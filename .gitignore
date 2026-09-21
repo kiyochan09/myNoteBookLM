@@ -1,0 +1,41 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*.class
+*.bak
+
+# Environments & IDEs
+.env
+.venv
+env/
+venv/
+ENV/
+.vscode/
+.idea/
+
+# Scratch & temporary test files
+scratch/
+*.tmp
+*.log
+data/test_out/
+data/*_bak/
+data/ocr_results/*_bak/
+
+# Large SQLite databases (my_notebook.db is > 1.2GB)
+*.db
+*.sqlite
+*.sqlite3
+
+# Large document binaries and generated media cache (> 2GB)
+data/media/
+data/*.pdf
+data/*.docx
+data/*.xlsx
+data/*.pptx
+data/*.odt
+
+# OS generated files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store

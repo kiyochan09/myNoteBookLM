@@ -1,0 +1,102 @@
+{
+  "page": 8,
+  "regions": [
+    {
+      "id": "reg-body-1",
+      "name": "見出し (675x441)",
+      "type": "heading",
+      "color": "#16a34a",
+      "x": 37,
+      "y": 404,
+      "w": 210,
+      "h": 441,
+      "text": "第一章引き裂かれた国境",
+      "reading_order": 1
+    }
+  ],
+  "tables": [],
+  "headings": [
+    {
+      "title": "第一章引き裂かれた国境",
+      "level": 1,
+      "page": 8
+    }
+  ],
+  "footnotes": [],
+  "figures": [],
+  "body_text": "",
+  "filename": "ウクライナ侵攻までの3000日.pdf",
+  "total_pages": 300,
+  "current_page": 8,
+  "page_width": 379,
+  "page_height": 489,
+  "image_width": 759,
+  "image_height": 979,
+  "ocr_lines": [
+    {
+      "x": 223,
+      "y": 440,
+      "w": 24,
+      "h": 85,
+      "text": "第一章",
+      "is_vertical": true,
+      "confidence": 0.738
+    },
+    {
+      "x": 124,
+      "y": 443,
+      "w": 73,
+      "h": 394,
+      "text": "引き裂かれた",
+      "is_vertical": true,
+      "confidence": 0.837
+    },
+    {
+      "x": 45,
+      "y": 450,
+      "w": 69,
+      "h": 124,
+      "text": "国境",
+      "is_vertical": true,
+      "confidence": 0.7
+    },
+    {
+      "x": 481,
+      "y": 412,
+      "w": 223,
+      "h": 18,
+      "text": "ロシアが実効支配しているクリミアと",
+      "is_vertical": false,
+      "confidence": 0.743
+    },
+    {
+      "x": 436,
+      "y": 431,
+      "w": 266,
+      "h": 20,
+      "text": "ヘルソン州のHENUSTATUMATI",
+      "is_vertical": false,
+      "confidence": 0.75
+    },
+    {
+      "x": 224,
+      "y": 580,
+      "w": 140,
+      "h": 27,
+      "text": "年2月末",
+      "is_vertical": false,
+      "confidence": 0.573
+    },
+    {
+      "x": 223,
+      "y": 610,
+      "w": 257,
+      "h": 28,
+      "text": "@ウクライナ南部クリミル",
+      "is_vertical": false,
+      "confidence": 0.581
+    }
+  ],
+  "page_number": 8,
+  "last_modified": 1789905027.4190948
+}

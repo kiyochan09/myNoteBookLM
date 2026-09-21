@@ -1,0 +1,1215 @@
+{
+  "_comment": "縦中横（10〜99）数字・画像登録辞書。各数値に対応する基準画像ファイルを登録できます。",
+  "templates": {
+    "0": {
+      "value": "0",
+      "enabled": true,
+      "primary_image": "0.png",
+      "images": [
+        "0.png",
+        "0_gothic.png",
+        "0_arial.png"
+      ],
+      "description": "0 (縦中横)"
+    },
+    "1": {
+      "value": "1",
+      "enabled": true,
+      "primary_image": "1.png",
+      "images": [
+        "1.png",
+        "1_gothic.png",
+        "1_arial.png"
+      ],
+      "description": "1 (縦中横)"
+    },
+    "2": {
+      "value": "2",
+      "enabled": true,
+      "primary_image": "2.png",
+      "images": [
+        "2.png",
+        "2_gothic.png",
+        "2_arial.png"
+      ],
+      "description": "2 (縦中横)"
+    },
+    "3": {
+      "value": "3",
+      "enabled": true,
+      "primary_image": "3.png",
+      "images": [
+        "3.png",
+        "3_gothic.png",
+        "3_arial.png"
+      ],
+      "description": "3 (縦中横)"
+    },
+    "4": {
+      "value": "4",
+      "enabled": true,
+      "primary_image": "4.png",
+      "images": [
+        "4.png",
+        "4_gothic.png",
+        "4_arial.png"
+      ],
+      "description": "4 (縦中横)"
+    },
+    "5": {
+      "value": "5",
+      "enabled": true,
+      "primary_image": "5.png",
+      "images": [
+        "5.png",
+        "5_gothic.png",
+        "5_arial.png"
+      ],
+      "description": "5 (縦中横)"
+    },
+    "6": {
+      "value": "6",
+      "enabled": true,
+      "primary_image": "6.png",
+      "images": [
+        "6.png",
+        "6_gothic.png",
+        "6_arial.png"
+      ],
+      "description": "6 (縦中横)"
+    },
+    "7": {
+      "value": "7",
+      "enabled": true,
+      "primary_image": "7.png",
+      "images": [
+        "7.png",
+        "7_gothic.png",
+        "7_arial.png"
+      ],
+      "description": "7 (縦中横)"
+    },
+    "8": {
+      "value": "8",
+      "enabled": true,
+      "primary_image": "8.png",
+      "images": [
+        "8.png",
+        "8_gothic.png",
+        "8_arial.png"
+      ],
+      "description": "8 (縦中横)"
+    },
+    "9": {
+      "value": "9",
+      "enabled": true,
+      "primary_image": "9.png",
+      "images": [
+        "9.png",
+        "9_gothic.png",
+        "9_arial.png"
+      ],
+      "description": "9 (縦中横)"
+    },
+    "00": {
+      "value": "00",
+      "enabled": true,
+      "primary_image": "00.png",
+      "images": [
+        "00.png",
+        "00_gothic.png",
+        "00_arial.png"
+      ],
+      "description": "00 (縦中横)"
+    },
+    "01": {
+      "value": "01",
+      "enabled": true,
+      "primary_image": "01.png",
+      "images": [
+        "01.png",
+        "01_gothic.png",
+        "01_arial.png"
+      ],
+      "description": "01 (縦中横)"
+    },
+    "02": {
+      "value": "02",
+      "enabled": true,
+      "primary_image": "02.png",
+      "images": [
+        "02.png",
+        "02_gothic.png",
+        "02_arial.png"
+      ],
+      "description": "02 (縦中横)"
+    },
+    "03": {
+      "value": "03",
+      "enabled": true,
+      "primary_image": "03.png",
+      "images": [
+        "03.png",
+        "03_gothic.png",
+        "03_arial.png"
+      ],
+      "description": "03 (縦中横)"
+    },
+    "04": {
+      "value": "04",
+      "enabled": true,
+      "primary_image": "04.png",
+      "images": [
+        "04.png",
+        "04_gothic.png",
+        "04_arial.png"
+      ],
+      "description": "04 (縦中横)"
+    },
+    "05": {
+      "value": "05",
+      "enabled": true,
+      "primary_image": "05.png",
+      "images": [
+        "05.png",
+        "05_gothic.png",
+        "05_arial.png"
+      ],
+      "description": "05 (縦中横)"
+    },
+    "06": {
+      "value": "06",
+      "enabled": true,
+      "primary_image": "06.png",
+      "images": [
+        "06.png",
+        "06_gothic.png",
+        "06_arial.png"
+      ],
+      "description": "06 (縦中横)"
+    },
+    "07": {
+      "value": "07",
+      "enabled": true,
+      "primary_image": "07.png",
+      "images": [
+        "07.png",
+        "07_gothic.png",
+        "07_arial.png"
+      ],
+      "description": "07 (縦中横)"
+    },
+    "08": {
+      "value": "08",
+      "enabled": true,
+      "primary_image": "08.png",
+      "images": [
+        "08.png",
+        "08_gothic.png",
+        "08_arial.png"
+      ],
+      "description": "08 (縦中横)"
+    },
+    "09": {
+      "value": "09",
+      "enabled": true,
+      "primary_image": "09.png",
+      "images": [
+        "09.png",
+        "09_gothic.png",
+        "09_arial.png"
+      ],
+      "description": "09 (縦中横)"
+    },
+    "10": {
+      "value": "10",
+      "enabled": true,
+      "primary_image": "10.png",
+      "images": [
+        "10.png",
+        "10_gothic.png",
+        "10_arial.png"
+      ],
+      "description": "10 (縦中横)"
+    },
+    "11": {
+      "value": "11",
+      "enabled": true,
+      "primary_image": "11.png",
+      "images": [
+        "11.png",
+        "11_gothic.png",
+        "11_arial.png"
+      ],
+      "description": "11 (縦中横)"
+    },
+    "12": {
+      "value": "12",
+      "enabled": true,
+      "primary_image": "12.png",
+      "images": [
+        "12.png",
+        "12_gothic.png",
+        "12_arial.png"
+      ],
+      "description": "12 (縦中横)"
+    },
+    "13": {
+      "value": "13",
+      "enabled": true,
+      "primary_image": "13.png",
+      "images": [
+        "13.png",
+        "13_gothic.png",
+        "13_arial.png"
+      ],
+      "description": "13 (縦中横)"
+    },
+    "14": {
+      "value": "14",
+      "enabled": true,
+      "primary_image": "14.png",
+      "images": [
+        "14.png",
+        "14_gothic.png",
+        "14_arial.png"
+      ],
+      "description": "14 (縦中横)"
+    },
+    "15": {
+      "value": "15",
+      "enabled": true,
+      "primary_image": "15.png",
+      "images": [
+        "15.png",
+        "15_gothic.png",
+        "15_arial.png"
+      ],
+      "description": "15 (縦中横)"
+    },
+    "16": {
+      "value": "16",
+      "enabled": true,
+      "primary_image": "16.png",
+      "images": [
+        "16.png",
+        "16_gothic.png",
+        "16_arial.png"
+      ],
+      "description": "16 (縦中横)"
+    },
+    "17": {
+      "value": "17",
+      "enabled": true,
+      "primary_image": "17.png",
+      "images": [
+        "17.png",
+        "17_gothic.png",
+        "17_arial.png"
+      ],
+      "description": "17 (縦中横)"
+    },
+    "18": {
+      "value": "18",
+      "enabled": true,
+      "primary_image": "18.png",
+      "images": [
+        "18.png",
+        "18_gothic.png",
+        "18_arial.png"
+      ],
+      "description": "18 (縦中横)"
+    },
+    "19": {
+      "value": "19",
+      "enabled": true,
+      "primary_image": "19.png",
+      "images": [
+        "19.png",
+        "19_gothic.png",
+        "19_arial.png"
+      ],
+      "description": "19 (縦中横)"
+    },
+    "20": {
+      "value": "20",
+      "enabled": true,
+      "primary_image": "20.png",
+      "images": [
+        "20.png",
+        "20_gothic.png",
+        "20_arial.png"
+      ],
+      "description": "20 (縦中横)"
+    },
+    "21": {
+      "value": "21",
+      "enabled": true,
+      "primary_image": "21.png",
+      "images": [
+        "21.png",
+        "21_gothic.png",
+        "21_arial.png"
+      ],
+      "description": "21 (縦中横)"
+    },
+    "22": {
+      "value": "22",
+      "enabled": true,
+      "primary_image": "22.png",
+      "images": [
+        "22.png",
+        "22_gothic.png",
+        "22_arial.png"
+      ],
+      "description": "22 (縦中横)"
+    },
+    "23": {
+      "value": "23",
+      "enabled": true,
+      "primary_image": "23.png",
+      "images": [
+        "23.png",
+        "23_gothic.png",
+        "23_arial.png"
+      ],
+      "description": "23 (縦中横)"
+    },
+    "24": {
+      "value": "24",
+      "enabled": true,
+      "primary_image": "24.png",
+      "images": [
+        "24.png",
+        "24_gothic.png",
+        "24_arial.png"
+      ],
+      "description": "24 (縦中横)"
+    },
+    "25": {
+      "value": "25",
+      "enabled": true,
+      "primary_image": "25.png",
+      "images": [
+        "25.png",
+        "25_gothic.png",
+        "25_arial.png"
+      ],
+      "description": "25 (縦中横)"
+    },
+    "26": {
+      "value": "26",
+      "enabled": true,
+      "primary_image": "26.png",
+      "images": [
+        "26.png",
+        "26_gothic.png",
+        "26_arial.png"
+      ],
+      "description": "26 (縦中横)"
+    },
+    "27": {
+      "value": "27",
+      "enabled": true,
+      "primary_image": "27.png",
+      "images": [
+        "27.png",
+        "27_gothic.png",
+        "27_arial.png"
+      ],
+      "description": "27 (縦中横)"
+    },
+    "28": {
+      "value": "28",
+      "enabled": true,
+      "primary_image": "28.png",
+      "images": [
+        "28.png",
+        "28_gothic.png",
+        "28_arial.png"
+      ],
+      "description": "28 (縦中横)"
+    },
+    "29": {
+      "value": "29",
+      "enabled": true,
+      "primary_image": "29.png",
+      "images": [
+        "29.png",
+        "29_gothic.png",
+        "29_arial.png"
+      ],
+      "description": "29 (縦中横)"
+    },
+    "30": {
+      "value": "30",
+      "enabled": true,
+      "primary_image": "30.png",
+      "images": [
+        "30.png",
+        "30_gothic.png",
+        "30_arial.png"
+      ],
+      "description": "30 (縦中横)"
+    },
+    "31": {
+      "value": "31",
+      "enabled": true,
+      "primary_image": "31.png",
+      "images": [
+        "31.png",
+        "31_gothic.png",
+        "31_arial.png"
+      ],
+      "description": "31 (縦中横)"
+    },
+    "32": {
+      "value": "32",
+      "enabled": true,
+      "primary_image": "32.png",
+      "images": [
+        "32.png",
+        "32_gothic.png",
+        "32_arial.png"
+      ],
+      "description": "32 (縦中横)"
+    },
+    "33": {
+      "value": "33",
+      "enabled": true,
+      "primary_image": "33.png",
+      "images": [
+        "33.png",
+        "33_gothic.png",
+        "33_arial.png"
+      ],
+      "description": "33 (縦中横)"
+    },
+    "34": {
+      "value": "34",
+      "enabled": true,
+      "primary_image": "34.png",
+      "images": [
+        "34.png",
+        "34_gothic.png",
+        "34_arial.png"
+      ],
+      "description": "34 (縦中横)"
+    },
+    "35": {
+      "value": "35",
+      "enabled": true,
+      "primary_image": "35.png",
+      "images": [
+        "35.png",
+        "35_gothic.png",
+        "35_arial.png"
+      ],
+      "description": "35 (縦中横)"
+    },
+    "36": {
+      "value": "36",
+      "enabled": true,
+      "primary_image": "36.png",
+      "images": [
+        "36.png",
+        "36_gothic.png",
+        "36_arial.png"
+      ],
+      "description": "36 (縦中横)"
+    },
+    "37": {
+      "value": "37",
+      "enabled": true,
+      "primary_image": "37.png",
+      "images": [
+        "37.png",
+        "37_gothic.png",
+        "37_arial.png"
+      ],
+      "description": "37 (縦中横)"
+    },
+    "38": {
+      "value": "38",
+      "enabled": true,
+      "primary_image": "38.png",
+      "images": [
+        "38.png",
+        "38_gothic.png",
+        "38_arial.png"
+      ],
+      "description": "38 (縦中横)"
+    },
+    "39": {
+      "value": "39",
+      "enabled": true,
+      "primary_image": "39.png",
+      "images": [
+        "39.png",
+        "39_gothic.png",
+        "39_arial.png"
+      ],
+      "description": "39 (縦中横)"
+    },
+    "40": {
+      "value": "40",
+      "enabled": true,
+      "primary_image": "40.png",
+      "images": [
+        "40.png",
+        "40_gothic.png",
+        "40_arial.png"
+      ],
+      "description": "40 (縦中横)"
+    },
+    "41": {
+      "value": "41",
+      "enabled": true,
+      "primary_image": "41.png",
+      "images": [
+        "41.png",
+        "41_gothic.png",
+        "41_arial.png"
+      ],
+      "description": "41 (縦中横)"
+    },
+    "42": {
+      "value": "42",
+      "enabled": true,
+      "primary_image": "42.png",
+      "images": [
+        "42.png",
+        "42_gothic.png",
+        "42_arial.png"
+      ],
+      "description": "42 (縦中横)"
+    },
+    "43": {
+      "value": "43",
+      "enabled": true,
+      "primary_image": "43.png",
+      "images": [
+        "43.png",
+        "43_gothic.png",
+        "43_arial.png"
+      ],
+      "description": "43 (縦中横)"
+    },
+    "44": {
+      "value": "44",
+      "enabled": true,
+      "primary_image": "44.png",
+      "images": [
+        "44.png",
+        "44_gothic.png",
+        "44_arial.png"
+      ],
+      "description": "44 (縦中横)"
+    },
+    "45": {
+      "value": "45",
+      "enabled": true,
+      "primary_image": "45.png",
+      "images": [
+        "45.png",
+        "45_gothic.png",
+        "45_arial.png"
+      ],
+      "description": "45 (縦中横)"
+    },
+    "46": {
+      "value": "46",
+      "enabled": true,
+      "primary_image": "46.png",
+      "images": [
+        "46.png",
+        "46_gothic.png",
+        "46_arial.png"
+      ],
+      "description": "46 (縦中横)"
+    },
+    "47": {
+      "value": "47",
+      "enabled": true,
+      "primary_image": "47.png",
+      "images": [
+        "47.png",
+        "47_gothic.png",
+        "47_arial.png"
+      ],
+      "description": "47 (縦中横)"
+    },
+    "48": {
+      "value": "48",
+      "enabled": true,
+      "primary_image": "48.png",
+      "images": [
+        "48.png",
+        "48_gothic.png",
+        "48_arial.png"
+      ],
+      "description": "48 (縦中横)"
+    },
+    "49": {
+      "value": "49",
+      "enabled": true,
+      "primary_image": "49.png",
+      "images": [
+        "49.png",
+        "49_gothic.png",
+        "49_arial.png"
+      ],
+      "description": "49 (縦中横)"
+    },
+    "50": {
+      "value": "50",
+      "enabled": true,
+      "primary_image": "50.png",
+      "images": [
+        "50.png",
+        "50_gothic.png",
+        "50_arial.png"
+      ],
+      "description": "50 (縦中横)"
+    },
+    "51": {
+      "value": "51",
+      "enabled": true,
+      "primary_image": "51.png",
+      "images": [
+        "51.png",
+        "51_gothic.png",
+        "51_arial.png"
+      ],
+      "description": "51 (縦中横)"
+    },
+    "52": {
+      "value": "52",
+      "enabled": true,
+      "primary_image": "52.png",
+      "images": [
+        "52.png",
+        "52_gothic.png",
+        "52_arial.png"
+      ],
+      "description": "52 (縦中横)"
+    },
+    "53": {
+      "value": "53",
+      "enabled": true,
+      "primary_image": "53.png",
+      "images": [
+        "53.png",
+        "53_gothic.png",
+        "53_arial.png"
+      ],
+      "description": "53 (縦中横)"
+    },
+    "54": {
+      "value": "54",
+      "enabled": true,
+      "primary_image": "54.png",
+      "images": [
+        "54.png",
+        "54_gothic.png",
+        "54_arial.png"
+      ],
+      "description": "54 (縦中横)"
+    },
+    "55": {
+      "value": "55",
+      "enabled": true,
+      "primary_image": "55.png",
+      "images": [
+        "55.png",
+        "55_gothic.png",
+        "55_arial.png"
+      ],
+      "description": "55 (縦中横)"
+    },
+    "56": {
+      "value": "56",
+      "enabled": true,
+      "primary_image": "56.png",
+      "images": [
+        "56.png",
+        "56_gothic.png",
+        "56_arial.png"
+      ],
+      "description": "56 (縦中横)"
+    },
+    "57": {
+      "value": "57",
+      "enabled": true,
+      "primary_image": "57.png",
+      "images": [
+        "57.png",
+        "57_gothic.png",
+        "57_arial.png"
+      ],
+      "description": "57 (縦中横)"
+    },
+    "58": {
+      "value": "58",
+      "enabled": true,
+      "primary_image": "58.png",
+      "images": [
+        "58.png",
+        "58_gothic.png",
+        "58_arial.png"
+      ],
+      "description": "58 (縦中横)"
+    },
+    "59": {
+      "value": "59",
+      "enabled": true,
+      "primary_image": "59.png",
+      "images": [
+        "59.png",
+        "59_gothic.png",
+        "59_arial.png"
+      ],
+      "description": "59 (縦中横)"
+    },
+    "60": {
+      "value": "60",
+      "enabled": true,
+      "primary_image": "60.png",
+      "images": [
+        "60.png",
+        "60_gothic.png",
+        "60_arial.png"
+      ],
+      "description": "60 (縦中横)"
+    },
+    "61": {
+      "value": "61",
+      "enabled": true,
+      "primary_image": "61.png",
+      "images": [
+        "61.png",
+        "61_gothic.png",
+        "61_arial.png"
+      ],
+      "description": "61 (縦中横)"
+    },
+    "62": {
+      "value": "62",
+      "enabled": true,
+      "primary_image": "62.png",
+      "images": [
+        "62.png",
+        "62_gothic.png",
+        "62_arial.png"
+      ],
+      "description": "62 (縦中横)"
+    },
+    "63": {
+      "value": "63",
+      "enabled": true,
+      "primary_image": "63.png",
+      "images": [
+        "63.png",
+        "63_gothic.png",
+        "63_arial.png"
+      ],
+      "description": "63 (縦中横)"
+    },
+    "64": {
+      "value": "64",
+      "enabled": true,
+      "primary_image": "64.png",
+      "images": [
+        "64.png",
+        "64_gothic.png",
+        "64_arial.png"
+      ],
+      "description": "64 (縦中横)"
+    },
+    "65": {
+      "value": "65",
+      "enabled": true,
+      "primary_image": "65.png",
+      "images": [
+        "65.png",
+        "65_gothic.png",
+        "65_arial.png"
+      ],
+      "description": "65 (縦中横)"
+    },
+    "66": {
+      "value": "66",
+      "enabled": true,
+      "primary_image": "66.png",
+      "images": [
+        "66.png",
+        "66_gothic.png",
+        "66_arial.png"
+      ],
+      "description": "66 (縦中横)"
+    },
+    "67": {
+      "value": "67",
+      "enabled": true,
+      "primary_image": "67.png",
+      "images": [
+        "67.png",
+        "67_gothic.png",
+        "67_arial.png"
+      ],
+      "description": "67 (縦中横)"
+    },
+    "68": {
+      "value": "68",
+      "enabled": true,
+      "primary_image": "68.png",
+      "images": [
+        "68.png",
+        "68_gothic.png",
+        "68_arial.png"
+      ],
+      "description": "68 (縦中横)"
+    },
+    "69": {
+      "value": "69",
+      "enabled": true,
+      "primary_image": "69.png",
+      "images": [
+        "69.png",
+        "69_gothic.png",
+        "69_arial.png"
+      ],
+      "description": "69 (縦中横)"
+    },
+    "70": {
+      "value": "70",
+      "enabled": true,
+      "primary_image": "70.png",
+      "images": [
+        "70.png",
+        "70_gothic.png",
+        "70_arial.png"
+      ],
+      "description": "70 (縦中横)"
+    },
+    "71": {
+      "value": "71",
+      "enabled": true,
+      "primary_image": "71.png",
+      "images": [
+        "71.png",
+        "71_gothic.png",
+        "71_arial.png"
+      ],
+      "description": "71 (縦中横)"
+    },
+    "72": {
+      "value": "72",
+      "enabled": true,
+      "primary_image": "72.png",
+      "images": [
+        "72.png",
+        "72_gothic.png",
+        "72_arial.png"
+      ],
+      "description": "72 (縦中横)"
+    },
+    "73": {
+      "value": "73",
+      "enabled": true,
+      "primary_image": "73.png",
+      "images": [
+        "73.png",
+        "73_gothic.png",
+        "73_arial.png"
+      ],
+      "description": "73 (縦中横)"
+    },
+    "74": {
+      "value": "74",
+      "enabled": true,
+      "primary_image": "74.png",
+      "images": [
+        "74.png",
+        "74_gothic.png",
+        "74_arial.png"
+      ],
+      "description": "74 (縦中横)"
+    },
+    "75": {
+      "value": "75",
+      "enabled": true,
+      "primary_image": "75.png",
+      "images": [
+        "75.png",
+        "75_gothic.png",
+        "75_arial.png"
+      ],
+      "description": "75 (縦中横)"
+    },
+    "76": {
+      "value": "76",
+      "enabled": true,
+      "primary_image": "76.png",
+      "images": [
+        "76.png",
+        "76_gothic.png",
+        "76_arial.png"
+      ],
+      "description": "76 (縦中横)"
+    },
+    "77": {
+      "value": "77",
+      "enabled": true,
+      "primary_image": "77.png",
+      "images": [
+        "77.png",
+        "77_gothic.png",
+        "77_arial.png"
+      ],
+      "description": "77 (縦中横)"
+    },
+    "78": {
+      "value": "78",
+      "enabled": true,
+      "primary_image": "78.png",
+      "images": [
+        "78.png",
+        "78_gothic.png",
+        "78_arial.png"
+      ],
+      "description": "78 (縦中横)"
+    },
+    "79": {
+      "value": "79",
+      "enabled": true,
+      "primary_image": "79.png",
+      "images": [
+        "79.png",
+        "79_gothic.png",
+        "79_arial.png"
+      ],
+      "description": "79 (縦中横)"
+    },
+    "80": {
+      "value": "80",
+      "enabled": true,
+      "primary_image": "80.png",
+      "images": [
+        "80.png",
+        "80_gothic.png",
+        "80_arial.png"
+      ],
+      "description": "80 (縦中横)"
+    },
+    "81": {
+      "value": "81",
+      "enabled": true,
+      "primary_image": "81.png",
+      "images": [
+        "81.png",
+        "81_gothic.png",
+        "81_arial.png"
+      ],
+      "description": "81 (縦中横)"
+    },
+    "82": {
+      "value": "82",
+      "enabled": true,
+      "primary_image": "82.png",
+      "images": [
+        "82.png",
+        "82_gothic.png",
+        "82_arial.png"
+      ],
+      "description": "82 (縦中横)"
+    },
+    "83": {
+      "value": "83",
+      "enabled": true,
+      "primary_image": "83.png",
+      "images": [
+        "83.png",
+        "83_gothic.png",
+        "83_arial.png"
+      ],
+      "description": "83 (縦中横)"
+    },
+    "84": {
+      "value": "84",
+      "enabled": true,
+      "primary_image": "84.png",
+      "images": [
+        "84.png",
+        "84_gothic.png",
+        "84_arial.png"
+      ],
+      "description": "84 (縦中横)"
+    },
+    "85": {
+      "value": "85",
+      "enabled": true,
+      "primary_image": "85.png",
+      "images": [
+        "85.png",
+        "85_gothic.png",
+        "85_arial.png"
+      ],
+      "description": "85 (縦中横)"
+    },
+    "86": {
+      "value": "86",
+      "enabled": true,
+      "primary_image": "86.png",
+      "images": [
+        "86.png",
+        "86_gothic.png",
+        "86_arial.png"
+      ],
+      "description": "86 (縦中横)"
+    },
+    "87": {
+      "value": "87",
+      "enabled": true,
+      "primary_image": "87.png",
+      "images": [
+        "87.png",
+        "87_gothic.png",
+        "87_arial.png"
+      ],
+      "description": "87 (縦中横)"
+    },
+    "88": {
+      "value": "88",
+      "enabled": true,
+      "primary_image": "88.png",
+      "images": [
+        "88.png",
+        "88_gothic.png",
+        "88_arial.png"
+      ],
+      "description": "88 (縦中横)"
+    },
+    "89": {
+      "value": "89",
+      "enabled": true,
+      "primary_image": "89.png",
+      "images": [
+        "89.png",
+        "89_gothic.png",
+        "89_arial.png"
+      ],
+      "description": "89 (縦中横)"
+    },
+    "90": {
+      "value": "90",
+      "enabled": true,
+      "primary_image": "90.png",
+      "images": [
+        "90.png",
+        "90_gothic.png",
+        "90_arial.png"
+      ],
+      "description": "90 (縦中横)"
+    },
+    "91": {
+      "value": "91",
+      "enabled": true,
+      "primary_image": "91.png",
+      "images": [
+        "91.png",
+        "91_gothic.png",
+        "91_arial.png"
+      ],
+      "description": "91 (縦中横)"
+    },
+    "92": {
+      "value": "92",
+      "enabled": true,
+      "primary_image": "92.png",
+      "images": [
+        "92.png",
+        "92_gothic.png",
+        "92_arial.png"
+      ],
+      "description": "92 (縦中横)"
+    },
+    "93": {
+      "value": "93",
+      "enabled": true,
+      "primary_image": "93.png",
+      "images": [
+        "93.png",
+        "93_gothic.png",
+        "93_arial.png"
+      ],
+      "description": "93 (縦中横)"
+    },
+    "94": {
+      "value": "94",
+      "enabled": true,
+      "primary_image": "94.png",
+      "images": [
+        "94.png",
+        "94_gothic.png",
+        "94_arial.png"
+      ],
+      "description": "94 (縦中横)"
+    },
+    "95": {
+      "value": "95",
+      "enabled": true,
+      "primary_image": "95.png",
+      "images": [
+        "95.png",
+        "95_gothic.png",
+        "95_arial.png"
+      ],
+      "description": "95 (縦中横)"
+    },
+    "96": {
+      "value": "96",
+      "enabled": true,
+      "primary_image": "96.png",
+      "images": [
+        "96.png",
+        "96_gothic.png",
+        "96_arial.png"
+      ],
+      "description": "96 (縦中横)"
+    },
+    "97": {
+      "value": "97",
+      "enabled": true,
+      "primary_image": "97.png",
+      "images": [
+        "97.png",
+        "97_gothic.png",
+        "97_arial.png"
+      ],
+      "description": "97 (縦中横)"
+    },
+    "98": {
+      "value": "98",
+      "enabled": true,
+      "primary_image": "98.png",
+      "images": [
+        "98.png",
+        "98_gothic.png",
+        "98_arial.png"
+      ],
+      "description": "98 (縦中横)"
+    },
+    "99": {
+      "value": "99",
+      "enabled": true,
+      "primary_image": "99.png",
+      "images": [
+        "99.png",
+        "99_gothic.png",
+        "99_arial.png"
+      ],
+      "description": "99 (縦中横)"
+    }
+  }
+}
