@@ -5548,11 +5548,35 @@
 
     function normalizeReadingOrders() {
         if (!currentDocData || !currentDocData.regions) return;
+        const isVert = (appSettings.TextOrientation === "vertical") || 
+                       (appSettings.TextOrientation !== "horizontal" && appSettings.DocumentType !== "western");
+
         const sorted = [...currentDocData.regions].sort((a, b) => {
             const ordA = (typeof a.reading_order === "number") ? a.reading_order : 999;
             const ordB = (typeof b.reading_order === "number") ? b.reading_order : 999;
             if (ordA !== ordB) return ordA - ordB;
-            return (a.y - b.y) || (a.x - b.x);
+
+            if (isVert) {
+                // 縦書き和書：右上から左下へ（段組がある場合は上段優先、同じ段内は右側優先）
+                const aBottom = (a.y || 0) + (a.h || 0);
+                const bBottom = (b.y || 0) + (b.h || 0);
+                const isADistinctlyAboveB = aBottom <= (b.y || 0) + (b.h || 0) * 0.25;
+                const isBDistinctlyAboveA = bBottom <= (a.y || 0) + (a.h || 0) * 0.25;
+
+                if (isADistinctlyAboveB) return -1; // 上段が先
+                if (isBDistinctlyAboveA) return 1;
+
+                // 同じ段内（または見開き左右）：右側（X大）が先！
+                const diffX = (b.x || 0) - (a.x || 0);
+                if (Math.abs(diffX) > 15) return diffX;
+
+                return (a.y || 0) - (b.y || 0);
+            } else {
+                // 横書き：左上から右下へ（上から下、左から右）
+                const diffY = (a.y || 0) - (b.y || 0);
+                if (Math.abs(diffY) > 15) return diffY;
+                return (a.x || 0) - (b.x || 0);
+            }
         });
         sorted.forEach((r, idx) => {
             r.reading_order = idx + 1;

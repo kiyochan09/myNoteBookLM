@@ -22,6 +22,7 @@ class TcyDigitRefiner:
     EXCESS_INK_RATIO_THRESH = 0.350
     EXCESS_INK_DEADZONE = 0.150
     SINGLE_DIGIT_MIN_SCORE = 0.885
+    TWO_DIGIT_MIN_SCORE = 0.840
     HORIZONTAL_GAP_RATIO = 0.40
 
     @classmethod
@@ -309,12 +310,28 @@ class TcyDigitRefiner:
                             used_comp_ids.add(c2["id"])
                         else:
                             # 左右個別の1桁照合 + 幾何平均信頼度（細身フォント・分断数字の横並びグルーピング）
+                            # 対策①: 極小ストロークの除外
+                            if left_c["w"] < 4 or right_c["w"] < 4 or left_c["area"] < 25 or right_c["area"] < 25:
+                                continue
+
                             patch_left = gray[max(0, left_c["y1"]-2):min(lh, left_c["y2"]+2), max(0, left_c["x1"]-2):min(lw, left_c["x2"]+2)]
                             patch_right = gray[max(0, right_c["y1"]-2):min(lh, right_c["y2"]+2), max(0, right_c["x1"]-2):min(lw, right_c["x2"]+2)]
-                            d_left, s_left = self.match_1digit_patch(patch_left)
-                            d_right, s_right = self.match_1digit_patch(patch_right)
+                            d_left, s_left, pos_l, t_l = self.match_1digit_patch_detailed(patch_left, ch=left_c["h"])
+                            d_right, s_right, pos_r, t_r = self.match_1digit_patch_detailed(patch_right, ch=right_c["h"])
                             if d_left is not None and d_right is not None and s_left >= 0.70 and s_right >= 0.70:
-                                base_s = math.sqrt(s_left * s_right)
+                                # 対策①: 左右それぞれに余剰インク比率 (R_excess) を適用
+                                re_left, _, _ = self.calculate_excess_ink(patch_left, pos_l, t_l, kernel_size=(5, 5))
+                                re_right, _, _ = self.calculate_excess_ink(patch_right, pos_r, t_r, kernel_size=(5, 5))
+
+                                if re_left > self.EXCESS_INK_RATIO_THRESH or re_right > self.EXCESS_INK_RATIO_THRESH:
+                                    continue
+
+                                p_left = max(0.0, 1.0 - 2.0 * max(0.0, re_left - self.EXCESS_INK_DEADZONE))
+                                p_right = max(0.0, 1.0 - 2.0 * max(0.0, re_right - self.EXCESS_INK_DEADZONE))
+                                s_eff_left = s_left * p_left
+                                s_eff_right = s_right * p_right
+
+                                base_s = math.sqrt(s_eff_left * s_eff_right)
                                 comb_n = int(d_left) * 10 + int(d_right)
                                 # もし2桁丸ごとパッチ照合で候補があり有意（>=0.74）であれば個別照合の誤爆（12等）より優先
                                 if num_patch is not None and s_patch >= 0.74:
@@ -328,7 +345,7 @@ class TcyDigitRefiner:
                                 if final_n == 11 and (num_patch != 11 or s_patch < 0.88):
                                     continue
 
-                                if final_s >= 0.75:
+                                if final_s >= 0.78:
                                     detected.append({
                                         "num": final_n,
                                         "num_str": str(final_n),
@@ -382,6 +399,26 @@ class TcyDigitRefiner:
                         min_neighbor_gap = gap
 
             if min_neighbor_gap is not None and min_neighbor_gap < lw * self.HORIZONTAL_GAP_RATIO:
+                continue
+
+            # 対策③: 垂直近傍Gap判定（同一文字内ストロークの除外）
+            # 上下方向の至近距離（ギャップ <= 4px）に近接ストロークがある場合は同一文字の分割画と判定
+            is_vertically_connected = False
+            for other in components:
+                if other["id"] == c["id"]:
+                    continue
+                x_ov = min(c["x2"], other["x2"]) - max(c["x1"], other["x1"])
+                gap_x = max(0, max(c["x1"] - other["x2"], other["x1"] - c["x2"]))
+                if x_ov > -3 or gap_x <= 4:
+                    gap_y = other["y1"] - c["y2"] if other["y1"] >= c["y2"] else c["y1"] - other["y2"]
+                    if 0 <= gap_y <= 4:
+                        is_vertically_connected = True
+                        break
+            if is_vertically_connected:
+                continue
+
+            # 対策③: 単体数字としての最小インク面積・幅検証（極細孤立ストロークの除外）
+            if c["w"] <= 4 and c["area"] < 38:
                 continue
 
             # 方針①: 幾何サイズ適合 & 余剰インク比率による減点・足切り
@@ -801,7 +838,7 @@ class TcyDigitRefiner:
             num = it.get("num", 0)
             is_2d = (method == "2digit_patch_match")
 
-            if is_2d and score >= 0.78:
+            if is_2d and score >= self.TWO_DIGIT_MIN_SCORE:
                 locked_digits.append(it)
             elif not is_2d and num in [1, 7] and score >= self.SINGLE_DIGIT_MIN_SCORE:
                 locked_digits.append(it)

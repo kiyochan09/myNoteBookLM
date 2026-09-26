@@ -787,6 +787,21 @@ def filter_matching_lines(
             is_vert_line = (lh > lw * 1.3)
 
         if is_vert_line:
+            # ルビ行および微小破片ノイズの除外 (本文領域の場合)
+            if rtype == "body":
+                if lw <= 16 and lh <= 18 and len(line.get("text", "").strip()) <= 1:
+                    continue
+                # ルビ判定: 極小幅 (lw < 14) かつ 短尺 (lh < 180) かつ 左隣に本文行が存在
+                if lw < 14 and lh < 180:
+                    has_adj = any(
+                        o for o in ocr_lines
+                        if o is not line and o.get("is_vertical", True)
+                        and 0 < (lx - o.get("x", 0)) <= 35
+                        and abs(ly - o.get("y", 0)) < 150
+                    )
+                    if has_adj:
+                        continue
+
             # 縦書き行: 列位置Xの中心が領域内か厳密に判定 (余白±2px)
             cx = lx + lw / 2
             x_in = (rx - 2) <= cx <= (rx + rw + 2)
@@ -1389,59 +1404,69 @@ def process_scanned_page_layout(
             right_non_tbl = [l for l in non_table_lines if (l['x'] + l['w'] / 2.0) >= mid_x]
 
             if is_spread and len(left_lines) >= 3 and len(right_lines) >= 3:
-                # --- 左ページ処理 ---
-                target_left = left_non_tbl if left_non_tbl else left_lines
-                if target_left:
-                    l_min_x = max(0, min(l['x'] for l in target_left) - 8)
-                    l_max_x = min(img_w, max(l['x'] + l['w'] for l in target_left) + 8)
-                    l_min_y = max(0, min(l['y'] for l in target_left) - 8)
-                    l_max_y = min(img_h, max(l['y'] + l['h'] for l in target_left) + 8)
-                    l_w = max(10, l_max_x - l_min_x)
-                    l_h = max(10, l_max_y - l_min_y)
+                # 縦書き和書の場合は【右ページが第1、左ページが第2】
+                # 横書きの場合は【左ページが第1、右ページが第2】
+                pages_order = ['right', 'left'] if is_vert else ['left', 'right']
 
-                    if deck_count == 2 and is_vert:
-                        l_half_h = int(l_h * 0.485)
-                        l_gap = l_h - (l_half_h * 2)
-                        all_regions.append({
-                            "id": "reg-body-3", "name": "左上本文", "type": "body", "color": COLOR_BODY,
-                            "x": l_min_x, "y": l_min_y, "w": l_w, "h": l_half_h, "text": "", "reading_order": len(all_regions) + 1
-                        })
-                        all_regions.append({
-                            "id": "reg-body-4", "name": "左下本文", "type": "body", "color": COLOR_BODY,
-                            "x": l_min_x, "y": l_min_y + l_half_h + l_gap, "w": l_w, "h": l_half_h, "text": "", "reading_order": len(all_regions) + 1
-                        })
+                for side in pages_order:
+                    if side == 'right':
+                        # --- 右ページ処理 ---
+                        target_right = right_non_tbl if right_non_tbl else right_lines
+                        if target_right:
+                            vert_body_right = [l for l in target_right if l.get('is_vertical', True) and (l.get('h', 0) >= 60 or len(l.get('text', '')) >= 4)]
+                            calc_right = vert_body_right if len(vert_body_right) >= 2 else target_right
+                            r_min_x = max(0, min(l['x'] for l in calc_right) - 8)
+                            r_max_x = min(img_w, max(l['x'] + l['w'] for l in calc_right) + 8)
+                            r_min_y = max(0, min(l['y'] for l in calc_right) - 8)
+                            r_max_y = min(img_h, max(l['y'] + l['h'] for l in calc_right) + 8)
+                            r_w = max(10, r_max_x - r_min_x)
+                            r_h = max(10, r_max_y - r_min_y)
+
+                            if deck_count == 2 and is_vert:
+                                r_half_h = int(r_h * 0.485)
+                                r_gap = r_h - (r_half_h * 2)
+                                all_regions.append({
+                                    "id": f"reg-body-{len(all_regions) + 1}", "name": "右上本文", "type": "body", "color": COLOR_BODY,
+                                    "x": r_min_x, "y": r_min_y, "w": r_w, "h": r_half_h, "text": "", "reading_order": len(all_regions) + 1
+                                })
+                                all_regions.append({
+                                    "id": f"reg-body-{len(all_regions) + 1}", "name": "右下本文", "type": "body", "color": COLOR_BODY,
+                                    "x": r_min_x, "y": r_min_y + r_half_h + r_gap, "w": r_w, "h": r_half_h, "text": "", "reading_order": len(all_regions) + 1
+                                })
+                            else:
+                                all_regions.append({
+                                    "id": f"reg-body-{len(all_regions) + 1}", "name": "右ページ本文", "type": "body", "color": COLOR_BODY,
+                                    "x": r_min_x, "y": r_min_y, "w": r_w, "h": r_h, "text": "", "reading_order": len(all_regions) + 1
+                                })
                     else:
-                        all_regions.append({
-                            "id": "reg-body-2", "name": "左ページ本文", "type": "body", "color": COLOR_BODY,
-                            "x": l_min_x, "y": l_min_y, "w": l_w, "h": l_h, "text": "", "reading_order": len(all_regions) + 1
-                        })
+                        # --- 左ページ処理 ---
+                        target_left = left_non_tbl if left_non_tbl else left_lines
+                        if target_left:
+                            vert_body_left = [l for l in target_left if l.get('is_vertical', True) and (l.get('h', 0) >= 60 or len(l.get('text', '')) >= 4)]
+                            calc_left = vert_body_left if len(vert_body_left) >= 2 else target_left
+                            l_min_x = max(0, min(l['x'] for l in calc_left) - 8)
+                            l_max_x = min(img_w, max(l['x'] + l['w'] for l in calc_left) + 8)
+                            l_min_y = max(0, min(l['y'] for l in calc_left) - 8)
+                            l_max_y = min(img_h, max(l['y'] + l['h'] for l in calc_left) + 8)
+                            l_w = max(10, l_max_x - l_min_x)
+                            l_h = max(10, l_max_y - l_min_y)
 
-                # --- 右ページ処理 ---
-                target_right = right_non_tbl if right_non_tbl else right_lines
-                if target_right:
-                    r_min_x = max(0, min(l['x'] for l in target_right) - 8)
-                    r_max_x = min(img_w, max(l['x'] + l['w'] for l in target_right) + 8)
-                    r_min_y = max(0, min(l['y'] for l in target_right) - 8)
-                    r_max_y = min(img_h, max(l['y'] + l['h'] for l in target_right) + 8)
-                    r_w = max(10, r_max_x - r_min_x)
-                    r_h = max(10, r_max_y - r_min_y)
-
-                    if deck_count == 2 and is_vert:
-                        r_half_h = int(r_h * 0.485)
-                        r_gap = r_h - (r_half_h * 2)
-                        all_regions.append({
-                            "id": "reg-body-1", "name": "右上本文", "type": "body", "color": COLOR_BODY,
-                            "x": r_min_x, "y": r_min_y, "w": r_w, "h": r_half_h, "text": "", "reading_order": len(all_regions) + 1
-                        })
-                        all_regions.append({
-                            "id": "reg-body-2", "name": "右下本文", "type": "body", "color": COLOR_BODY,
-                            "x": r_min_x, "y": r_min_y + r_half_h + r_gap, "w": r_w, "h": r_half_h, "text": "", "reading_order": len(all_regions) + 1
-                        })
-                    else:
-                        all_regions.append({
-                            "id": "reg-body-1", "name": "右ページ本文", "type": "body", "color": COLOR_BODY,
-                            "x": r_min_x, "y": r_min_y, "w": r_w, "h": r_h, "text": "", "reading_order": len(all_regions) + 1
-                        })
+                            if deck_count == 2 and is_vert:
+                                l_half_h = int(l_h * 0.485)
+                                l_gap = l_h - (l_half_h * 2)
+                                all_regions.append({
+                                    "id": f"reg-body-{len(all_regions) + 1}", "name": "左上本文", "type": "body", "color": COLOR_BODY,
+                                    "x": l_min_x, "y": l_min_y, "w": l_w, "h": l_half_h, "text": "", "reading_order": len(all_regions) + 1
+                                })
+                                all_regions.append({
+                                    "id": f"reg-body-{len(all_regions) + 1}", "name": "左下本文", "type": "body", "color": COLOR_BODY,
+                                    "x": l_min_x, "y": l_min_y + l_half_h + l_gap, "w": l_w, "h": l_half_h, "text": "", "reading_order": len(all_regions) + 1
+                                })
+                            else:
+                                all_regions.append({
+                                    "id": f"reg-body-{len(all_regions) + 1}", "name": "左ページ本文", "type": "body", "color": COLOR_BODY,
+                                    "x": l_min_x, "y": l_min_y, "w": l_w, "h": l_h, "text": "", "reading_order": len(all_regions) + 1
+                                })
             else:
                 # 単一ページ処理: 表の有無に関わらず、本文行に対する本文領域 (reg-body-1) を必ず生成
                 target_lines = non_table_lines if non_table_lines else valid_lines

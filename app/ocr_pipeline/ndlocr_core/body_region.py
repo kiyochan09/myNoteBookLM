@@ -45,7 +45,7 @@ def create_body_regions(
 
     if vertical_results:
         vertical_results.sort(
-            key=lambda r: r["x"]
+            key=lambda r: -r["x"]
         )
 
         groups = []
