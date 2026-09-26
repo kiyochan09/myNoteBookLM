@@ -4,12 +4,16 @@ import shutil
 import base64
 import json
 import urllib.parse
+import secrets
+import uuid
+import zipfile
 from pathlib import Path
 from typing import Optional, Dict, Any, List
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Query, Response
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Query, Response, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse, StreamingResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 from pydantic import BaseModel
 import re
 import fitz
@@ -42,6 +46,16 @@ from app.ocr_pipeline.ndlocr_engine import run_ndlocr_on_image
 BASE_DIR = Path(__file__).resolve().parent.parent
 MEDIA_DIR = BASE_DIR / "data" / "media"
 MEDIA_DIR.mkdir(parents=True, exist_ok=True)
+TEMP_UPLOAD_DIR = BASE_DIR / "data" / "temp_uploads"
+TEMP_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+# アプリケーション共通セキュリティトークン (暗号学的一意性)
+APP_SECURITY_TOKEN = secrets.token_hex(32)
+
+ALLOWED_ORIGINS = [
+    "http://127.0.0.1:8000",
+    "http://localhost:8000",
+]
 
 app = FastAPI(
     title="MyNotebookLM & OCR Knowledge Base System",
@@ -49,12 +63,44 @@ app = FastAPI(
     version="2.0.0"
 )
 
+# 1. セキュリティ検査ミドルウェア (Host / Sec-Fetch-Site / Origin / Token認証)
+class SecurityEnforcementMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        # (1) Hostヘッダ検証 (DNS Rebinding 防御)
+        host_header = request.headers.get("host", "").split(":")[0]
+        if host_header and host_header not in {"127.0.0.1", "localhost", "testserver"}:
+            return Response("Bad Request: Invalid Host", status_code=400)
+
+        # (2) 更新系リクエストに対する CSRF & 外部Origin防御
+        if request.method in ("POST", "PUT", "DELETE", "PATCH"):
+            # Sec-Fetch-Site 検証: cross-site からの更新は即時遮断
+            sec_fetch_site = request.headers.get("sec-fetch-site")
+            if sec_fetch_site == "cross-site":
+                return Response("Forbidden: Cross-site request rejected", status_code=403)
+
+            # Origin 検証: 外部ドメインからの更新は即時遮断
+            origin = request.headers.get("origin")
+            if origin and origin not in ALLOWED_ORIGINS:
+                return Response("Forbidden: Origin not allowed", status_code=403)
+
+            # /api/ 配下に対する X-App-Token 暗号学的検証
+            if request.url.path.startswith("/api/"):
+                token = request.headers.get("x-app-token", "")
+                if not token or not secrets.compare_digest(token, APP_SECURITY_TOKEN):
+                    return Response("Unauthorized: Valid X-App-Token required", status_code=401)
+
+        response = await call_next(request)
+        return response
+
+app.add_middleware(SecurityEnforcementMiddleware)
+
+# 2. CORS設定 (限定Origin, credentials=False, PATCH明示許可)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allow_headers=["X-Requested-With", "X-App-Token", "Content-Type", "Accept"],
 )
 
 app.mount("/media", StaticFiles(directory=str(MEDIA_DIR)), name="media")
@@ -63,22 +109,38 @@ db_service = DBService()
 export_service = ExportService(db_service)
 
 # ==========================================
-# 画面配信 (HTML Routes)
+# 画面配信 (HTML Routes) とセキュリティトークン注入
 # ==========================================
 EDITOR_HTML_PATH = BASE_DIR / "editor_form.html"
 OCR_HTML_PATH = BASE_DIR / "ocr_form1_designer.html"
+OCR_TEST_HTML_PATH = BASE_DIR / "ocr_test_full.html"
+
+def _inject_security_token(html_text: str) -> str:
+    """HTMLの<head>直後にセキュリティトークンを安全に注入"""
+    token_script = f'<meta name="app-token" content="{APP_SECURITY_TOKEN}"><script>window.__APP_SECURITY_TOKEN__ = "{APP_SECURITY_TOKEN}";</script>'
+    if "<head>" in html_text:
+        return html_text.replace("<head>", f"<head>{token_script}", 1)
+    elif "<HEAD>" in html_text:
+        return html_text.replace("<HEAD>", f"<HEAD>{token_script}", 1)
+    return token_script + html_text
 
 def _render_editor():
     if EDITOR_HTML_PATH.exists():
         with open(EDITOR_HTML_PATH, "r", encoding="utf-8") as f:
-            return HTMLResponse(content=f.read())
+            return HTMLResponse(content=_inject_security_token(f.read()))
     return HTMLResponse(content="<h1>MyNotebookLM Backend Running</h1>")
 
 def _render_ocr():
     if OCR_HTML_PATH.exists():
         with open(OCR_HTML_PATH, "r", encoding="utf-8") as f:
-            return HTMLResponse(content=f.read())
+            return HTMLResponse(content=_inject_security_token(f.read()))
     return HTMLResponse(content="<h1>OCR Form1 Designer Not Found</h1>", status_code=404)
+
+def _render_ocr_test():
+    if OCR_TEST_HTML_PATH.exists():
+        with open(OCR_TEST_HTML_PATH, "r", encoding="utf-8") as f:
+            return HTMLResponse(content=_inject_security_token(f.read()))
+    return HTMLResponse(content="<h1>OCR Test Full Not Found</h1>", status_code=404)
 
 @app.get("/", response_class=HTMLResponse)
 def read_root():
@@ -103,6 +165,11 @@ def get_editor_form():
 @app.get("/ocr_app.html", response_class=HTMLResponse)
 def get_ocr_form():
     return _render_ocr()
+
+@app.get("/ocr_test_full.html", response_class=HTMLResponse)
+@app.get("/ocr_test_full", response_class=HTMLResponse)
+def get_ocr_test_form():
+    return _render_ocr_test()
 
 
 # ==========================================
@@ -339,45 +406,124 @@ def rename_editor_document(doc_id: str, req: RenameDocumentRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50MB
+ALLOWED_EXTENSIONS = {".docx", ".odt", ".pdf"}
+
+async def _read_file_safely(file: UploadFile, max_size: int = MAX_UPLOAD_SIZE) -> bytes:
+    """ストリーミングサイズを監視しながら安全にファイルを読み込み (50MB超過で即時切断)"""
+    content = bytearray()
+    chunk_size = 1024 * 1024  # 1MB
+    while True:
+        chunk = await file.read(chunk_size)
+        if not chunk:
+            break
+        content.extend(chunk)
+        if len(content) > max_size:
+            raise HTTPException(status_code=413, detail="ファイルサイズが上限(50MB)を超過しています")
+    return bytes(content)
+
+def _verify_magic_number(ext: str, content: bytes) -> None:
+    """ファイルのマジックナンバー (先頭シグネチャ) を検証"""
+    if ext == ".pdf":
+        if not content.startswith(b"%PDF-"):
+            raise ValueError("不正なPDFファイルです: マジックナンバー (%PDF-) が一致しません")
+    elif ext in (".docx", ".odt"):
+        if not content.startswith(b"PK\x03\x04"):
+            raise ValueError(f"不正な{ext.upper()}ファイルです: PKヘッダ (PK\\x03\\x04) が一致しません")
+
+def _verify_zip_safety(content: bytes, max_uncompressed_bytes: int = 200 * 1024 * 1024, max_ratio: float = 50.0) -> None:
+    """Zip爆弾防御 (展開時合計200MB上限 & 圧縮比率1:50上限)"""
+    try:
+        with zipfile.ZipFile(io.BytesIO(content)) as zf:
+            total_uncompressed = 0
+            total_compressed = 0
+            for info in zf.infolist():
+                total_uncompressed += info.file_size
+                total_compressed += info.compress_size
+                if total_uncompressed > max_uncompressed_bytes:
+                    raise ValueError("Zip爆弾の疑いがあります: 展開後サイズが200MBを超過しています")
+            if total_compressed > 0 and (total_uncompressed / total_compressed) > max_ratio:
+                raise ValueError("Zip爆弾の疑いがあります: 圧縮比率が異常に高すぎます (>50:1)")
+    except zipfile.BadZipFile:
+        raise ValueError("Zipアーカイブが破損しているか形式が不正です")
+
 def _process_single_import(filename: str, content: bytes) -> Dict[str, Any]:
-    """1ファイルのパースとDB保存を実行"""
-    ext = Path(filename).suffix.lower()
-    temp_path = BASE_DIR / "data" / filename
-    temp_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(temp_path, "wb") as f:
-        f.write(content)
+    """多層防御を備えた1ファイルの安全なインポートとDB保存"""
+    # 1. パストラバーサル防止（純粋なファイル名のみ抽出）
+    safe_basename = Path(filename).name.strip()
+    if not safe_basename:
+        safe_basename = "uploaded_file"
+    ext = Path(safe_basename).suffix.lower()
 
-    if ext == ".docx":
-        importer = DocxImporter(media_dir=MEDIA_DIR)
-        bundle = importer.parse_file(temp_path)
-    elif ext == ".odt":
-        importer = OdtImporter(media_dir=MEDIA_DIR)
-        bundle = importer.parse_file(temp_path)
-    elif ext == ".pdf":
-        importer = PdfImporter(media_dir=MEDIA_DIR)
-        bundle = importer.parse_file(temp_path)
-    else:
-        raise ValueError(f"Unsupported format: {ext}. Support .odt, .docx, .pdf")
+    # 2. 拡張子ホワイトリスト検証
+    if ext not in ALLOWED_EXTENSIONS:
+        raise ValueError(f"許可されていない拡張子です: {ext} (許可: .docx, .odt, .pdf)")
 
-    doc_id = db_service.save_document_bundle(bundle)
-    return {
-        "document_id": doc_id,
-        "title": bundle["document"]["title"],
-        "source_type": bundle["document"]["source_type"],
-        "sections_count": len(bundle["sections"]),
-        "blocks_count": len(bundle["blocks"]),
-        "tables_count": len(bundle["tables"]),
-        "figures_count": len(bundle["figures"])
-    }
+    # 3. マジックナンバー検証
+    _verify_magic_number(ext, content)
+
+    # 4. Zip爆弾検証 (DOCX / ODT)
+    if ext in (".docx", ".odt"):
+        _verify_zip_safety(content)
+
+    # 5. UUID隔離保存 & 境界検証 (is_relative_to)
+    unique_name = f"{uuid.uuid4().hex}_{safe_basename}"
+    temp_path = (TEMP_UPLOAD_DIR / unique_name).resolve()
+    if not temp_path.is_relative_to(TEMP_UPLOAD_DIR.resolve()):
+        raise ValueError("セキュリティエラー: 隔離ディレクトリ外への書き込みは拒絶されました")
+
+    try:
+        with open(temp_path, "wb") as f:
+            f.write(content)
+
+        if ext == ".docx":
+            importer = DocxImporter(media_dir=MEDIA_DIR)
+            bundle = importer.parse_file(temp_path, original_filename=safe_basename)
+        elif ext == ".odt":
+            importer = OdtImporter(media_dir=MEDIA_DIR)
+            bundle = importer.parse_file(temp_path, original_filename=safe_basename)
+        elif ext == ".pdf":
+            importer = PdfImporter(media_dir=MEDIA_DIR)
+            bundle = importer.parse_file(temp_path, original_filename=safe_basename)
+        else:
+            raise ValueError(f"Unsupported format: {ext}")
+
+        # タイトルおよびファイル名からUUIDなどの一時プレフィックスが確実に排除されていることを保証
+        expected_title = Path(safe_basename).stem
+        if bundle.get("document"):
+            bundle["document"]["title"] = expected_title
+            bundle["document"]["source_filename"] = safe_basename
+        if bundle.get("sections") and len(bundle["sections"]) > 0:
+            if bundle["sections"][0].get("level") == 1 and bundle["sections"][0].get("parent_id") is None:
+                bundle["sections"][0]["title"] = expected_title
+
+        doc_id = db_service.save_document_bundle(bundle)
+        return {
+            "document_id": doc_id,
+            "title": bundle["document"]["title"],
+            "source_type": bundle["document"]["source_type"],
+            "sections_count": len(bundle["sections"]),
+            "blocks_count": len(bundle["blocks"]),
+            "tables_count": len(bundle["tables"]),
+            "figures_count": len(bundle["figures"])
+        }
+    finally:
+        # 6. 必ずクリーンアップ (finally unlink)
+        try:
+            temp_path.unlink(missing_ok=True)
+        except Exception:
+            pass
 
 
 @app.post("/api/editor/import-file")
 async def import_editor_file(file: UploadFile = File(...)):
     """ODT / DOCX / PDF ファイルを受信して自動解析しDBに格納"""
     try:
-        content = await file.read()
+        content = await _read_file_safely(file)
         res = _process_single_import(file.filename, content)
         return {"status": "success", **res}
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -394,7 +540,7 @@ async def import_editor_files_batch(files: List[UploadFile] = File(...)):
     for file in files:
         filename = file.filename
         try:
-            content = await file.read()
+            content = await _read_file_safely(file)
             res = _process_single_import(filename, content)
             results.append({
                 "filename": filename,
@@ -641,11 +787,22 @@ def save_ocr_page_to_disk(filename: str, page_number: int, data: Dict[str, Any])
             updated_figs = save_figure_images_to_disk(pdf_name, page_number, figures, regions)
             save_dict["figures"] = updated_figs
 
+        body_text = data.get("body_text", "")
+        # 本文系 regions に最新の body_text を同期し、古いテキストの残存を根絶
+        if body_text and regions:
+            body_regs = [r for r in regions if r.get("type") in ["body", "paragraph", None]]
+            if len(body_regs) == 1:
+                body_regs[0]["text"] = body_text
+            elif len(body_regs) > 1:
+                body_regs[0]["text"] = body_text
+                for br in body_regs[1:]:
+                    br["text"] = ""
+            save_dict["regions"] = regions
+
         json_path = page_dir / "page_data.json"
         with open(json_path, "w", encoding="utf-8") as f:
             json.dump(save_dict, f, ensure_ascii=False, indent=2)
 
-        body_text = data.get("body_text", "")
         if body_text:
             with open(page_dir / "body_reading_order.txt", "w", encoding="utf-8") as f:
                 f.write(body_text)
@@ -1390,12 +1547,12 @@ def apply_batch_proofread(req: ProofreadApplyRequest):
 # ユーザー補正辞書 & 縦中横（10〜99）REST API
 # ==========================================
 USER_DICT_PATHS = [
-    Path(r"C:\Users\natur\source\repos\OCR_Translator\ocr_engine\config\user_dictionary.json"),
-    BASE_DIR / "data" / "user_dictionary.json"
+    BASE_DIR / "data" / "user_dictionary.json",
+    Path(r"C:\Users\natur\source\repos\OCR_Translator\ocr_engine\config\user_dictionary.json")
 ]
 TCY_REGISTRY_PATHS = [
-    Path(r"C:\Users\natur\source\repos\OCR_Translator\ocr_engine\config\tcy_registry.json"),
-    BASE_DIR / "data" / "tcy_registry.json"
+    BASE_DIR / "data" / "tcy_registry.json",
+    Path(r"C:\Users\natur\source\repos\OCR_Translator\ocr_engine\config\tcy_registry.json")
 ]
 
 @app.get("/api/user-dict")
@@ -1418,6 +1575,11 @@ def save_user_dict(payload: Dict[str, Any]):
                 json.dump(payload, f, ensure_ascii=False, indent=2)
         except Exception:
             pass
+    try:
+        from app.ocr_pipeline.user_dict_service import UserDictService
+        UserDictService.get_instance().reload_if_needed(force=True)
+    except Exception:
+        pass
     return {"status": "success", "count": len(payload.get("rules", []))}
 
 @app.get("/api/tcy-registry")

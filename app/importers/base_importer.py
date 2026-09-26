@@ -15,7 +15,7 @@ class BaseImporter(ABC):
         self.media_dir.mkdir(parents=True, exist_ok=True)
 
     @abstractmethod
-    def parse_file(self, file_path: Path) -> Dict[str, Any]:
+    def parse_file(self, file_path: Path, original_filename: Optional[str] = None) -> Dict[str, Any]:
         """
         ファイルを解析し、DBService.save_document_bundle() に直接渡せる
         ドキュメントバンドル（document, sections, blocks, tables, figures, annotations）を返す

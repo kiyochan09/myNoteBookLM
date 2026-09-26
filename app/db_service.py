@@ -2,8 +2,19 @@ import sqlite3
 import json
 import uuid
 import datetime
+import html
 from pathlib import Path
 from typing import Dict, Any, List, Optional
+
+def sanitize_fts_snippet(snippet_text: str) -> str:
+    """SQLite FTS5のsnippet()結果から<mark>タグのみを維持し、他の全テキストを安全にHTMLエスケープ"""
+    if not snippet_text:
+        return ""
+    token_open = "___FTS_MARK_OPEN___"
+    token_close = "___FTS_MARK_CLOSE___"
+    escaped_tokens = snippet_text.replace("<mark>", token_open).replace("</mark>", token_close)
+    safe = html.escape(escaped_tokens)
+    return safe.replace(token_open, "<mark>").replace(token_close, "</mark>")
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DEFAULT_NOTEBOOK_DB_PATH = BASE_DIR / "data" / "my_notebook.db"
@@ -1014,8 +1025,15 @@ class DBService:
                 """,
                 (q_clean, limit)
             ).fetchall()
-            return [dict(r) for r in rows]
+            results = []
+            for r in rows:
+                item = dict(r)
+                if "snippet" in item and item["snippet"]:
+                    item["snippet"] = sanitize_fts_snippet(item["snippet"])
+                results.append(item)
+            return results
         except Exception:
             return []
         finally:
             conn.close()
+

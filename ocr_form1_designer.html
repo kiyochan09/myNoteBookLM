@@ -423,6 +423,22 @@
     }
     .btn-delete-disk:hover { background: #fee2e2; }
 
+    /* 検索マッチ語ハイライト */
+    mark.search-match-highlight {
+        background-color: #fde047 !important;
+        color: #0f172a !important;
+        font-weight: bold !important;
+        padding: 1px 3px !important;
+        border-radius: 2px !important;
+        box-shadow: 0 0 0 1.5px #ca8a04 !important;
+        animation: searchHighlightPulse 1.2s ease-in-out;
+    }
+    @keyframes searchHighlightPulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.15); background-color: #facc15; }
+        100% { transform: scale(1); }
+    }
+
     /* バッチ・プロジェクト内テキスト検索モーダル (BatchSearchForm.cs 準拠) */
     #batchSearchModal {
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -1956,13 +1972,13 @@
         </div>
     </div>
 
-<div id="progressModal" class="modal-overlay" style="display:none; z-index:3500;">
-        <div class="modal-container" style="width: 530px; box-shadow: 0 25px 50px rgba(0,0,0,0.35);">
+    <div id="progressModal" class="modal-overlay" style="display:none; z-index:3500;" onclick="if(!isAutoLayoutRunning && event.target === this) closeProgressModal()">
+        <div class="modal-container" style="width: 530px; box-shadow: 0 25px 50px rgba(0,0,0,0.35);" onclick="event.stopPropagation()">
             <div class="modal-header" style="background:#f1f5f9; border-bottom:1px solid #cbd5e1;">
                 <h3 style="font-size:15px; font-weight:bold; color:#0f172a; display:flex; align-items:center; gap:8px;">
                     <span style="color:#d97706; font-size:18px;">⚡</span> 領域自動判定 - 進行状況
                 </h3>
-                <button class="modal-close-btn" id="btnProgressClose" onclick="cancelAutoLayout()" title="閉じる">✕</button>
+                <button class="modal-close-btn" id="btnProgressClose" onclick="closeProgressModal()" title="閉じる">✕</button>
             </div>
             <div class="modal-body" style="padding: 20px 24px; gap: 16px;">
                 <div id="lblProgressTitle" style="font-size: 13.5px; font-weight: bold; color: #1e293b; line-height: 1.5;">
@@ -1982,8 +1998,8 @@
                     準備中...
                 </div>
             </div>
-            <div class="modal-footer" style="padding: 10px 18px; background:#f8fafc;">
-                <button class="btn-opt-cancel" id="btnCancelAutoLayout" onclick="cancelAutoLayout()" style="background:#fee2e2; color:#b91c1c; border-color:#fca5a5; font-weight:bold;">
+            <div class="modal-footer" style="padding: 10px 18px; background:#f8fafc; display:flex; justify-content:flex-end; gap:10px;">
+                <button class="btn-opt-cancel" id="btnCancelAutoLayout" onclick="cancelAutoLayout()" style="background:#fee2e2; color:#b91c1c; border-color:#fca5a5; font-weight:bold; min-width:90px;">
                     ⏹️ 中止
                 </button>
             </div>
@@ -2011,11 +2027,8 @@
                 <div style="display:flex; flex-wrap:wrap; gap:12px; font-size:12px; background:#f1f5f9; padding:8px 12px; border-radius:4px; border:1px solid #e2e8f0; align-items:center;">
                     <div style="display:flex; align-items:center; gap:6px;">
                         <span style="font-weight:bold; color:#334155;">検索範囲:</span>
-                        <select id="cmbBatchSearchScope" class="toolbar-num-box" style="height:28px; width:210px; font-size:12px;">
-                            <option value="current_batch">作業中のバッチ</option>
-                            <option value="all_batches">全バッチ (プロジェクト全体)</option>
-                            <option value="current_page">現在のページのみ</option>
-                        </select>
+                        <span style="font-weight:bold; color:#0f766e; background:#ccfbf1; padding:3px 10px; border-radius:4px; font-size:12px; border:1px solid #99f6e4;">🌐 全バッチ検索 (プロジェクト全体)</span>
+                        <input type="hidden" id="cmbBatchSearchScope" value="all_batches">
                     </div>
                     <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
                         <label style="cursor:pointer; display:flex; align-items:center; gap:4px;"><input type="checkbox" id="chkSearchBody" checked> 本文</label>
@@ -2030,9 +2043,8 @@
                 <div style="display:flex; justify-content:space-between; align-items:center; font-size:12px; gap:8px;">
                     <span id="lblBatchSearchStatus" style="font-weight:bold; color:#0369a1; flex:1; line-height:1.4;">検索語を入力して「検索」ボタンを押してください</span>
                     <div style="display:flex; gap:6px; flex-shrink:0;">
-                        <button class="table-btn" onclick="navigateSearchResult(-1)" title="現在バッチ内の前の一致へ移動">▲ 前の一致</button>
-                        <button class="table-btn" onclick="navigateSearchResult(1)" title="現在バッチ内の次の一致へ移動">▼ 次の一致</button>
-                        <button class="table-btn" onclick="searchNextBatchManual()" title="次のバッチ以降で一致するページを検索して移動" style="background:#f0fdf4; color:#166534; border-color:#86efac; font-weight:bold;">⏩ 次のバッチ検索</button>
+                        <button class="table-btn" onclick="navigateSearchResult(-1)" title="前の一致へ移動">▲ 前の一致</button>
+                        <button class="table-btn" onclick="navigateSearchResult(1)" title="次の一致へ移動">▼ 次の一致</button>
                     </div>
                 </div>
                 <!-- 検索結果一覧テーブル -->
@@ -2140,9 +2152,44 @@
     </div>
 
 <script>
+    // セキュリティ: Same-Origin ガード付き fetch インターセプター (X-App-Token & X-Requested-With 自動付与)
+    (function() {
+        const originalFetch = window.fetch;
+        function isSameOriginUrl(url) {
+            try {
+                const u = new URL(url, window.location.href);
+                return u.origin === window.location.origin;
+            } catch(e) {
+                return false;
+            }
+        }
+        window.fetch = async function(resource, init = {}) {
+            init = init || {};
+            init.headers = init.headers || {};
+            const url = typeof resource === 'string' ? resource : (resource instanceof Request ? resource.url : '');
+            if (isSameOriginUrl(url)) {
+                const token = window.__APP_SECURITY_TOKEN__ || (document.querySelector('meta[name="app-token"]') ? document.querySelector('meta[name="app-token"]').content : '');
+                if (init.headers instanceof Headers) {
+                    init.headers.set('X-Requested-With', 'XMLHttpRequest');
+                    if (token) init.headers.set('X-App-Token', token);
+                } else if (Array.isArray(init.headers)) {
+                    init.headers.push(['X-Requested-With', 'XMLHttpRequest']);
+                    if (token) init.headers.push(['X-App-Token', token]);
+                } else {
+                    init.headers['X-Requested-With'] = 'XMLHttpRequest';
+                    if (token) init.headers['X-App-Token'] = token;
+                }
+            }
+            return originalFetch(resource, init);
+        };
+    })();
+
     // ==========================================
-    // グローバル状態管理
+    // API基底URL & グローバル状態管理
     // ==========================================
+    const API_BASE = (window.location.origin && window.location.origin.startsWith("http")) 
+        ? window.location.origin 
+        : "http://127.0.0.1:8000";
     let currentPdfFile = null;
     let isManualDrawMode = false;       // ユーザーが開いたPDFファイルオブジェクト (永続保持)
     let currentPage = 1;             // 現在表示ページ番号 (1-based)
@@ -2251,7 +2298,20 @@
     let selectedCellPos = null;
 
     // ==========================================
-    // ログ出力
+    // セキュリティ: HTMLエスケープ (完全版: &, <, >, ", ')
+    // ==========================================
+    function escapeHtml(str) {
+        if (str === null || str === undefined) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    // ==========================================
+    // ログ出力 (内部で自動エスケープしファイル名XSSを完全遮断)
     // ==========================================
     function appendLog(tag, message, type = "normal") {
         const txtLog = document.getElementById("txtLog");
@@ -2262,7 +2322,11 @@
         if (type === "success") typeClass = "log-success";
         if (type === "warn") typeClass = "log-warn";
 
-        logLine.innerHTML = `<span class="log-time">[${timeStr}]</span><span class="log-tag">【${tag}】</span><span class="${typeClass}">${message}</span>`;
+        const safeTag = escapeHtml(tag || "");
+        const safeMsg = escapeHtml(message || "");
+
+        const htmlContent = `<span class="log-time">[${timeStr}]</span><span class="log-tag">【${safeTag}】</span><span class="${typeClass}">${safeMsg}</span>`;
+        logLine.innerHTML = htmlContent;
         if (txtLog) {
             txtLog.appendChild(logLine);
             txtLog.scrollTop = txtLog.scrollHeight;
@@ -2270,7 +2334,7 @@
 
         const lblLatest = document.getElementById("lblLogLatestMsg");
         if (lblLatest) {
-            lblLatest.innerHTML = `<span class="log-time">[${timeStr}]</span><span class="log-tag">【${tag}】</span><span class="${typeClass}">${message}</span>`;
+            lblLatest.innerHTML = htmlContent;
         }
     }
 
@@ -2548,6 +2612,7 @@
         const lblElapsed = document.getElementById("lblProgressElapsed");
         const lblStatus = document.getElementById("lblProgressStatus");
         const btnCancel = document.getElementById("btnCancelAutoLayout");
+        const btnCloseX = document.getElementById("btnProgressClose");
 
         if (lblTitle) {
             lblTitle.innerHTML = isCurrentOnly 
@@ -2559,9 +2624,14 @@
         if (lblElapsed) lblElapsed.textContent = "経過: 00:00";
         if (lblStatus) lblStatus.textContent = "初期化中...\nNDLOCR-Liteエンジンを呼び出しています。";
         if (btnCancel) {
-            btnCancel.textContent = "中止";
+            btnCancel.textContent = "⏹️ 中止";
             btnCancel.disabled = false;
+            btnCancel.onclick = cancelAutoLayout;
+            btnCancel.style.background = "#fee2e2";
+            btnCancel.style.color = "#b91c1c";
+            btnCancel.style.borderColor = "#fca5a5";
         }
+        if (btnCloseX) btnCloseX.onclick = cancelAutoLayout;
         if (modal) modal.style.display = "flex";
 
         isAutoLayoutRunning = true;
@@ -2590,11 +2660,11 @@
                     break;
                 }
 
-                const pct = Math.round((i / totalTarget) * 100);
-                if (barFill) barFill.style.width = `${pct}%`;
-                if (lblCount) lblCount.textContent = `${i} / ${totalTarget} ページ (${pct}%)`;
-                if (lblStatus) lblStatus.textContent = `ページ ${p} / ${totalPages} (対象内: ${i + 1}/${totalTarget}) を処理しています...
-NDLOCR-Lite文字認識・領域解析を実行中...`;
+                // 実行開始時のプログレス表示（単一ページなら50%、複数なら開始比率）
+                const startPct = totalTarget === 1 ? 50 : Math.round((i / totalTarget) * 100);
+                if (barFill) barFill.style.width = `${startPct}%`;
+                if (lblCount) lblCount.textContent = `${i} / ${totalTarget} ページ (${startPct}%)`;
+                if (lblStatus) lblStatus.textContent = `ページ ${p} / ${totalPages} (対象内: ${i + 1}/${totalTarget}) を処理しています...\nNDLOCR-Lite文字認識・領域解析を実行中...`;
 
                 try {
                     const formData = new FormData();
@@ -2675,6 +2745,9 @@ NDLOCR-Lite文字認識・領域解析を実行中...`;
                     }
 
                     successCount++;
+                    const donePct = Math.round(((i + 1) / totalTarget) * 100);
+                    if (barFill) barFill.style.width = `${donePct}%`;
+                    if (lblCount) lblCount.textContent = `${i + 1} / ${totalTarget} ページ (${donePct}%)`;
                     appendLog(`第${p}ページOCR`, `成功: 領域 ${data.regions ? data.regions.length : 0}件`, "success");
                 } catch (pageErr) {
                     failureCount++;
@@ -2685,48 +2758,60 @@ NDLOCR-Lite文字認識・領域解析を実行中...`;
             if (barFill) barFill.style.width = "100%";
             if (lblCount) lblCount.textContent = `${totalTarget} / ${totalTarget} ページ (100%)`;
             if (lblStatus) lblStatus.textContent = `========== OCR実行完了 ==========\n成功: ${successCount}ページ / 失敗: ${failureCount}ページ\n左側領域枠と右側テキストを確認してください。`;
-            if (btnCancel) btnCancel.textContent = "閉じる";
+            
+            // 完了時のボタン切替: 閉じるボタンとして機能
+            if (btnCancel) {
+                btnCancel.textContent = "閉じる";
+                btnCancel.disabled = false;
+                btnCancel.onclick = closeProgressModal;
+                btnCancel.style.background = "#dbeafe";
+                btnCancel.style.color = "#1e40af";
+                btnCancel.style.borderColor = "#93c5fd";
+            }
+            if (btnCloseX) btnCloseX.onclick = closeProgressModal;
 
             appendLog("OCR実行完了", `成功: ${successCount}ページ, 失敗: ${failureCount}ページ`, "success");
 
-            // 対象バッチの全ページを右側UIタブへ展開
-            const minP = validPages[0];
-            const maxP = validPages[validPages.length - 1];
-            if (typeof loadBatchDataToUi === "function") {
-                loadBatchDataToUi(minP, maxP);
-            }
-
-            // 画面表示の更新
-            if (validPages.includes(currentPage)) {
-                if (pageCache[currentPage]) {
-                    currentDocData = JSON.parse(JSON.stringify(pageCache[currentPage].docData));
-                    currentPageImgInfo = pageCache[currentPage].imgInfo;
+            // 画面表示・UIデータの安全な更新
+            try {
+                // 対象バッチの全ページを右側UIタブへ展開
+                const minP = validPages[0];
+                const maxP = validPages[validPages.length - 1];
+                if (typeof loadBatchDataToUi === "function") {
+                    loadBatchDataToUi(minP, maxP);
                 }
-                if (typeof renderRegionList === "function") renderRegionList(currentDocData?.regions || []);
-                if (typeof renderBBoxes === "function") renderBBoxes(currentDocData?.regions || []);
-                if (typeof renderTables === "function") renderTables(currentDocData?.tables || []);
-                if (typeof renderFigures === "function") renderFigures(currentDocData?.figures || []);
-                if (typeof renderHeadings === "function") renderHeadings(currentDocData?.headings || []);
-                if (typeof renderFootnotes === "function") renderFootnotes(currentDocData?.footnotes || []);
-                if (typeof renderBodyText === "function") renderBodyText();
-            } else {
-                await goToPage(validPages[0]);
-            }
 
-            if (typeof scrollOcrResultToPage === "function") {
-                scrollOcrResultToPage(validPages[0]);
-            }
-            if (typeof switchTab === "function") {
-                switchTab("body");
+                if (validPages.includes(currentPage)) {
+                    if (pageCache[currentPage]) {
+                        currentDocData = JSON.parse(JSON.stringify(pageCache[currentPage].docData));
+                        currentPageImgInfo = pageCache[currentPage].imgInfo;
+                    }
+                    if (typeof renderRegionList === "function") renderRegionList(currentDocData?.regions || []);
+                    if (typeof renderBBoxes === "function") renderBBoxes(currentDocData?.regions || []);
+                    if (typeof renderTables === "function") renderTables(currentDocData?.tables || []);
+                    if (typeof renderFigures === "function") renderFigures(currentDocData?.figures || []);
+                    if (typeof renderHeadings === "function") renderHeadings(currentDocData?.headings || []);
+                    if (typeof renderFootnotes === "function") renderFootnotes(currentDocData?.footnotes || []);
+                } else {
+                    await goToPage(validPages[0]);
+                }
+
+                if (typeof scrollOcrResultToPage === "function") {
+                    scrollOcrResultToPage(validPages[0]);
+                }
+                if (typeof switchTab === "function") {
+                    switchTab("body");
+                }
+            } catch (uiErr) {
+                console.warn("[UI Update Warning]", uiErr);
             }
         } finally {
             clearInterval(timerInterval);
             isAutoLayoutRunning = false;
+            // 1秒後に自動でモーダルを確実に閉じる（ユーザーが閉じるのを待つ必要なく快適に操作復帰）
             setTimeout(() => {
-                if (modal && modal.style.display !== "none" && !autoLayoutCancelRequested) {
-                    modal.style.display = "none";
-                }
-            }, 1400);
+                closeProgressModal();
+            }, 1000);
         }
     }
 
@@ -2748,6 +2833,24 @@ NDLOCR-Lite文字認識・領域解析を実行中...`;
         await startOcrBatchProcessing(pages, false);
     }
 
+    function closeProgressModal() {
+        isAutoLayoutRunning = false;
+        autoLayoutCancelRequested = false;
+        const modal = document.getElementById("progressModal");
+        if (modal) modal.style.display = "none";
+        const btn = document.getElementById("btnCancelAutoLayout");
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = "⏹️ 中止";
+            btn.onclick = cancelAutoLayout;
+            btn.style.background = "#fee2e2";
+            btn.style.color = "#b91c1c";
+            btn.style.borderColor = "#fca5a5";
+        }
+        const btnCloseX = document.getElementById("btnProgressClose");
+        if (btnCloseX) btnCloseX.onclick = closeProgressModal;
+    }
+
     function cancelAutoLayout() {
         if (isAutoLayoutRunning) {
             autoLayoutCancelRequested = true;
@@ -2755,9 +2858,16 @@ NDLOCR-Lite文字認識・領域解析を実行中...`;
             if (lbl) lbl.textContent = "処理の中止をリクエスト中...";
             const btn = document.getElementById("btnCancelAutoLayout");
             if (btn) btn.disabled = true;
+            // 安全対策: 万が一2秒以上経っても応答がない場合は強制クローズ可能にする
+            setTimeout(() => {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = "閉じる";
+                    btn.onclick = closeProgressModal;
+                }
+            }, 1800);
         } else {
-            const modal = document.getElementById("progressModal");
-            if (modal) modal.style.display = "none";
+            closeProgressModal();
         }
     }
 
@@ -2791,9 +2901,25 @@ NDLOCR-Lite文字認識・領域解析を実行中...`;
         }, delayMs);
     }
 
+    function syncBodyTextToRegions(docData, newText) {
+        if (!docData || !Array.isArray(docData.regions) || !newText) return;
+        const bodyRegions = docData.regions.filter(r => !r.type || r.type === "body" || r.type === "paragraph");
+        if (bodyRegions.length === 1) {
+            bodyRegions[0].text = newText;
+        } else if (bodyRegions.length > 1) {
+            bodyRegions[0].text = newText;
+            for (let i = 1; i < bodyRegions.length; i++) {
+                bodyRegions[i].text = "";
+            }
+        }
+    }
+
     function saveCurrentPageToCache(isUserEdit = false) {
         if (currentDocData && currentPageImgInfo) {
             if (isUserEdit) markPageModified(currentPage);
+            if (currentDocData.body_text) {
+                syncBodyTextToRegions(currentDocData, currentDocData.body_text);
+            }
             const dataCopy = JSON.parse(JSON.stringify(currentDocData));
             dataCopy.page_number = currentPage;
             dataCopy.current_page = currentPage;
@@ -2868,6 +2994,10 @@ NDLOCR-Lite文字認識・領域解析を実行中...`;
 
         if (target !== currentPage) {
             saveCurrentPageToCache();
+            // ページを移動したら検索語のハイライトを自動解除
+            if (typeof clearSearchHighlight === "function") {
+                clearSearchHighlight(true);
+            }
         }
 
         currentPage = target;
@@ -4165,8 +4295,10 @@ NDLOCR-Lite文字認識・領域解析を実行中...`;
                     pageCache[p].docData.body_text = txt;
                     pageCache[p].isModified = true;
                 }
+                syncBodyTextToRegions(pageCache[p].docData, txt);
                 if (p === currentPage && currentDocData) {
                     currentDocData.body_text = txt;
+                    syncBodyTextToRegions(currentDocData, txt);
                 }
                 markPageModified(p);
                 if (typeof updateBatchDashboardForPage === "function") {
@@ -4177,6 +4309,7 @@ NDLOCR-Lite文字認識・領域解析を実行中...`;
         } else {
             if (currentDocData) {
                 currentDocData.body_text = fullText;
+                syncBodyTextToRegions(currentDocData, fullText);
                 markPageModified(currentPage);
                 saveCurrentPageToCache(true);
             }
@@ -4307,26 +4440,39 @@ NDLOCR-Lite文字認識・領域解析を実行中...`;
             const card = document.createElement("div");
             card.className = "figure-card";
             const imgSrc = (fig.image_base64 && fig.image_base64.trim()) ? fig.image_base64 : "";
-            const imgHtml = imgSrc ? `<img src="${imgSrc}" alt="${fig.name || '図版'}">` : `<div style="padding:20px; color:#94a3b8; font-size:12px;">画像データなし</div>`;
-            const saveBtnHtml = imgSrc ? `<button class="table-btn" onclick="saveSingleFigure('${fig.name || 'figure'}', '${imgSrc}')">💾 PNG保存</button>` : '';
-            const customBadge = fig.is_custom_image ? `<span style="background:#10b981; color:#fff; font-size:10.5px; padding:2px 7px; border-radius:3px; margin-left:8px; font-weight:normal;">🎨 差し替え済み</span>` : '';
-            const replaceBtnHtml = `<button class="table-btn" style="background:#0284c7; color:#fff; border-color:#0369a1; font-weight:bold;" onclick="openFigureReplaceMenu('${fig.id}', ${fig.page || currentPage}, '${(fig.name || '図版').replace(/'/g, "\\'")}')">🔄 図の差し替え</button>`;
+            const safeCaption = escapeHtml(fig.name || '図版');
+            const customBadgeHtml = fig.is_custom_image ? `<span style="background:#10b981; color:#fff; font-size:10.5px; padding:2px 7px; border-radius:3px; margin-left:8px; font-weight:normal;">🎨 差し替え済み</span>` : '';
             
             card.innerHTML = `
                 <div class="figure-img-wrap">
-                    ${imgHtml}
+                    ${imgSrc ? `<img src="${escapeHtml(imgSrc)}" alt="${safeCaption}">` : `<div style="padding:20px; color:#94a3b8; font-size:12px;">画像データなし</div>`}
                 </div>
                 <div class="figure-info">
                     <div>
-                        <div class="figure-title">${fig.name || '図版'}${customBadge}</div>
-                        <div class="figure-meta">領域寸法: 幅 ${fig.w || 0}px × 高さ ${fig.h || 0}px<br>配置座標: X=${fig.x || 0}, Y=${fig.y || 0}${fig.file_size_kb ? ` | 容量: ${fig.file_size_kb} KB` : ''}</div>
+                        <div class="figure-title">${safeCaption}${customBadgeHtml}</div>
+                        <div class="figure-meta">領域寸法: 幅 ${Number(fig.w || 0)}px × 高さ ${Number(fig.h || 0)}px<br>配置座標: X=${Number(fig.x || 0)}, Y=${Number(fig.y || 0)}${fig.file_size_kb ? ` | 容量: ${escapeHtml(String(fig.file_size_kb))} KB` : ''}</div>
                     </div>
-                    <div class="figure-actions" style="display:flex; gap:8px; align-items:center;">
-                        ${saveBtnHtml}
-                        ${replaceBtnHtml}
-                    </div>
+                    <div class="figure-actions" style="display:flex; gap:8px; align-items:center;"></div>
                 </div>
             `;
+
+            const actionsContainer = card.querySelector(".figure-actions");
+            if (imgSrc) {
+                const btnSave = document.createElement("button");
+                btnSave.className = "table-btn";
+                btnSave.textContent = "💾 PNG保存";
+                // クロージャで直接変数を引き渡し (onclick属性脱出XSSを完全遮断)
+                btnSave.onclick = () => saveSingleFigure(fig.name || 'figure', imgSrc);
+                actionsContainer.appendChild(btnSave);
+            }
+
+            const btnReplace = document.createElement("button");
+            btnReplace.className = "table-btn";
+            btnReplace.style.cssText = "background:#0284c7; color:#fff; border-color:#0369a1; font-weight:bold;";
+            btnReplace.textContent = "🔄 図の差し替え";
+            btnReplace.onclick = () => openFigureReplaceMenu(fig.id, fig.page || currentPage, fig.name || '図版');
+            actionsContainer.appendChild(btnReplace);
+
             gallery.appendChild(card);
         });
     }
@@ -4789,101 +4935,7 @@ NDLOCR-Lite文字認識・領域解析を実行中...`;
     }
 
     async function exportWord() {
-        // 1. 文書名の特定
-        let docName = (currentPdfFile && currentPdfFile.name) ? currentPdfFile.name : "";
-        if (!docName) {
-            const batchLabel = document.getElementById("lblCurrentBatchDisplay")?.innerText || "";
-            const m = batchLabel.match(/「([^」]+)」/);
-            if (m) docName = m[1];
-        }
-        if (!docName) {
-            try {
-                const checkRes = await fetch("http://127.0.0.1:8000/api/figures/batch-list");
-                const checkData = await checkRes.json();
-                if (checkData.batches && checkData.batches.length > 0) {
-                    docName = checkData.batches[0].folder_name;
-                }
-            } catch(e) {}
-        }
-        if (!docName) {
-            docName = prompt("出力対象のドキュメント名（またはPDFファイル名）を入力してください:", "諜報国家ロシア") || "";
-        }
-        if (!docName) {
-            alert("出力対象のドキュメントが選択されていません。");
-            return;
-        }
-
-        const stem = docName.replace(/\.pdf$/i, "");
-
-        // 2. オプションの取得
-        const mergeCross = document.getElementById("optMergeCrossPage") ? document.getElementById("optMergeCrossPage").checked : true;
-        const insertBreak = document.getElementById("optInsertPageBreak") ? document.getElementById("optInsertPageBreak").checked : false;
-        const lineChars = document.getElementById("optLineCharCount") ? parseInt(document.getElementById("optLineCharCount").value) || 0 : 0;
-
-        // 現在の編集内容をキャッシュに反映 (READ-ONLY安全)
-        saveCurrentPageToCache();
-
-        // メモリ上の最新ページ配列
-        const memoryPages = [];
-        if (typeof pageCache === 'object' && pageCache) {
-            Object.keys(pageCache).forEach(pNum => {
-                if (pageCache[pNum] && pageCache[pNum].docData) {
-                    memoryPages.push(pageCache[pNum].docData);
-                }
-            });
-        }
-
-        appendLog("Word出力開始", `【Word出力開始】「${stem}」の全ページ統合Word文書 (.docx) を生成しています...`, "info");
-
-        // ボタンのスピナー・無効化
-        const btnToolbar = document.getElementById("btnExportWord");
-        const btnDashboard = document.getElementById("btnExportWordFromDashboard");
-        if (btnToolbar) { btnToolbar.disabled = true; btnToolbar.style.opacity = "0.6"; }
-        if (btnDashboard) { btnDashboard.disabled = true; btnDashboard.style.opacity = "0.6"; }
-
-        try {
-            const reqBody = {
-                filename: docName,
-                merge_cross_page: mergeCross,
-                insert_page_break: insertBreak,
-                line_char_count: lineChars,
-                memory_pages: memoryPages.length > 0 ? memoryPages : null
-            };
-
-            const res = await fetch("http://127.0.0.1:8000/api/batch/export-docx", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(reqBody)
-            });
-
-            if (!res.ok) {
-                const errText = await res.text();
-                throw new Error(errText || `HTTP ${res.status}`);
-            }
-
-            const blob = await res.blob();
-            const downloadUrl = window.URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.style.display = "none";
-            a.href = downloadUrl;
-            a.download = `${stem}.docx`;
-            document.body.appendChild(a);
-            a.click();
-            setTimeout(() => {
-                window.URL.revokeObjectURL(downloadUrl);
-                document.body.removeChild(a);
-            }, 1000);
-
-            appendLog("Word出力完了", `【Word出力成功】全ページの本文・見出し・表・図版・注釈を統合したWord文書「${stem}.docx」を出力しました。`, "success");
-            alert(`Word文書「${stem}.docx」の出力が完了しました。\nブラウザのダウンロードフォルダをご確認ください。`);
-        } catch (err) {
-            console.error("Word export failed:", err);
-            appendLog("Word出力エラー", `Word出力に失敗しました: ${err.message}`, "error");
-            alert(`Word出力中にエラーが発生しました:\n${err.message}`);
-        } finally {
-            if (btnToolbar) { btnToolbar.disabled = false; btnToolbar.style.opacity = "1"; }
-            if (btnDashboard) { btnDashboard.disabled = false; btnDashboard.style.opacity = "1"; }
-        }
+        await openWordRangeExportModal();
     }
 
     function toggleOrientation() {
@@ -5774,11 +5826,9 @@ NDLOCR-Lite文字認識・領域解析を実行中...`;
         const endP = parseInt(document.getElementById("numPageEnd").value) || totalPages;
 
         const scopeSelect = document.getElementById("cmbBatchSearchScope");
-        if (scopeSelect) {
+        if (scopeSelect && scopeSelect.tagName === "SELECT") {
             scopeSelect.innerHTML = `
-                <option value="current_batch">作業中のバッチ (${startP}〜${endP}P)</option>
-                <option value="all_batches">全バッチ (プロジェクト全体: 1〜${totalPages}P)</option>
-                <option value="current_page">現在のページのみ (P.${currentPage})</option>
+                <option value="all_batches" selected>全バッチ (プロジェクト全体: 1〜${totalPages}P)</option>
             `;
         }
 
@@ -5923,6 +5973,187 @@ NDLOCR-Lite文字認識・領域解析を実行中...`;
         }
     }
 
+    let currentHighlightedTerm = "";
+
+    function clearSearchHighlight(clearTerm = false) {
+        if (clearTerm) {
+            currentHighlightedTerm = "";
+        }
+        // 1. 本文や表内のハイライトマーク (<mark class="search-match-highlight">) を安全に解除
+        const marks = document.querySelectorAll("mark.search-match-highlight");
+        marks.forEach(mark => {
+            const parent = mark.parentNode;
+            if (parent) {
+                while (mark.firstChild) {
+                    parent.insertBefore(mark.firstChild, mark);
+                }
+                parent.removeChild(mark);
+                parent.normalize();
+            }
+        });
+
+        // 2. 見出し・注釈カードの強調枠を解除
+        document.querySelectorAll(".heading-card, .footnote-card").forEach(card => {
+            card.style.outline = "";
+            card.style.background = "";
+        });
+
+        // 3. テーブルセルの強調枠を解除
+        const dgv = document.getElementById("dgvBody");
+        if (dgv) {
+            dgv.querySelectorAll("td").forEach(td => {
+                if (td.style.outline && td.style.outline.includes("rgb(202, 138, 4)")) {
+                    td.style.outline = "";
+                    td.style.background = "";
+                }
+            });
+        }
+    }
+
+    function applySearchHighlight(term, pageNum, targetTab) {
+        clearSearchHighlight(false);
+        if (!term) return;
+        currentHighlightedTerm = term;
+
+        let targetElementToScroll = null;
+
+        if (targetTab === "body") {
+            const bodyBox = document.getElementById("richTextBox1");
+            if (bodyBox) {
+                // 対象ページ (pageNum) の範囲内ノードを優先特定
+                let nodesToProcess = [];
+                const anchor = document.getElementById(`pageAnchor_${pageNum}`);
+                if (anchor) {
+                    let curr = anchor.nextSibling;
+                    while (curr && (!curr.classList || !curr.classList.contains("page-anchor-header"))) {
+                        nodesToProcess.push(curr);
+                        curr = curr.nextSibling;
+                    }
+                }
+                if (nodesToProcess.length === 0) {
+                    // ページアンカー未分離または単一ページ表示時は本文全体を対象
+                    nodesToProcess = [bodyBox];
+                }
+
+                // 対象ノード群からテキストノードを収集
+                const textNodes = [];
+                nodesToProcess.forEach(rootNode => {
+                    if (rootNode.nodeType === Node.TEXT_NODE) {
+                        if (rootNode.nodeValue && rootNode.nodeValue.toLowerCase().includes(term.toLowerCase())) {
+                            textNodes.push(rootNode);
+                        }
+                    } else if (rootNode.nodeType === Node.ELEMENT_NODE) {
+                        const walker = document.createTreeWalker(rootNode, NodeFilter.SHOW_TEXT, null, false);
+                        let tn;
+                        while ((tn = walker.nextNode())) {
+                            if (tn.parentNode && tn.parentNode.classList && tn.parentNode.classList.contains("search-match-highlight")) {
+                                continue;
+                            }
+                            if (tn.nodeValue && tn.nodeValue.toLowerCase().includes(term.toLowerCase())) {
+                                textNodes.push(tn);
+                            }
+                        }
+                    }
+                });
+
+                for (const textNode of textNodes) {
+                    const parent = textNode.parentNode;
+                    if (!parent) continue;
+                    const val = textNode.nodeValue;
+                    const lowerVal = val.toLowerCase();
+                    const lowerTerm = term.toLowerCase();
+                    let lastIdx = 0;
+                    let idx = lowerVal.indexOf(lowerTerm);
+                    if (idx === -1) continue;
+
+                    const frag = document.createDocumentFragment();
+                    while (idx !== -1) {
+                        if (idx > lastIdx) {
+                            frag.appendChild(document.createTextNode(val.substring(lastIdx, idx)));
+                        }
+                        const mark = document.createElement("mark");
+                        mark.className = "search-match-highlight";
+                        mark.appendChild(document.createTextNode(val.substring(idx, idx + term.length)));
+                        if (!targetElementToScroll) {
+                            targetElementToScroll = mark;
+                        }
+                        frag.appendChild(mark);
+                        lastIdx = idx + term.length;
+                        idx = lowerVal.indexOf(lowerTerm, lastIdx);
+                    }
+                    if (lastIdx < val.length) {
+                        frag.appendChild(document.createTextNode(val.substring(lastIdx)));
+                    }
+                    parent.replaceChild(frag, textNode);
+                }
+            }
+        } else if (targetTab === "heading") {
+            const headingContainer = document.getElementById("headingContainer");
+            if (headingContainer) {
+                const inputs = headingContainer.querySelectorAll(".heading-input");
+                for (const inp of inputs) {
+                    if (inp.value && inp.value.toLowerCase().includes(term.toLowerCase())) {
+                        const card = inp.closest(".heading-card");
+                        if (card) {
+                            card.style.outline = "2px solid #ca8a04";
+                            card.style.background = "#fef9c3";
+                            if (!targetElementToScroll) targetElementToScroll = card;
+                        }
+                        try {
+                            inp.focus();
+                            const sIdx = inp.value.toLowerCase().indexOf(term.toLowerCase());
+                            if (sIdx !== -1) {
+                                inp.setSelectionRange(sIdx, sIdx + term.length);
+                            }
+                        } catch(e) {}
+                        break;
+                    }
+                }
+            }
+        } else if (targetTab === "footnote") {
+            const footnoteContainer = document.getElementById("footnoteContainer");
+            if (footnoteContainer) {
+                const inputs = footnoteContainer.querySelectorAll(".heading-input");
+                for (const inp of inputs) {
+                    if (inp.value && inp.value.toLowerCase().includes(term.toLowerCase())) {
+                        const card = inp.closest(".footnote-card");
+                        if (card) {
+                            card.style.outline = "2px solid #ca8a04";
+                            card.style.background = "#fef9c3";
+                            if (!targetElementToScroll) targetElementToScroll = card;
+                        }
+                        try {
+                            inp.focus();
+                            const sIdx = inp.value.toLowerCase().indexOf(term.toLowerCase());
+                            if (sIdx !== -1) {
+                                inp.setSelectionRange(sIdx, sIdx + term.length);
+                            }
+                        } catch(e) {}
+                        break;
+                    }
+                }
+            }
+        } else if (targetTab === "table") {
+            const dgvBody = document.getElementById("dgvBody");
+            if (dgvBody) {
+                const cells = dgvBody.querySelectorAll("td");
+                for (const cell of cells) {
+                    if (cell.innerText && cell.innerText.toLowerCase().includes(term.toLowerCase())) {
+                        cell.style.outline = "2px solid #ca8a04";
+                        cell.style.background = "#fef9c3";
+                        if (!targetElementToScroll) targetElementToScroll = cell;
+                    }
+                }
+            }
+        }
+
+        if (targetElementToScroll) {
+            setTimeout(() => {
+                targetElementToScroll.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 80);
+        }
+    }
+
     async function runBatchSearch() {
         const queryInput = document.getElementById("txtBatchSearchQuery");
         const query = queryInput ? queryInput.value.trim() : "";
@@ -5931,7 +6162,6 @@ NDLOCR-Lite文字認識・領域解析を実行中...`;
             return;
         }
 
-        const scope = document.getElementById("cmbBatchSearchScope").value;
         const searchBody = document.getElementById("chkSearchBody").checked;
         const searchHeading = document.getElementById("chkSearchHeading").checked;
         const searchFootnote = document.getElementById("chkSearchFootnote").checked;
@@ -5954,214 +6184,22 @@ NDLOCR-Lite文字認識・領域解析を実行中...`;
         }
 
         const total = totalPages > 0 ? totalPages : 20;
-        const bSize = Math.min(20, Math.max(5, parseInt(appSettings.BatchPageSize) || 20));
 
-        // 1. 現在のページのみ
-        if (scope === "current_page") {
-            const results = searchRange(currentPage, currentPage, regex, searchFlags);
-            batchSearchResults = results;
-            currentSearchResultIdx = -1;
-            if (results.length === 0) {
-                showNoResults(query, `現在のページ (P.${currentPage})`);
-                return;
-            }
-            renderSearchResultsUI(`検索結果: ${results.length}件の一致が見つかりました (P.${currentPage})`);
-            jumpToSearchResult(0);
-            return;
-        }
-
-        // 2. 全バッチ (プロジェクト全体)
-        if (scope === "all_batches") {
-            const results = searchRange(1, total, regex, searchFlags);
-            batchSearchResults = results;
-            currentSearchResultIdx = -1;
-            if (results.length === 0) {
-                showNoResults(query, `全ページ (1〜${total}P)`);
-                return;
-            }
-            renderSearchResultsUI(`検索結果: 全バッチから ${results.length}件の一致が見つかりました (1〜${total}P)`);
-            jumpToSearchResult(0);
-            return;
-        }
-
-        // 3. 作業中のバッチ (current_batch) -> なければ次のバッチを自動検索
-        let startP = parseInt(document.getElementById("numPageStart").value) || 1;
-        let endP = parseInt(document.getElementById("numPageEnd").value) || total;
-
-        const currentBatchResults = searchRange(startP, endP, regex, searchFlags);
-        if (currentBatchResults.length > 0) {
-            batchSearchResults = currentBatchResults;
-            currentSearchResultIdx = -1;
-            const bNum = selectedBatchIndex || Math.floor((startP - 1) / bSize) + 1;
-            renderSearchResultsUI(`検索結果: ${currentBatchResults.length}件の一致が見つかりました (${getCircledNumber(bNum)} P.${startP}〜P.${endP})`);
-            jumpToSearchResult(0);
-            return;
-        }
-
-        // 表示中のバッチにない場合 -> 次のバッチを順番に自動検索
-        appendLog("文字検索", `表示中のバッチ (P.${startP}〜P.${endP}) に「${query}」は見つかりませんでした。次のバッチを自動検索します...`, "info");
-
-        let allBatches = [...batchListData];
-        if (allBatches.length === 0) {
-            let bIdx = 1;
-            for (let sp = 1; sp <= total; sp += bSize) {
-                allBatches.push({
-                    batchIndex: bIdx++,
-                    startPage: sp,
-                    endPage: Math.min(total, sp + bSize - 1)
-                });
-            }
-        }
-
-        const curBatchIdx = selectedBatchIndex || Math.floor((startP - 1) / bSize) + 1;
-        let foundBatch = null;
-        let foundResults = [];
-
-        // 1. 次のバッチ〜末尾バッチまで探索
-        for (let i = 0; i < allBatches.length; i++) {
-            const b = allBatches[i];
-            if (b.batchIndex > curBatchIdx) {
-                const nextRes = searchRange(b.startPage, b.endPage, regex, searchFlags);
-                if (nextRes.length > 0) {
-                    foundBatch = b;
-                    foundResults = nextRes;
-                    break;
-                }
-            }
-        }
-
-        // 2. 末尾までに見つからなければ、先頭バッチ〜現在バッチ手前まで探索 (周回検索)
-        if (!foundBatch) {
-            for (let i = 0; i < allBatches.length; i++) {
-                const b = allBatches[i];
-                if (b.batchIndex < curBatchIdx) {
-                    const wrapRes = searchRange(b.startPage, b.endPage, regex, searchFlags);
-                    if (wrapRes.length > 0) {
-                        foundBatch = b;
-                        foundResults = wrapRes;
-                        break;
-                    }
-                }
-            }
-        }
-
-        if (foundBatch && foundResults.length > 0) {
-            await selectBatch(foundBatch.startPage, foundBatch.endPage, foundBatch.batchIndex);
-
-            const scopeSelect = document.getElementById("cmbBatchSearchScope");
-            if (scopeSelect && scopeSelect.querySelector("option[value='current_batch']")) {
-                scopeSelect.querySelector("option[value='current_batch']").innerText = `作業中のバッチ (${foundBatch.startPage}〜${foundBatch.endPage}P)`;
-            }
-
-            batchSearchResults = foundResults;
-            currentSearchResultIdx = -1;
-            const batchLabel = `${getCircledNumber(foundBatch.batchIndex)} P.${foundBatch.startPage}〜P.${foundBatch.endPage}`;
-            renderSearchResultsUI(`表示中バッチになかったため、次のバッチ【${batchLabel}】を検索しました (${foundResults.length}件ヒット)`);
-            appendLog("文字検索", `表示中バッチに一致がなく、次バッチ【${batchLabel}】へ自動移動し、${foundResults.length}件の一致を検出しました`, "success");
-            jumpToSearchResult(0);
-            return;
-        }
-
-        // 全バッチで見つからなかった場合
-        batchSearchResults = [];
+        // 全バッチ検索 (プロジェクト全体) に一本化
+        const results = searchRange(1, total, regex, searchFlags);
+        batchSearchResults = results;
         currentSearchResultIdx = -1;
-        showNoResults(query, `全バッチ (全${total}ページ)`);
+        if (results.length === 0) {
+            showNoResults(query, `全バッチ (全${total}ページ)`);
+            return;
+        }
+        renderSearchResultsUI(`検索結果: 全バッチから ${results.length}件の一致が見つかりました (1〜${total}P)`);
+        await jumpToSearchResult(0);
     }
 
-    async function searchNextBatchManual() {
-        const queryInput = document.getElementById("txtBatchSearchQuery");
-        const query = queryInput ? queryInput.value.trim() : "";
-        if (!query) {
-            alert("検索文字列を入力してください。");
-            return;
-        }
-
-        const searchBody = document.getElementById("chkSearchBody").checked;
-        const searchHeading = document.getElementById("chkSearchHeading").checked;
-        const searchFootnote = document.getElementById("chkSearchFootnote").checked;
-        const searchTable = document.getElementById("chkSearchTable").checked;
-        const matchCase = document.getElementById("chkSearchMatchCase").checked;
-        const isRegex = document.getElementById("chkSearchRegex").checked;
-        const searchFlags = { searchBody, searchHeading, searchFootnote, searchTable };
-
-        let regex = null;
-        try {
-            if (isRegex) {
-                regex = new RegExp(query, matchCase ? "g" : "gi");
-            } else {
-                const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                regex = new RegExp(escaped, matchCase ? "g" : "gi");
-            }
-        } catch (err) {
-            alert("正規表現の構文が無効です: " + err.message);
-            return;
-        }
-
-        const total = totalPages > 0 ? totalPages : 20;
-        const bSize = Math.min(20, Math.max(5, parseInt(appSettings.BatchPageSize) || 20));
-
-        let allBatches = [...batchListData];
-        if (allBatches.length === 0) {
-            let bIdx = 1;
-            for (let sp = 1; sp <= total; sp += bSize) {
-                allBatches.push({
-                    batchIndex: bIdx++,
-                    startPage: sp,
-                    endPage: Math.min(total, sp + bSize - 1)
-                });
-            }
-        }
-
-        const curStart = parseInt(document.getElementById("numPageStart").value) || 1;
-        const curBatchIdx = selectedBatchIndex || Math.floor((curStart - 1) / bSize) + 1;
-
-        let foundBatch = null;
-        let foundResults = [];
-
-        // 現在バッチより後ろのバッチを探索
-        for (let i = 0; i < allBatches.length; i++) {
-            const b = allBatches[i];
-            if (b.batchIndex > curBatchIdx) {
-                const res = searchRange(b.startPage, b.endPage, regex, searchFlags);
-                if (res.length > 0) {
-                    foundBatch = b;
-                    foundResults = res;
-                    break;
-                }
-            }
-        }
-
-        // 見つからなければ先頭から現在バッチ手前まで周回探索
-        if (!foundBatch) {
-            for (let i = 0; i < allBatches.length; i++) {
-                const b = allBatches[i];
-                if (b.batchIndex < curBatchIdx) {
-                    const res = searchRange(b.startPage, b.endPage, regex, searchFlags);
-                    if (res.length > 0) {
-                        foundBatch = b;
-                        foundResults = res;
-                        break;
-                    }
-                }
-            }
-        }
-
-        if (foundBatch && foundResults.length > 0) {
-            await selectBatch(foundBatch.startPage, foundBatch.endPage, foundBatch.batchIndex);
-            const scopeSelect = document.getElementById("cmbBatchSearchScope");
-            if (scopeSelect && scopeSelect.querySelector("option[value='current_batch']")) {
-                scopeSelect.querySelector("option[value='current_batch']").innerText = `作業中のバッチ (${foundBatch.startPage}〜${foundBatch.endPage}P)`;
-            }
-
-            batchSearchResults = foundResults;
-            currentSearchResultIdx = -1;
-            const batchLabel = `${getCircledNumber(foundBatch.batchIndex)} P.${foundBatch.startPage}〜P.${foundBatch.endPage}`;
-            renderSearchResultsUI(`次のバッチ【${batchLabel}】で ${foundResults.length}件の一致が見つかりました`);
-            appendLog("文字検索", `次の一致バッチ【${batchLabel}】へ移動しました (${foundResults.length}件ヒット)`, "success");
-            jumpToSearchResult(0);
-        } else {
-            alert(`これ以降のバッチに「${query}」に一致する項目は見つかりませんでした。`);
-        }
+    function searchNextBatchManual() {
+        // 全バッチ検索一本化に伴い次の一致へ移動
+        navigateSearchResult(1);
     }
 
     function createSnippet(text, start, length) {
@@ -6173,11 +6211,7 @@ NDLOCR-Lite文字認識・領域解析を実行中...`;
         return `${escapeHtml(prefix)}<mark style="background:#fef08a; font-weight:bold; padding:0 2px;">${escapeHtml(match)}</mark>${escapeHtml(suffix)}`;
     }
 
-    function escapeHtml(str) {
-        return (str || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    }
-
-    function jumpToSearchResult(idx) {
+    async function jumpToSearchResult(idx) {
         if (idx < 0 || idx >= batchSearchResults.length) return;
         currentSearchResultIdx = idx;
         const res = batchSearchResults[idx];
@@ -6193,13 +6227,21 @@ NDLOCR-Lite文字認識・領域解析を実行中...`;
 
         // ページ移動 & タブ切替
         if (res.pageNum !== currentPage) {
-            goToPage(res.pageNum);
+            await goToPage(res.pageNum);
         }
         if (res.tab) {
             switchTab(res.tab);
         }
 
-        document.getElementById("lblBatchSearchStatus").innerText = `結果 ${idx + 1} / ${batchSearchResults.length}件 (P.${res.pageNum} - ${res.targetType})`;
+        // 検索語のハイライトを適用
+        const queryInput = document.getElementById("txtBatchSearchQuery");
+        const term = res.matchedText || (queryInput ? queryInput.value.trim() : "");
+        applySearchHighlight(term, res.pageNum, res.tab);
+
+        const statusEl = document.getElementById("lblBatchSearchStatus");
+        if (statusEl) {
+            statusEl.innerText = `結果 ${idx + 1} / ${batchSearchResults.length}件 (P.${res.pageNum} - ${res.targetType})`;
+        }
     }
 
     function navigateSearchResult(delta) {
@@ -6448,7 +6490,7 @@ NDLOCR-Lite文字認識・領域解析を実行中...`;
                     <span style="color:#16a34a; font-weight:bold; max-width:110px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(c.suggested)}</span>
                 </div>
                 <div style="font-size:10px; color:#64748b; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
-                    ${c.reason}
+                    ${escapeHtml(c.reason || '')}
                 </div>
             `;
             listEl.appendChild(card);
@@ -6875,6 +6917,23 @@ NDLOCR-Lite文字認識・領域解析を実行中...`;
             }
         } catch(e) {}
 
+        // サーバー側 /api/user-dict とのリアルタイム同期（旧字体辞書や最新ルールの取得）
+        fetch("/api/user-dict")
+            .then(res => res.json())
+            .then(data => {
+                if (data && Array.isArray(data.rules) && data.rules.length > 0) {
+                    userDictRules = data.rules;
+                    try {
+                        localStorage.setItem("ocr_repos_user_dict_rules", JSON.stringify(userDictRules));
+                    } catch(e) {}
+                    if (document.getElementById("userDictModal") && document.getElementById("userDictModal").style.display !== "none") {
+                        renderUserDictTable();
+                    }
+                    updateOptDictStats();
+                }
+            })
+            .catch(err => console.warn("Notice: /api/user-dict fetch skipped or offline", err));
+
         try {
             const rawTcy = localStorage.getItem("ocr_repos_tcy_registry");
             if (rawTcy) {
@@ -7145,11 +7204,6 @@ NDLOCR-Lite文字認識・領域解析を実行中...`;
         updateUserDictLiveTest();
     }
 
-    function escapeHtml(str) {
-        if (!str) return "";
-        return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-    }
-
     function openAddRuleForm() {
         const pnl = document.getElementById("pnlUserDictRuleEditor");
         if (!pnl) return;
@@ -7257,6 +7311,13 @@ NDLOCR-Lite文字認識・領域解析を実行中...`;
         try {
             localStorage.setItem("ocr_repos_user_dict_rules", JSON.stringify(userDictRules));
         } catch(e) {}
+
+        // サーバー（data/user_dictionary.json）へリアルタイム同期保存
+        fetch("/api/user-dict", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ rules: userDictRules, status: "ok" })
+        }).catch(err => console.warn("Notice: /api/user-dict sync skipped or offline", err));
     }
 
     function exportUserDictJson() {
@@ -7546,23 +7607,53 @@ NDLOCR-Lite文字認識・領域解析を実行中...`;
 
 
     // ==========================================
+    // ドキュメント名の安全・自動特定
+    // ==========================================
+    async function getEffectiveDocumentName() {
+        if (currentPdfFile && currentPdfFile.name) {
+            return currentPdfFile.name;
+        }
+        if (currentDocData && currentDocData.filename) {
+            return currentDocData.filename;
+        }
+        if (typeof pageCache === 'object' && pageCache) {
+            for (const p of Object.values(pageCache)) {
+                if (p && p.docData && p.docData.filename) {
+                    return p.docData.filename;
+                }
+            }
+        }
+        const lblDoc = document.getElementById("lblWordExportDocName") || document.getElementById("lblOcrRunDocName");
+        if (lblDoc && lblDoc.innerText && lblDoc.innerText !== "ドキュメント" && lblDoc.innerText !== "-") {
+            return lblDoc.innerText.trim();
+        }
+        try {
+            const checkRes = await fetch(`${API_BASE}/api/editor/ocr-batches`);
+            if (checkRes.ok) {
+                const checkData = await checkRes.json();
+                if (checkData.batches && checkData.batches.length > 0) {
+                    return checkData.batches[0].batch_name;
+                }
+            }
+        } catch(e) {
+            console.warn("getEffectiveDocumentName error:", e);
+        }
+        return "ウクライナ侵攻までの3000日";
+    }
+
+    // ==========================================
     // Word (.docx) ページ範囲出力機能
     // ==========================================
-    function openWordRangeExportModal(customStart, customEnd) {
-        let docName = (currentPdfFile && currentPdfFile.name) ? currentPdfFile.name : "";
-        if (!docName) {
-            const batchLabel = document.getElementById("lblCurrentBatchDisplay")?.innerText || "";
-            const m = batchLabel.match(/「([^」]+)」/);
-            if (m) docName = m[1];
-        }
-        if (!docName) docName = "ドキュメント";
+    async function openWordRangeExportModal(customStart, customEnd) {
+        let docName = await getEffectiveDocumentName();
+        const cleanDocName = docName.replace(/\.pdf$/i, "");
 
         const lblDoc = document.getElementById("lblWordExportDocName");
-        if (lblDoc) lblDoc.innerText = docName.replace(/\.pdf$/i, "");
+        if (lblDoc) lblDoc.innerText = cleanDocName;
 
         const curStart = parseInt(document.getElementById("numPageStart")?.value) || 1;
         const curEnd = parseInt(document.getElementById("numPageEnd")?.value) || Math.min(20, totalPages || 20);
-        const totalP = totalPages > 0 ? totalPages : 20;
+        const totalP = totalPages > 0 ? totalPages : (batchListData && batchListData.length > 0 ? (batchListData[batchListData.length - 1].endPage || 20) : 20);
 
         const inputStart = document.getElementById("numWordRangeStart");
         const inputEnd = document.getElementById("numWordRangeEnd");
@@ -7651,24 +7742,7 @@ NDLOCR-Lite文字認識・領域解析を実行中...`;
 
     async function executeWordExport({ mode = "range", pageStart = null, pageEnd = null, pages = null, customMergeCross = null, customInsertBreak = null } = {}) {
         // 1. 文書名の特定
-        let docName = (currentPdfFile && currentPdfFile.name) ? currentPdfFile.name : "";
-        if (!docName) {
-            const batchLabel = document.getElementById("lblCurrentBatchDisplay")?.innerText || "";
-            const m = batchLabel.match(/「([^」]+)」/);
-            if (m) docName = m[1];
-        }
-        if (!docName) {
-            try {
-                const checkRes = await fetch(`${API_BASE}/api/figures/batch-list`);
-                const checkData = await checkRes.json();
-                if (checkData.batches && checkData.batches.length > 0) {
-                    docName = checkData.batches[0].folder_name;
-                }
-            } catch(e) {}
-        }
-        if (!docName) {
-            docName = prompt("出力対象のドキュメント名（またはPDFファイル名）を入力してください:", "諜報国家ロシア") || "";
-        }
+        let docName = await getEffectiveDocumentName();
         if (!docName) {
             alert("出力対象のドキュメントが選択されていません。");
             return;

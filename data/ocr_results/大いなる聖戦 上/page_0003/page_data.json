@@ -1,0 +1,41 @@
+{
+  "page": 3,
+  "regions": [
+    {
+      "id": "reg-body-1",
+      "name": "本文 (1段組)",
+      "type": "body",
+      "color": "#e11d48",
+      "x": 363,
+      "y": 1112,
+      "w": 356,
+      "h": 36,
+      "text": "=== ページ 3 ===\n\n",
+      "reading_order": 1
+    }
+  ],
+  "tables": [],
+  "headings": [],
+  "footnotes": [],
+  "figures": [],
+  "body_text": "=== ページ 3 ===\n\n",
+  "ocr_lines": [
+    {
+      "x": 371,
+      "y": 1120,
+      "w": 340,
+      "h": 20,
+      "text": "Lical con",
+      "is_vertical": false,
+      "confidence": 0.917
+    }
+  ],
+  "filename": "大いなる聖戦 上.pdf",
+  "total_pages": 439,
+  "current_page": 3,
+  "page_width": 407,
+  "page_height": 648,
+  "image_width": 816,
+  "image_height": 1297,
+  "page_number": 3
+}

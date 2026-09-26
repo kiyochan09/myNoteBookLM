@@ -329,14 +329,20 @@ class DocxImporter(BaseImporter):
 
         return full_plain, full_html, meta
 
-    def parse_file(self, file_path: Path) -> Dict[str, Any]:
+    def parse_file(self, file_path: Path, original_filename: Optional[str] = None) -> Dict[str, Any]:
         file_path = Path(file_path).resolve()
         if not file_path.exists():
             raise FileNotFoundError(f"File not found: {file_path}")
 
         doc = docx.Document(str(file_path))
         doc_id = f"doc-{uuid.uuid4().hex[:12]}"
-        doc_title = file_path.stem
+        if original_filename:
+            doc_title = Path(original_filename).stem
+            source_file_name = Path(original_filename).name
+        else:
+            clean_name = re.sub(r'^[0-9a-fA-F]{32}_', '', file_path.name)
+            doc_title = Path(clean_name).stem
+            source_file_name = clean_name
 
         sections: List[Dict[str, Any]] = []
         blocks: List[Dict[str, Any]] = []
@@ -652,7 +658,7 @@ class DocxImporter(BaseImporter):
                 "id": doc_id,
                 "title": doc_title,
                 "source_type": "docx",
-                "source_filename": file_path.name,
+                "source_filename": source_file_name,
                 "total_pages": 1,
                 "doc_metadata_json": {
                     "original_path": str(file_path),

@@ -99,10 +99,23 @@
         align-items: center;
         gap: 4px;
         flex-wrap: nowrap;
-        overflow-x: auto;
+        overflow: visible;
     }
-    .tb-row-top { height: 36px; min-height: 36px; border-bottom: 1px dashed #e2e8f0; padding-bottom: 3px; }
-    .tb-row-bottom { height: 34px; min-height: 34px; padding-top: 1px; }
+    .tb-row-top { 
+        height: 36px; 
+        min-height: 36px; 
+        border-bottom: 1px dashed #e2e8f0; 
+        padding-bottom: 3px; 
+        position: relative;
+        z-index: 30;
+    }
+    .tb-row-bottom { 
+        height: 34px; 
+        min-height: 34px; 
+        padding-top: 1px; 
+        position: relative;
+        z-index: 20;
+    }
 
     .tb-group {
         display: flex;
@@ -208,21 +221,20 @@
         position: absolute;
         top: calc(100% + 4px);
         left: 0;
-        min-width: 170px;
+        min-width: 200px;
         background: #ffffff;
         border: 1px solid #cbd5e1;
         border-radius: 6px;
-        box-shadow: 0 8px 16px rgba(0,0,0,0.12);
-        z-index: 100;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.18);
+        z-index: 1000;
         padding: 4px 0;
         font-size: 0.82rem;
-        animation: fadeInMenu 0.12s ease-out;
     }
-    @keyframes fadeInMenu {
-        from { opacity: 0; transform: translateY(-4px); }
-        to { opacity: 1; transform: translateY(0); }
+    .tb-dropdown-menu.show { 
+        display: block !important; 
+        opacity: 1 !important; 
+        visibility: visible !important;
     }
-    .tb-dropdown-menu.show { display: block; }
     .tb-dropdown-item {
         padding: 6px 12px;
         cursor: pointer;
@@ -311,6 +323,238 @@
 
     /* 下線メニュー */
     .tb-underline-menu { min-width: 180px; }
+
+    /* ===================================================
+       書式スタイルギャラリー (StyleGalleryPopover) & モーダル (StyleEditModal)
+       =================================================== */
+    .style-gallery-popover {
+        display: none;
+        position: absolute;
+        top: calc(100% + 4px);
+        left: 0;
+        width: 480px;
+        background: #ffffff;
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2);
+        z-index: 1000;
+        font-size: 0.78rem;
+        overflow: hidden;
+        user-select: none;
+    }
+    .style-gallery-popover.show {
+        display: block !important;
+    }
+    .style-gallery-header {
+        background: #f1f5f9;
+        padding: 8px 12px;
+        border-bottom: 1px solid #e2e8f0;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .style-gallery-tabs {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+    .style-gallery-tab-btn {
+        padding: 4px 10px;
+        border-radius: 4px;
+        font-size: 0.76rem;
+        font-weight: 600;
+        color: #64748b;
+        border: 1px solid transparent;
+        background: transparent;
+        cursor: pointer;
+        transition: all 0.1s ease;
+    }
+    .style-gallery-tab-btn:hover {
+        background: #e2e8f0;
+        color: #1e293b;
+    }
+    .style-gallery-tab-btn.active {
+        background: #ffffff;
+        color: #2563eb;
+        border-color: #cbd5e1;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+        font-weight: 700;
+    }
+    .style-gallery-body {
+        padding: 10px;
+        max-height: 380px;
+        overflow-y: auto;
+        background: #ffffff;
+    }
+    .style-gallery-grid {
+        display: grid;
+        grid-template-columns: repeat(6, 1fr);
+        gap: 8px;
+    }
+    .style-card {
+        position: relative;
+        border: 1px solid #e2e8f0;
+        border-radius: 6px;
+        height: 74px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: space-between;
+        padding: 4px;
+        background: #ffffff;
+        cursor: pointer;
+        transition: all 0.15s ease;
+    }
+    .style-card:hover {
+        border-color: #93c5fd;
+        box-shadow: 0 2px 8px rgba(37, 99, 235, 0.15);
+        background: #f8fafc;
+    }
+    .style-card.selected {
+        border: 2px solid #2563eb;
+        background: #eff6ff;
+    }
+    .style-card-preview {
+        height: 38px;
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+        font-size: 0.85rem;
+    }
+    .style-card-name {
+        font-size: 0.7rem;
+        color: #334155;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        width: 100%;
+        text-align: center;
+        line-height: 1.2;
+    }
+    .style-card-actions {
+        display: none;
+        position: absolute;
+        top: 2px;
+        right: 2px;
+        background: rgba(255, 255, 255, 0.95);
+        border: 1px solid #cbd5e1;
+        border-radius: 4px;
+        padding: 2px;
+        gap: 2px;
+        z-index: 10;
+    }
+    .style-card:hover .style-card-actions {
+        display: flex;
+    }
+    .style-card-action-btn {
+        border: none;
+        background: transparent;
+        color: #64748b;
+        cursor: pointer;
+        padding: 2px 4px;
+        font-size: 0.7rem;
+        border-radius: 3px;
+        line-height: 1;
+    }
+    .style-card-action-btn:hover {
+        background: #eff6ff;
+        color: #2563eb;
+    }
+    .style-card-action-btn.btn-del:hover {
+        background: #fef2f2;
+        color: #ef4444;
+    }
+    .style-gallery-footer {
+        background: #1e293b;
+        color: #f8fafc;
+        padding: 8px 12px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 0.74rem;
+    }
+    .style-gallery-footer-actions {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .style-gallery-btn {
+        padding: 4px 10px;
+        border-radius: 4px;
+        border: none;
+        font-size: 0.74rem;
+        font-weight: 600;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        transition: background 0.1s;
+    }
+    .style-gallery-btn-clear {
+        background: #334155;
+        color: #f1f5f9;
+    }
+    .style-gallery-btn-clear:hover {
+        background: #475569;
+    }
+    .style-gallery-btn-new {
+        background: #2563eb;
+        color: #ffffff;
+    }
+    .style-gallery-btn-new:hover {
+        background: #1d4ed8;
+    }
+    .style-gallery-btn-reset {
+        background: transparent;
+        color: #94a3b8;
+    }
+    .style-gallery-btn-reset:hover {
+        background: #334155;
+        color: #f1f5f9;
+    }
+    
+    /* StyleEditModal 内のUIスタイル */
+    .style-modal-cat-btn {
+        flex: 1;
+        padding: 6px 12px;
+        border-radius: 4px;
+        border: 1px solid #cbd5e1;
+        background: #f8fafc;
+        color: #475569;
+        font-size: 0.8rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.15s ease;
+    }
+    .style-modal-cat-btn.active {
+        background: #2563eb;
+        color: #ffffff;
+        border-color: #2563eb;
+        box-shadow: 0 1px 3px rgba(37,99,235,0.3);
+    }
+    .style-preview-container {
+        border: 1px solid #cbd5e1;
+        border-radius: 6px;
+        background: #f8fafc;
+        padding: 10px;
+        margin-top: 6px;
+    }
+    .style-preview-box {
+        min-height: 58px;
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 4px;
+        padding: 10px 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+    }
+
 
     /* 注釈文末セクション */
     .doc-footnotes-section {
@@ -1579,43 +1823,61 @@
 
         <div class="tb-divider"></div>
 
-        <!-- 4. 文字書式 & 段落書式 (別々に配置) -->
-        <div class="tb-group">
-            <!-- 文字書式 -->
-            <div class="tb-dropdown-wrap">
-                <button class="tb-btn tb-btn-text" id="tbBtnCharFormat" onclick="toggleDropdownMenu(event, 'menuCharFormat')" title="文字書式 - ルビ(ふりがな)、傍点、上付き・下付き、全角半角変換など文字単位の書式を設定">
-                    <span>文字書式</span> <i class="fa-solid fa-caret-down" style="font-size:0.75rem;"></i>
-                </button>
-                <div class="tb-dropdown-menu" id="menuCharFormat">
-                    <div class="tb-dropdown-item" onclick="openRubyDialog()"><i class="fa-solid fa-language"></i> ルビ (ふりがな) を挿入...</div>
-                    <div class="tb-dropdown-item" onclick="applyEmphasisDots()"><i class="fa-solid fa-ellipsis"></i> 傍点 (圏点) を付ける</div>
-                    <div class="tb-dropdown-item" onclick="execCmd('superscript')"><i class="fa-solid fa-superscript"></i> 上付き文字 (X²)</div>
-                    <div class="tb-dropdown-item" onclick="execCmd('subscript')"><i class="fa-solid fa-subscript"></i> 下付き文字 (X₂)</div>
-                    <div class="tb-dropdown-divider"></div>
-                    <div class="tb-dropdown-item" onclick="convertCase('upper')"><i class="fa-solid fa-font"></i> 大文字に変換 (UPPERCASE)</div>
-                    <div class="tb-dropdown-item" onclick="convertCase('lower')"><i class="fa-solid fa-font"></i> 小文字に変換 (lowercase)</div>
-                    <div class="tb-dropdown-item" onclick="convertZenHan('zenToHan')"><i class="fa-solid fa-arrows-left-right"></i> 全角英数を半角に変換</div>
-                    <div class="tb-dropdown-item" onclick="convertZenHan('hanToZen')"><i class="fa-solid fa-arrows-left-right"></i> 半角英数を全角に変換</div>
+        <!-- 4. 書式スタイルギャラリー (KaisoRTextEditor互換) -->
+        <div class="tb-group tb-dropdown-wrap" style="position: relative;">
+            <button class="tb-btn tb-btn-text" id="tbBtnStyleGallery" onclick="toggleStyleGalleryPopover(event)" title="書式スタイル - ワンクリックで文字・段落書式を適用、新規スタイルの追加・編集・削除 (Alt+N)">
+                <span style="color: #2563eb; font-weight: 700;">か力漢</span> <span>書式スタイル</span> <i class="fa-solid fa-caret-down" style="font-size:0.75rem;"></i>
+            </button>
+
+            <!-- 書式スタイルギャラリー ポップアップ -->
+            <div id="styleGalleryPopover" class="style-gallery-popover">
+                <div class="style-gallery-header">
+                    <div class="style-gallery-tabs">
+                        <button type="button" class="style-gallery-tab-btn active" id="tabBtnStyleAll" onclick="switchStyleGalleryTab('all')">すべて一覧</button>
+                        <button type="button" class="style-gallery-tab-btn" id="tabBtnStyleChar" onclick="switchStyleGalleryTab('character')"><i class="fa-solid fa-font" style="color:#2563eb;"></i> 文字書式 (<span id="countStyleChar">0</span>)</button>
+                        <button type="button" class="style-gallery-tab-btn" id="tabBtnStylePara" onclick="switchStyleGalleryTab('paragraph')"><i class="fa-solid fa-paragraph" style="color:#d97706;"></i> 段落書式 (<span id="countStylePara">0</span>)</button>
+                    </div>
+                    <button type="button" style="background:transparent; border:none; color:#64748b; font-size:1rem; cursor:pointer;" onclick="closeStyleGalleryPopover()" title="閉じる (Esc)">✕</button>
+                </div>
+                <div class="style-gallery-body" id="styleGalleryBody">
+                    <div class="style-gallery-grid" id="styleGalleryGrid">
+                        <!-- JSで動的にカードを描画 -->
+                    </div>
+                </div>
+                <div class="style-gallery-footer">
+                    <div class="style-gallery-footer-actions">
+                        <button type="button" class="style-gallery-btn style-gallery-btn-clear" onclick="clearPresetFormat()" title="書式のクリア (Alt+C)">
+                            <i class="fa-solid fa-eraser" style="color:#f59e0b;"></i> 書式のクリア(<u>C</u>)
+                        </button>
+                        <button type="button" class="style-gallery-btn style-gallery-btn-new" onclick="openStyleEditModal(null, currentStyleGalleryTab)" title="新しいスタイルの登録 (Alt+N)">
+                            <i class="fa-solid fa-plus"></i> 新しいスタイル(<u>N</u>)...
+                        </button>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <button type="button" class="style-gallery-btn style-gallery-btn-reset" onclick="resetCustomStylesToDefault()" title="初期スタイルにリセット">
+                            <i class="fa-solid fa-rotate-left"></i> 初期状態に戻す
+                        </button>
+                        <span id="totalStyleCountLabel" style="color:#94a3b8; font-size:0.7rem;">合計 0 スタイル</span>
+                    </div>
                 </div>
             </div>
+        </div>
 
-            <!-- 段落書式 (見出し設定を破壊しない) -->
-            <div class="tb-dropdown-wrap">
-                <button class="tb-btn tb-btn-text" id="tbBtnParaFormat" onclick="toggleDropdownMenu(event, 'menuParaFormat')" title="段落書式 - 本文・見出し(H1〜H4)・引用・行間・段落余白を設定 (※既存の見出し設定は維持されます)">
-                    <span>段落書式</span> <i class="fa-solid fa-caret-down" style="font-size:0.75rem;"></i>
-                </button>
-                <div class="tb-dropdown-menu" id="menuParaFormat">
-                    <div class="tb-dropdown-item" onclick="applyParagraphBlock('p')"><i class="fa-solid fa-paragraph"></i> 本文 (標準段落)</div>
-                    <div class="tb-dropdown-item" onclick="applyParagraphBlock('h1')"><i class="fa-solid fa-heading"></i> 見出し 1 (H1)</div>
-                    <div class="tb-dropdown-item" onclick="applyParagraphBlock('h2')"><i class="fa-solid fa-heading"></i> 見出し 2 (H2)</div>
-                    <div class="tb-dropdown-item" onclick="applyParagraphBlock('h3')"><i class="fa-solid fa-heading"></i> 見出し 3 (H3)</div>
-                    <div class="tb-dropdown-item" onclick="applyParagraphBlock('h4')"><i class="fa-solid fa-heading"></i> 見出し 4 (H4)</div>
-                    <div class="tb-dropdown-item" onclick="applyParagraphBlock('blockquote')"><i class="fa-solid fa-quote-left"></i> 引用ブロック</div>
-                    <div class="tb-dropdown-divider"></div>
-                    <div class="tb-dropdown-item" onclick="applyLineHeight('1.2')"><i class="fa-solid fa-arrows-up-down"></i> 行間: 狭い (1.2)</div>
-                    <div class="tb-dropdown-item" onclick="applyLineHeight('1.6')"><i class="fa-solid fa-arrows-up-down"></i> 行間: 標準 (1.6)</div>
-                    <div class="tb-dropdown-item" onclick="applyLineHeight('2.0')"><i class="fa-solid fa-arrows-up-down"></i> 行間: 広い (2.0)</div>
-                </div>
+        <!-- 特殊文字・段落書式（ルビ・傍点・上下付き・大文字小文字・全半角）の予備ドロップダウン -->
+        <div class="tb-group tb-dropdown-wrap" style="position: relative;">
+            <button class="tb-btn tb-btn-text" id="tbBtnSpecialCharMenu" onclick="toggleDropdownMenu(event, 'menuSpecialChar')" title="特殊文字・記号書式 - ルビ(ふりがな)、傍点、上付き・下付き、全角半角変換">
+                <i class="fa-solid fa-ellipsis-vertical" style="color:#64748b;"></i>
+            </button>
+            <div class="tb-dropdown-menu" id="menuSpecialChar">
+                <div class="tb-dropdown-item" onclick="openRubyDialog()"><i class="fa-solid fa-language"></i> ルビ (ふりがな) を挿入...</div>
+                <div class="tb-dropdown-item" onclick="applyEmphasisDots()"><i class="fa-solid fa-ellipsis"></i> 傍点 (圏点) を付ける</div>
+                <div class="tb-dropdown-item" onclick="execCmd('superscript')"><i class="fa-solid fa-superscript"></i> 上付き文字 (X²)</div>
+                <div class="tb-dropdown-item" onclick="execCmd('subscript')"><i class="fa-solid fa-subscript"></i> 下付き文字 (X₂)</div>
+                <div class="tb-dropdown-divider"></div>
+                <div class="tb-dropdown-item" onclick="convertCase('upper')"><i class="fa-solid fa-font"></i> 大文字に変換 (UPPERCASE)</div>
+                <div class="tb-dropdown-item" onclick="convertCase('lower')"><i class="fa-solid fa-font"></i> 小文字に変換 (lowercase)</div>
+                <div class="tb-dropdown-item" onclick="convertZenHan('zenToHan')"><i class="fa-solid fa-arrows-left-right"></i> 全角英数を半角に変換</div>
+                <div class="tb-dropdown-item" onclick="convertZenHan('hanToZen')"><i class="fa-solid fa-arrows-left-right"></i> 半角英数を全角に変換</div>
             </div>
         </div>
 
@@ -1630,7 +1892,7 @@
 
         <!-- 6. 文章BM (ブックマーク) -->
         <div class="tb-group tb-dropdown-wrap">
-            <button class="tb-btn tb-btn-text tb-btn-badge" id="tbBtnBookmark" onclick="toggleDropdownMenu(event, 'menuBookmarkList')" title="文章ブックマーク - カーソル位置をブックマーク登録・一覧からジャンプ">
+            <button class="tb-btn tb-btn-text tb-btn-badge" id="tbBtnBookmark" onclick="toggleBookmarkMenu(event)" title="文章ブックマーク - カーソル位置をブックマーク登録・一覧からジャンプ">
                 <i class="fa-regular fa-bookmark"></i> 文章BM <span id="tbBookmarkCount" class="tb-count-pill">0</span>
             </button>
             <div class="tb-dropdown-menu" id="menuBookmarkList">
@@ -1831,13 +2093,13 @@
 
         <!-- 4. 水平配置: 左揃え, 中央揃え, 右揃え -->
         <div class="tb-group">
-            <button class="tb-btn" onclick="execCmd('justifyLeft')" title="左揃え">
+            <button class="tb-btn" id="tbBtnAlignLeft" onclick="execCmd('justifyLeft')" title="左揃え">
                 <i class="fa-solid fa-align-left"></i>
             </button>
-            <button class="tb-btn" onclick="execCmd('justifyCenter')" title="中央揃え">
+            <button class="tb-btn" id="tbBtnAlignCenter" onclick="execCmd('justifyCenter')" title="中央揃え">
                 <i class="fa-solid fa-align-center"></i>
             </button>
-            <button class="tb-btn" onclick="execCmd('justifyRight')" title="右揃え">
+            <button class="tb-btn" id="tbBtnAlignRight" onclick="execCmd('justifyRight')" title="右揃え">
                 <i class="fa-solid fa-align-right"></i>
             </button>
         </div>
@@ -1846,16 +2108,16 @@
 
         <!-- 5. 箇条書き, 段落番号, インデント解除, インデント -->
         <div class="tb-group">
-            <button class="tb-btn" onclick="execCmd('insertUnorderedList')" title="箇条書き (リスト)">
+            <button class="tb-btn" id="tbBtnListUl" onclick="execCmd('insertUnorderedList')" title="箇条書き (リスト)">
                 <i class="fa-solid fa-list-ul"></i>
             </button>
-            <button class="tb-btn" onclick="execCmd('insertOrderedList')" title="段落番号 (番号付きリスト)">
+            <button class="tb-btn" id="tbBtnListOl" onclick="execCmd('insertOrderedList')" title="段落番号 (番号付きリスト)">
                 <i class="fa-solid fa-list-ol"></i>
             </button>
-            <button class="tb-btn" onclick="execCmd('outdent')" title="インデント解除 (字上げ・左へシフト)">
+            <button class="tb-btn" id="tbBtnOutdent" onclick="execCmd('outdent')" title="インデント解除 (字上げ・左へシフト)">
                 <i class="fa-solid fa-outdent"></i>
             </button>
-            <button class="tb-btn" onclick="execCmd('indent')" title="インデント (字下げ・右へシフト)">
+            <button class="tb-btn" id="tbBtnIndent" onclick="execCmd('indent')" title="インデント (字下げ・右へシフト)">
                 <i class="fa-solid fa-indent"></i>
             </button>
         </div>
@@ -2543,8 +2805,273 @@
     </div>
 </div>
 
+<!-- 書式スタイル登録・編集モーダル (StyleEditModal - KaisoRTextEditor互換) -->
+<div class="modal-backdrop" id="styleEditModal" style="z-index: 180;">
+    <div class="modal-box" style="max-width: 640px; width: 95vw; max-height: 90vh; display: flex; flex-direction: column;">
+        <div class="modal-header" style="background:#0f172a; color:#ffffff;">
+            <div style="display:flex; align-items:center; gap:8px;">
+                <i class="fa-solid fa-font" style="color:#60a5fa;"></i>
+                <span id="styleEditModalTitle" style="font-weight:700;">新しい書式スタイルの登録</span>
+            </div>
+            <button class="modal-close" onclick="closeStyleEditModal()" style="background:transparent; border:none; color:#94a3b8; font-size:1.1rem; cursor:pointer;" title="閉じる (Esc)">✕</button>
+        </div>
+        <div class="modal-body" style="padding: 16px 20px; display: flex; flex-direction: column; gap: 14px; overflow-y: auto;">
+            
+            <!-- 1. 基本情報 -->
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+                <div>
+                    <label style="display:block; font-size:0.8rem; font-weight:700; color:#334155; margin-bottom:4px;">
+                        スタイル名 <span style="color:#ef4444;">*</span>
+                    </label>
+                    <input type="text" id="styleInputName" placeholder="例: 赤色波線強調, 論文見出し..." style="width:100%; height:32px; padding:4px 8px; border:1px solid #cbd5e1; border-radius:4px; font-size:0.82rem;" oninput="updateStyleEditModalPreview()">
+                </div>
+                <div>
+                    <label style="display:block; font-size:0.8rem; font-weight:700; color:#334155; margin-bottom:4px;">
+                        スタイル種別
+                    </label>
+                    <div style="display:flex; gap:6px;">
+                        <button type="button" class="style-modal-cat-btn active" id="btnCatChar" onclick="switchModalCategory('character')">
+                            <i class="fa-solid fa-font"></i> 文字書式
+                        </button>
+                        <button type="button" class="style-modal-cat-btn" id="btnCatPara" onclick="switchModalCategory('paragraph')">
+                            <i class="fa-solid fa-paragraph"></i> 段落書式
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. プレビュー表示 -->
+            <div class="style-preview-container">
+                <div style="font-size:0.75rem; font-weight:700; color:#64748b; margin-bottom:4px; display:flex; align-items:center; gap:4px;">
+                    <i class="fa-solid fa-eye"></i> <span>プレビュー表示</span>
+                </div>
+                <div class="style-preview-box">
+                    <div id="styleModalPreviewTarget" style="font-size:14px; color:#0f172a; transition:all 0.1s ease;">
+                        か力漢 Sample Text 日本語の文章です。
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. フォント・文字設定 -->
+            <div style="border-top: 1px solid #e2e8f0; padding-top: 10px;">
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+                    <span style="font-size:0.82rem; font-weight:700; color:#1e293b; display:flex; align-items:center; gap:6px;">
+                        <i class="fa-solid fa-font" style="color:#2563eb;"></i> フォント・文字設定
+                    </span>
+                    <button type="button" onclick="scanPCFontsForModal()" style="padding:2px 8px; font-size:0.72rem; border-radius:4px; border:1px solid #93c5fd; background:#eff6ff; color:#1d4ed8; cursor:pointer;" title="PC端末にインストールされているフォントを検出します">
+                        <i class="fa-solid fa-laptop"></i> PCフォント読込
+                    </button>
+                </div>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                    <div>
+                        <label style="font-size:0.76rem; color:#475569; display:block; margin-bottom:2px;">フォント種類:</label>
+                        <select id="styleInputFontFamily" class="tb-select" style="width:100%; height:30px; font-size:0.8rem;" onchange="updateStyleEditModalPreview()">
+                            <option value="">指定なし (標準フォント)</option>
+                            <option value="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'BIZ UDPGothic', Meiryo, sans-serif">BIZ UDPゴシック / システム標準</option>
+                            <option value="'BIZ UDPMincho', 'MS Mincho', serif">BIZ UDP明朝</option>
+                            <option value="'Yu Gothic', 'YuGothic', sans-serif">游ゴシック</option>
+                            <option value="'Yu Mincho', 'YuMincho', serif">游明朝</option>
+                            <option value="'Meiryo', sans-serif">メイリオ</option>
+                            <option value="'MS Gothic', sans-serif">ＭＳ ゴシック</option>
+                            <option value="'MS Mincho', serif">ＭＳ 明朝</option>
+                            <option value="'Arial', sans-serif">Arial</option>
+                            <option value="'Times New Roman', serif">Times New Roman</option>
+                            <option value="monospace">monospace (等幅コード)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-size:0.76rem; color:#475569; display:block; margin-bottom:2px;">文字サイズ:</label>
+                        <select id="styleInputFontSize" class="tb-select" style="width:100%; height:30px; font-size:0.8rem;" onchange="updateStyleEditModalPreview()">
+                            <option value="">指定なし (標準サイズ)</option>
+                            <option value="8pt">8pt</option>
+                            <option value="9pt">9pt</option>
+                            <option value="10pt">10pt</option>
+                            <option value="10.5pt">10.5pt ★標準</option>
+                            <option value="11pt">11pt</option>
+                            <option value="12pt">12pt</option>
+                            <option value="13pt">13pt</option>
+                            <option value="14pt">14pt</option>
+                            <option value="16pt">16pt (強調)</option>
+                            <option value="18pt">18pt</option>
+                            <option value="20pt">20pt</option>
+                            <option value="24pt">24pt (大見出し)</option>
+                            <option value="28pt">28pt</option>
+                            <option value="32pt">32pt</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div style="display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin-top:8px;">
+                    <!-- 太字・斜体 -->
+                    <label style="display:flex; align-items:center; gap:4px; font-size:0.78rem; cursor:pointer;">
+                        <input type="checkbox" id="styleInputBold" onchange="updateStyleEditModalPreview()">
+                        <span style="font-weight:700;">太字 (B)</span>
+                    </label>
+                    <label style="display:flex; align-items:center; gap:4px; font-size:0.78rem; cursor:pointer;">
+                        <input type="checkbox" id="styleInputItalic" onchange="updateStyleEditModalPreview()">
+                        <span style="font-style:italic;">斜体 (I)</span>
+                    </label>
+                    <label style="display:flex; align-items:center; gap:4px; font-size:0.78rem; cursor:pointer;">
+                        <input type="checkbox" id="styleInputStrike" onchange="updateStyleEditModalPreview()">
+                        <span style="text-decoration:line-through;">打消線</span>
+                    </label>
+                    <!-- 文字色 -->
+                    <div style="display:flex; align-items:center; gap:4px; font-size:0.78rem;">
+                        <span>文字色:</span>
+                        <input type="color" id="styleInputTextColor" value="#0f172a" style="width:28px; height:24px; padding:0; border:1px solid #cbd5e1; border-radius:3px; cursor:pointer;" onchange="updateStyleEditModalPreview()">
+                    </div>
+                    <!-- 背景色 / マーカー -->
+                    <div style="display:flex; align-items:center; gap:4px; font-size:0.78rem;">
+                        <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+                            <input type="checkbox" id="styleInputHasBg" onchange="updateStyleEditModalPreview()">
+                            <span>マーカー色:</span>
+                        </label>
+                        <select id="styleInputBgColor" class="tb-select" style="height:26px; font-size:0.76rem;" onchange="document.getElementById('styleInputHasBg').checked = (this.value !== 'transparent'); updateStyleEditModalPreview();">
+                            <option value="transparent">なし (透明)</option>
+                            <option value="#fef08a">黄色 (#fef08a)</option>
+                            <option value="#bbf7d0">薄緑 (#bbf7d0)</option>
+                            <option value="#bfdbfe">薄青 (#bfdbfe)</option>
+                            <option value="#fbcfe8">薄ピンク (#fbcfe8)</option>
+                            <option value="#fed7aa">薄オレンジ (#fed7aa)</option>
+                            <option value="#c2410c">濃橙 (白抜き用)</option>
+                            <option value="#1e3a8a">濃青 (白抜き用)</option>
+                            <option value="#f1f5f9">グレー (コード用)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- 下線スタイル詳細 -->
+                <div style="display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-top:8px; background:#f8fafc; padding:6px 10px; border-radius:4px; border:1px solid #e2e8f0;">
+                    <label style="display:flex; align-items:center; gap:4px; font-size:0.78rem; font-weight:600; cursor:pointer;">
+                        <input type="checkbox" id="styleInputHasUnderline" onchange="updateStyleEditModalPreview()">
+                        <span>下線を引く</span>
+                    </label>
+                    <div style="display:flex; align-items:center; gap:4px; font-size:0.76rem;">
+                        <span>下線種別:</span>
+                        <select id="styleInputUnderlineStyle" class="tb-select" style="height:26px; font-size:0.76rem;" onchange="document.getElementById('styleInputHasUnderline').checked = true; updateStyleEditModalPreview();">
+                            <option value="solid">実線 (solid)</option>
+                            <option value="double">二重線 (double)</option>
+                            <option value="dotted">点線 (dotted)</option>
+                            <option value="dashed">破線 (dashed)</option>
+                            <option value="wavy">波線 (wavy ★)</option>
+                        </select>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:4px; font-size:0.76rem;">
+                        <span>下線色:</span>
+                        <input type="color" id="styleInputUnderlineColor" value="#991b1b" style="width:26px; height:22px; padding:0; border:1px solid #cbd5e1; border-radius:3px; cursor:pointer;" onchange="document.getElementById('styleInputHasUnderline').checked = true; updateStyleEditModalPreview()">
+                    </div>
+                </div>
+            </div>
+
+            <!-- 4. 段落設定 (段落書式選択時のみ表示) -->
+            <div id="styleModalParaSection" style="display:none; border-top: 1px solid #e2e8f0; padding-top: 10px;">
+                <span style="font-size:0.82rem; font-weight:700; color:#1e293b; display:flex; align-items:center; gap:6px; margin-bottom:8px;">
+                    <i class="fa-solid fa-paragraph" style="color:#d97706;"></i> 段落・配置・余白設定
+                </span>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                    <div>
+                        <label style="font-size:0.76rem; color:#475569; display:block; margin-bottom:2px;">見出しレベル / ブロック:</label>
+                        <select id="styleInputHeadingLevel" class="tb-select" style="width:100%; height:30px; font-size:0.8rem;" onchange="updateStyleEditModalPreview()">
+                            <option value="p">標準本文 (p)</option>
+                            <option value="h1">見出し 1 (H1)</option>
+                            <option value="h2">見出し 2 (H2)</option>
+                            <option value="h3">見出し 3 (H3)</option>
+                            <option value="h4">見出し 4 (H4)</option>
+                            <option value="h5">見出し 5 (H5)</option>
+                            <option value="blockquote">引用 (blockquote)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-size:0.76rem; color:#475569; display:block; margin-bottom:2px;">行の高さ (行間):</label>
+                        <select id="styleInputLineHeight" class="tb-select" style="width:100%; height:30px; font-size:0.8rem;" onchange="updateStyleEditModalPreview()">
+                            <option value="1.2">1.2倍 (狭め・コンパクト)</option>
+                            <option value="1.4">1.4倍</option>
+                            <option value="1.6" selected>1.6倍 (標準)</option>
+                            <option value="1.8">1.8倍 (ゆったり)</option>
+                            <option value="2.0">2.0倍 (広い)</option>
+                            <option value="2.4">2.4倍</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-size:0.76rem; color:#475569; display:block; margin-bottom:2px;">テキスト水平配置:</label>
+                        <select id="styleInputTextAlign" class="tb-select" style="width:100%; height:30px; font-size:0.8rem;" onchange="updateStyleEditModalPreview()">
+                            <option value="left">左揃え</option>
+                            <option value="center">中央揃え</option>
+                            <option value="right">右揃え</option>
+                            <option value="justify">両端揃え</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-size:0.76rem; color:#475569; display:block; margin-bottom:2px;">字下げ (インデント):</label>
+                        <label style="display:flex; align-items:center; gap:6px; height:30px; font-size:0.78rem; cursor:pointer;">
+                            <input type="checkbox" id="styleInputIndent" onchange="updateStyleEditModalPreview()">
+                            <span>段落先頭を1文字分字下げ (1.2em)</span>
+                        </label>
+                    </div>
+                </div>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:8px;">
+                    <div>
+                        <label style="font-size:0.76rem; color:#475569; display:block; margin-bottom:2px;">段落の上余白 (marginTop):</label>
+                        <input type="text" id="styleInputMarginTop" placeholder="例: 0.8em, 16px (空欄で標準)" style="width:100%; height:28px; padding:3px 6px; border:1px solid #cbd5e1; border-radius:4px; font-size:0.78rem;" oninput="updateStyleEditModalPreview()">
+                    </div>
+                    <div>
+                        <label style="font-size:0.76rem; color:#475569; display:block; margin-bottom:2px;">段落の下余白 (marginBottom):</label>
+                        <input type="text" id="styleInputMarginBottom" placeholder="例: 0.4em, 8px (空欄で標準)" style="width:100%; height:28px; padding:3px 6px; border:1px solid #cbd5e1; border-radius:4px; font-size:0.78rem;" oninput="updateStyleEditModalPreview()">
+                    </div>
+                </div>
+            </div>
+
+        </div>
+        <div class="modal-footer" style="display:flex; justify-content:space-between; align-items:center; background:#f8fafc; border-top:1px solid #cbd5e1; padding:10px 18px;">
+            <div>
+                <button type="button" class="btn btn-outline" id="btnDeleteStyleFromModal" style="color:#ef4444; border-color:#fca5a5; display:none;" onclick="onDeleteCurrentEditingStyle()">
+                    <i class="fa-solid fa-trash-can"></i> このスタイルを削除
+                </button>
+            </div>
+            <div style="display:flex; gap:8px;">
+                <button type="button" class="btn btn-outline" onclick="closeStyleEditModal()">キャンセル</button>
+                <button type="button" class="btn btn-primary" onclick="saveCustomStyleFromModal()">
+                    <i class="fa-solid fa-check"></i> 登録 / 保存
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div id="toast"><i class="fa-solid fa-check"></i> <span id="toastMsg">保存しました</span></div>
 <script>
+// セキュリティ: Same-Origin ガード付き fetch インターセプター (X-App-Token & X-Requested-With 自動付与)
+(function() {
+    const originalFetch = window.fetch;
+    function isSameOriginUrl(url) {
+        try {
+            const u = new URL(url, window.location.href);
+            return u.origin === window.location.origin;
+        } catch(e) {
+            return false;
+        }
+    }
+    window.fetch = async function(resource, init = {}) {
+        init = init || {};
+        init.headers = init.headers || {};
+        const url = typeof resource === 'string' ? resource : (resource instanceof Request ? resource.url : '');
+        if (isSameOriginUrl(url)) {
+            const token = window.__APP_SECURITY_TOKEN__ || (document.querySelector('meta[name="app-token"]') ? document.querySelector('meta[name="app-token"]').content : '');
+            if (init.headers instanceof Headers) {
+                init.headers.set('X-Requested-With', 'XMLHttpRequest');
+                if (token) init.headers.set('X-App-Token', token);
+            } else if (Array.isArray(init.headers)) {
+                init.headers.push(['X-Requested-With', 'XMLHttpRequest']);
+                if (token) init.headers.push(['X-App-Token', token]);
+            } else {
+                init.headers['X-Requested-With'] = 'XMLHttpRequest';
+                if (token) init.headers['X-App-Token'] = token;
+            }
+        }
+        return originalFetch(resource, init);
+    };
+})();
+
 let currentDocId = null;
 let currentBundle = null;
 let isDirty = false;
@@ -2617,8 +3144,12 @@ function setupToolbarStateTracker() {
     document.addEventListener('selectionchange', updateToolbarState);
     const editor = document.getElementById('editorContent');
     if (editor) {
-        editor.addEventListener('keyup', updateToolbarState);
+        editor.addEventListener('keyup', () => {
+            saveSelection();
+            updateToolbarState();
+        });
         editor.addEventListener('mouseup', () => {
+            saveSelection();
             updateToolbarState();
             if (formatPainterState === 'copy_ready') {
                 const sel = window.getSelection();
@@ -2636,9 +3167,35 @@ function setupToolbarStateTracker() {
                 }
             }
         });
-        editor.addEventListener('click', updateToolbarState);
-        editor.addEventListener('focus', updateToolbarState);
+        editor.addEventListener('click', () => {
+            saveSelection();
+            updateToolbarState();
+        });
+        editor.addEventListener('focus', () => {
+            saveSelection();
+            updateToolbarState();
+        });
     }
+
+    // ツールバーおよびドロップダウンメニューの mousedown によるフォーカス喪失＆選択解除を防止
+    const toolbar = document.getElementById('editorToolbar');
+    if (toolbar) {
+        toolbar.addEventListener('mousedown', (e) => {
+            // select要素やinput要素の通常操作は阻害せず、ボタンやアイコンクリック時の選択解除のみ防ぐ
+            const tag = e.target.tagName.toLowerCase();
+            if (tag !== 'select' && tag !== 'input' && tag !== 'option') {
+                e.preventDefault();
+            }
+        });
+    }
+    document.querySelectorAll('.tb-dropdown-menu').forEach(menu => {
+        menu.addEventListener('mousedown', (e) => {
+            const tag = e.target.tagName.toLowerCase();
+            if (tag !== 'select' && tag !== 'input' && tag !== 'option') {
+                e.preventDefault();
+            }
+        });
+    });
 }
 
 function saveSelection() {
@@ -2647,14 +3204,25 @@ function saveSelection() {
         const range = sel.getRangeAt(0);
         const editor = document.getElementById('editorContent');
         if (editor && (editor.contains(range.commonAncestorContainer) || editor === range.commonAncestorContainer)) {
+            // 有効な選択範囲（選択テキストがある場合）を最優先で保存
             savedSelectionRange = range.cloneRange();
         }
     }
 }
 
 function restoreSelection() {
+    const sel = window.getSelection();
+    const editor = document.getElementById('editorContent');
+    // すでにエディタ内にアクティブで有効な選択範囲が存在する場合は絶対に破棄しない
+    if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+        const node = sel.anchorNode;
+        if (editor && (node === editor || editor.contains(node))) {
+            return;
+        }
+    }
+    // フォーカスが外れた場合のみ保存済みのRangeを復元
     if (savedSelectionRange) {
-        const sel = window.getSelection();
+        if (!sel) return;
         sel.removeAllRanges();
         sel.addRange(savedSelectionRange);
     }
@@ -2689,10 +3257,13 @@ function toggleDropdownMenu(e, menuId) {
 
 function closeAllDropdownMenus() {
     document.querySelectorAll('.tb-dropdown-menu').forEach(m => m.classList.remove('show'));
+    if (typeof closeStyleGalleryPopover === 'function') {
+        closeStyleGalleryPopover();
+    }
 }
 
 document.addEventListener('click', (e) => {
-    if (!e.target.closest('.tb-dropdown-wrap') && !e.target.closest('.tb-split-btn-wrap') && !e.target.closest('#editorFindReplaceBar')) {
+    if (!e.target.closest('.tb-dropdown-wrap') && !e.target.closest('.tb-split-btn-wrap') && !e.target.closest('#editorFindReplaceBar') && !e.target.closest('#styleGalleryPopover')) {
         closeAllDropdownMenus();
     }
 });
@@ -2702,11 +3273,22 @@ function applyFontFamily(font) {
     const editor = document.getElementById('editorContent');
     editor.focus();
     restoreSelection();
-    if (font === 'default' || font === 'system') {
-        const sysFont = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "BIZ UDPGothic", Meiryo, sans-serif';
-        document.execCommand('fontName', false, sysFont);
+    const targetFont = (font === 'default' || font === 'system')
+        ? '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "BIZ UDPGothic", Meiryo, sans-serif'
+        : font;
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+        const range = sel.getRangeAt(0);
+        const span = document.createElement('span');
+        span.style.fontFamily = targetFont;
+        span.appendChild(range.extractContents());
+        range.insertNode(span);
+        range.selectNodeContents(span);
+        sel.removeAllRanges();
+        sel.addRange(range);
     } else {
-        document.execCommand('fontName', false, font);
+        const primaryFont = targetFont.split(',')[0].replace(/["']/g, '').trim();
+        document.execCommand('fontName', false, primaryFont);
     }
     saveSelection();
     onEditorInput();
@@ -2796,7 +3378,7 @@ function matchFontSizeOption(sizeStr) {
     return `${closest}pt`;
 }
 
-// ツールバーのリアルタイム状態更新
+// ツールバーのリアルタイム状態更新（エディタ状態の完全反映）
 function updateToolbarState() {
     const sel = window.getSelection();
     const editor = document.getElementById('editorContent');
@@ -2806,6 +3388,14 @@ function updateToolbarState() {
     const btnItalic = document.getElementById('tbBtnItalic');
     const btnUnderline = document.getElementById('tbBtnUnderline');
     const btnStrike = document.getElementById('tbBtnStrike');
+    const textColorBar = document.getElementById('textColorBar');
+    const highlightColorBar = document.getElementById('highlightColorBar');
+    const paraLabel = document.getElementById('tbBtnParaFormatLabel');
+    const btnAlignLeft = document.getElementById('tbBtnAlignLeft');
+    const btnAlignCenter = document.getElementById('tbBtnAlignCenter');
+    const btnAlignRight = document.getElementById('tbBtnAlignRight');
+    const btnListUl = document.getElementById('tbBtnListUl');
+    const btnListOl = document.getElementById('tbBtnListOl');
 
     let hasEditorCursor = false;
     let targetNode = null;
@@ -2820,7 +3410,7 @@ function updateToolbarState() {
     }
 
     if (hasEditorCursor && targetNode) {
-        // 1. カーソル位置のフォント・サイズを計算して反映
+        // 1. カーソル位置のフォント・サイズ・装飾を計算して反映
         const comp = window.getComputedStyle(targetNode);
 
         // フォントサイズの同期
@@ -2840,12 +3430,67 @@ function updateToolbarState() {
             fontSelect.value = matchedFont;
         }
 
-        // 書式ボタンのアクティブ表示連動
+        // 書式ボタンのアクティブ表示連動 (queryCommandState と computedStyle の併用)
         try {
-            if (btnBold) btnBold.classList.toggle('active', document.queryCommandState('bold'));
-            if (btnItalic) btnItalic.classList.toggle('active', document.queryCommandState('italic'));
-            if (btnUnderline) btnUnderline.classList.toggle('active', document.queryCommandState('underline'));
-            if (btnStrike) btnStrike.classList.toggle('active', document.queryCommandState('strikeThrough'));
+            const isBold = document.queryCommandState('bold') || comp.fontWeight === 'bold' || parseInt(comp.fontWeight) >= 600;
+            if (btnBold) btnBold.classList.toggle('active', !!isBold);
+
+            const isItalic = document.queryCommandState('italic') || comp.fontStyle === 'italic';
+            if (btnItalic) btnItalic.classList.toggle('active', !!isItalic);
+
+            const deco = (comp.textDecoration || '') + ' ' + (comp.textDecorationLine || '');
+            const isUnderline = document.queryCommandState('underline') || deco.includes('underline');
+            if (btnUnderline) btnUnderline.classList.toggle('active', !!isUnderline);
+
+            const isStrike = document.queryCommandState('strikeThrough') || deco.includes('line-through');
+            if (btnStrike) btnStrike.classList.toggle('active', !!isStrike);
+        } catch(e) {}
+
+        // 文字色バー & マーカーバーの同期
+        if (textColorBar && comp.color) {
+            textColorBar.style.background = comp.color;
+            currentTextColor = comp.color;
+        }
+        if (highlightColorBar) {
+            const bg = comp.backgroundColor;
+            if (bg && bg !== 'transparent' && bg !== 'rgba(0, 0, 0, 0)') {
+                highlightColorBar.style.background = bg;
+                currentHighlightColor = bg;
+            } else {
+                highlightColorBar.style.background = '#fef08a';
+            }
+        }
+
+        // 段落書式ラベルの同期 (カーソル位置のブロック要素を判定)
+        let blockEl = targetNode;
+        while (blockEl && blockEl !== editor && !['p', 'h1', 'h2', 'h3', 'h4', 'blockquote', 'pre', 'li', 'td', 'th'].includes(blockEl.tagName.toLowerCase())) {
+            blockEl = blockEl.parentElement;
+        }
+        if (paraLabel) {
+            const bTag = (blockEl && blockEl !== editor) ? blockEl.tagName.toLowerCase() : 'p';
+            switch (bTag) {
+                case 'h1': paraLabel.textContent = '見出し 1'; break;
+                case 'h2': paraLabel.textContent = '見出し 2'; break;
+                case 'h3': paraLabel.textContent = '見出し 3'; break;
+                case 'h4': paraLabel.textContent = '見出し 4'; break;
+                case 'blockquote': paraLabel.textContent = '引用'; break;
+                case 'pre': paraLabel.textContent = 'コード'; break;
+                case 'li': paraLabel.textContent = '箇条書き'; break;
+                default: paraLabel.textContent = '本文 (P)'; break;
+            }
+        }
+
+        // 水平配置ボタンのアクティブ同期
+        const alignTarget = (blockEl && blockEl !== editor) ? window.getComputedStyle(blockEl) : comp;
+        const textAlign = alignTarget.textAlign || 'left';
+        if (btnAlignLeft) btnAlignLeft.classList.toggle('active', textAlign === 'left' || textAlign === 'start');
+        if (btnAlignCenter) btnAlignCenter.classList.toggle('active', textAlign === 'center');
+        if (btnAlignRight) btnAlignRight.classList.toggle('active', textAlign === 'right');
+
+        // リストボタンのアクティブ同期
+        try {
+            if (btnListUl) btnListUl.classList.toggle('active', document.queryCommandState('insertUnorderedList'));
+            if (btnListOl) btnListOl.classList.toggle('active', document.queryCommandState('insertOrderedList'));
         } catch(e) {}
 
     } else {
@@ -2871,11 +3516,17 @@ function updateToolbarState() {
             }
         }
 
-        // 書式ボタンを非アクティブ化
+        // 書式ボタン・配置・リストを非アクティブ化
         if (btnBold) btnBold.classList.remove('active');
         if (btnItalic) btnItalic.classList.remove('active');
         if (btnUnderline) btnUnderline.classList.remove('active');
         if (btnStrike) btnStrike.classList.remove('active');
+        if (btnAlignLeft) btnAlignLeft.classList.add('active');
+        if (btnAlignCenter) btnAlignCenter.classList.remove('active');
+        if (btnAlignRight) btnAlignRight.classList.remove('active');
+        if (btnListUl) btnListUl.classList.remove('active');
+        if (btnListOl) btnListOl.classList.remove('active');
+        if (paraLabel) paraLabel.textContent = '段落書式';
     }
 }
 
@@ -3047,6 +3698,9 @@ function applyCapturedFormatToSelection() {
 // 文字書式
 function openRubyDialog() {
     closeAllDropdownMenus();
+    const editor = document.getElementById('editorContent');
+    if (editor) editor.focus();
+    restoreSelection();
     const sel = window.getSelection();
     const text = sel ? sel.toString().trim() : '';
     if (!text) {
@@ -3061,6 +3715,9 @@ function openRubyDialog() {
 
 function applyEmphasisDots() {
     closeAllDropdownMenus();
+    const editor = document.getElementById('editorContent');
+    if (editor) editor.focus();
+    restoreSelection();
     const sel = window.getSelection();
     if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
         alert('傍点を付けたいテキストを選択してください。');
@@ -3071,11 +3728,19 @@ function applyEmphasisDots() {
     span.className = 'emphasis-dots';
     span.appendChild(range.extractContents());
     range.insertNode(span);
+    range.selectNodeContents(span);
+    sel.removeAllRanges();
+    sel.addRange(range);
+    saveSelection();
     onEditorInput();
+    updateToolbarState();
 }
 
 function convertCase(type) {
     closeAllDropdownMenus();
+    const editor = document.getElementById('editorContent');
+    if (editor) editor.focus();
+    restoreSelection();
     const sel = window.getSelection();
     if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
     const text = sel.toString();
@@ -3085,6 +3750,9 @@ function convertCase(type) {
 
 function convertZenHan(type) {
     closeAllDropdownMenus();
+    const editor = document.getElementById('editorContent');
+    if (editor) editor.focus();
+    restoreSelection();
     const sel = window.getSelection();
     if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
     let str = sel.toString();
@@ -3104,8 +3772,10 @@ function applyParagraphBlock(tag) {
 
 function applyLineHeight(lh) {
     closeAllDropdownMenus();
-    const sel = window.getSelection();
     const editor = document.getElementById('editorContent');
+    if (editor) editor.focus();
+    restoreSelection();
+    const sel = window.getSelection();
     if (!sel || sel.rangeCount === 0 || !editor) return;
     let node = sel.anchorNode;
     if (node && node.nodeType === Node.TEXT_NODE) node = node.parentElement;
@@ -3114,24 +3784,43 @@ function applyLineHeight(lh) {
     }
     if (node && node !== editor) {
         node.style.lineHeight = lh;
+        saveSelection();
         onEditorInput();
+        updateToolbarState();
     }
 }
 
 // 書式クリア（見出しは壊さない）
 function clearSelectionFormatting() {
+    const editor = document.getElementById('editorContent');
+    if (editor) editor.focus();
+    restoreSelection();
     execCmd('removeFormat');
     const sel = window.getSelection();
     if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
         const range = sel.getRangeAt(0);
-        const container = range.commonAncestorContainer;
-        if (container.nodeType === Node.ELEMENT_NODE) {
-            container.querySelectorAll('span, font, b, i, u, s').forEach(el => {
-                el.removeAttribute('style');
-                el.removeAttribute('class');
-            });
+        let root = range.commonAncestorContainer;
+        if (root.nodeType === Node.TEXT_NODE) root = root.parentElement;
+
+        const targets = [];
+        if (root && root.matches && root.matches('span, font, b, i, u, s, em, strong')) {
+            targets.push(root);
         }
+        if (root && root.querySelectorAll) {
+            root.querySelectorAll('span, font, b, i, u, s, em, strong').forEach(el => targets.push(el));
+        }
+
+        targets.forEach(el => {
+            el.removeAttribute('style');
+            el.removeAttribute('class');
+            if (el.tagName.toLowerCase() === 'span' && !el.hasAttributes() && el.parentNode) {
+                const parent = el.parentNode;
+                while (el.firstChild) parent.insertBefore(el.firstChild, el);
+                parent.removeChild(el);
+            }
+        });
     }
+    saveSelection();
     onEditorInput();
     updateToolbarState();
     showToast('文字装飾をクリアしました');
@@ -3183,7 +3872,7 @@ function addBookmarkAtCursor() {
     if (!title || !title.trim()) return;
 
     const bmId = 'bm-' + Date.now();
-    execCmd('insertHTML', `<span id="${bmId}" class="bm-anchor" title="ブックマーク: ${escapeHtml(title.trim())}" style="display:inline-block; margin:0 2px; font-size:0.9rem; user-select:none; cursor:pointer;" onclick="showToast('🔖 ${escapeHtml(title.trim())}')">🔖</span>`);
+    execCmd('insertHTML', `<span id="${bmId}" class="bm-anchor" title="ブックマーク: ${escapeHtml(title.trim())}" style="display:inline-block; margin:0 2px; font-size:0.9rem; user-select:none; cursor:pointer;" onclick="showToast('🔖 ' + (this.getAttribute('title') || '').replace(/^ブックマーク:\\s*/, ''))">🔖</span>`);
 
     bookmarksList.push({ id: bmId, title: title.trim() });
     updateBookmarkCount();
@@ -3235,6 +3924,10 @@ function jumpToBookmark(id) {
 
 // 吹き出し / コメント
 function insertCalloutComment() {
+    closeAllDropdownMenus();
+    const editor = document.getElementById('editorContent');
+    if (editor) editor.focus();
+    restoreSelection();
     const sel = window.getSelection();
     const text = sel ? sel.toString().trim() : '';
     const comment = prompt('吹き出し（注記）に表示するテキストを入力してください:', text || 'ここに注記内容を入力');
@@ -3263,6 +3956,10 @@ function insertTextBox(type) {
 
 // ハイパーリンク
 function insertHyperlinkDialog() {
+    closeAllDropdownMenus();
+    const editor = document.getElementById('editorContent');
+    if (editor) editor.focus();
+    restoreSelection();
     const sel = window.getSelection();
     const curText = sel ? sel.toString() : '';
     const url = prompt('リンク先URLを入力してください (例: https://example.com):', 'https://');
@@ -3484,25 +4181,36 @@ async function executeGlobalSearch() {
     try {
         const res = await safeFetchJson(`/api/search?q=${encodeURIComponent(term)}&group=${encodeURIComponent(group)}`);
         if (res.status === 'success' && res.results && res.results.length > 0) {
-            listEl.innerHTML = res.results.map(r => `
-                <div style="background:#ffffff; border:1px solid #cbd5e1; border-radius:6px; padding:10px; margin-bottom:8px; cursor:pointer;" onclick="jumpToGlobalSearchResult('${r.doc_id}', '${escapeHtml(term)}')">
+            listEl.innerHTML = '';
+            res.results.forEach(r => {
+                const item = document.createElement('div');
+                item.style.cssText = "background:#ffffff; border:1px solid #cbd5e1; border-radius:6px; padding:10px; margin-bottom:8px; cursor:pointer;";
+                item.innerHTML = `
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
                         <strong style="color:#1d4ed8; font-size:0.9rem;">📄 ${escapeHtml(r.title || '無題の文書')}</strong>
                         <span style="font-size:0.75rem; color:#64748b; background:#eff6ff; padding:2px 8px; border-radius:10px;">${escapeHtml(r.group_name || '一般')}</span>
                     </div>
                     <div style="font-size:0.82rem; color:#334155; line-height:1.4;">${r.snippet || ''}</div>
-                </div>
-            `).join('');
+                `;
+                // クロージャで安全に変数渡し (onclick属性脱出XSSを完全遮断)
+                item.onclick = () => jumpToGlobalSearchResult(r.doc_id, term);
+                listEl.appendChild(item);
+            });
         } else {
             // ローカル文書リストからクライアント側フォールバック検索
             const localMatches = allDocs.filter(d => (d.title && d.title.includes(term)) || (d.id === currentDocId && document.getElementById('editorContent').innerText.includes(term)));
             if (localMatches.length > 0) {
-                listEl.innerHTML = localMatches.map(d => `
-                    <div style="background:#ffffff; border:1px solid #cbd5e1; border-radius:6px; padding:10px; margin-bottom:8px; cursor:pointer;" onclick="jumpToGlobalSearchResult('${d.id}', '${escapeHtml(term)}')">
+                listEl.innerHTML = '';
+                localMatches.forEach(d => {
+                    const item = document.createElement('div');
+                    item.style.cssText = "background:#ffffff; border:1px solid #cbd5e1; border-radius:6px; padding:10px; margin-bottom:8px; cursor:pointer;";
+                    item.innerHTML = `
                         <strong style="color:#1d4ed8; font-size:0.9rem;">📄 ${escapeHtml(d.title || '無題の文書')}</strong>
                         <div style="font-size:0.82rem; color:#64748b; margin-top:2px;">ファイル名に一致しました</div>
-                    </div>
-                `).join('');
+                    `;
+                    item.onclick = () => jumpToGlobalSearchResult(d.id, term);
+                    listEl.appendChild(item);
+                });
             } else {
                 listEl.innerHTML = '<div style="text-align:center; color:#94a3b8; padding:30px;">一致する文書は見つかりませんでした</div>';
             }
@@ -3554,6 +4262,16 @@ function setupShortcuts() {
             closeFindReplaceDialog();
             closeAllDropdownMenus();
             closeEditorOptionsModal();
+            if (typeof closeStyleGalleryPopover === 'function') closeStyleGalleryPopover();
+            if (typeof closeStyleEditModal === 'function') closeStyleEditModal();
+        }
+        if (e.altKey && (e.key === 'c' || e.key === 'C')) {
+            e.preventDefault();
+            if (typeof clearPresetFormat === 'function') clearPresetFormat();
+        }
+        if (e.altKey && (e.key === 'n' || e.key === 'N')) {
+            e.preventDefault();
+            if (typeof openStyleEditModal === 'function') openStyleEditModal(null, currentStyleGalleryTab);
         }
     });
 }
@@ -4098,10 +4816,10 @@ function renderDocument(bundle) {
     document.getElementById('statusSourceType').innerText = `ソース: ${doc.source_type}`;
 
     document.getElementById('docMetaInfo').innerHTML = `
-        タイトル: ${doc.title}<br>
-        形式: ${doc.source_type.toUpperCase()}<br>
-        総ページ: ${doc.total_pages || 1}<br>
-        更新日時: ${doc.updated_at || '--'}
+        タイトル: ${escapeHtml(doc.title || '')}<br>
+        形式: ${escapeHtml((doc.source_type || '').toUpperCase())}<br>
+        総ページ: ${Number(doc.total_pages || 1)}<br>
+        更新日時: ${escapeHtml(doc.updated_at || '--')}
     `;
 
     const editor = document.getElementById('editorContent');
@@ -4113,7 +4831,7 @@ function renderDocument(bundle) {
 
     let htmlParts = [];
     blocks.forEach(blk => {
-        let h = blk.html_content || `<p>${blk.text_content}</p>`;
+        let h = blk.html_content || `<p>${escapeHtml(blk.text_content || '')}</p>`;
         
         // 表のインライン展開
         if (h.includes('data-table-id')) {
@@ -4124,9 +4842,9 @@ function renderDocument(bundle) {
                 const rows = grid.rows || [];
                 if (rows.length > 0) {
                     let tHtml = `<div class="table-embed"><table class="styled-table">`;
-                    tHtml += `<thead><tr>${rows[0].map(c => `<th>${c}</th>`).join('')}</tr></thead><tbody>`;
+                    tHtml += `<thead><tr>${rows[0].map(c => `<th>${escapeHtml(c || '')}</th>`).join('')}</tr></thead><tbody>`;
                     rows.slice(1).forEach(r => {
-                        tHtml += `<tr>${r.map(c => `<td>${c}</td>`).join('')}</tr>`;
+                        tHtml += `<tr>${r.map(c => `<td>${escapeHtml(c || '')}</td>`).join('')}</tr>`;
                     });
                     tHtml += `</tbody></table></div>`;
                     h = tHtml;
@@ -4139,13 +4857,14 @@ function renderDocument(bundle) {
             const m = h.match(/data-fig-id="([^"]+)"/);
             if (m && figuresMap[m[1]]) {
                 const fig = figuresMap[m[1]];
-                const imgSrc = fig.image_base64 || fig.file_path;
-                const caption = fig.caption || '図版';
+                const imgSrc = escapeHtml(fig.image_base64 || fig.file_path || '');
+                const caption = escapeHtml(fig.caption || '図版');
+                const safeFigId = escapeHtml(fig.id || '');
                 h = `
-                <figure class="figure-embed" data-fig-id="${fig.id}">
+                <figure class="figure-embed" data-fig-id="${safeFigId}">
                     <div class="fig-actions" contenteditable="false">
-                        <button class="fig-action-btn btn-move" onclick="openMoveFigureModal('${fig.id}')" title="見出し/位置を指定して移動"><i class="fa-solid fa-arrows-up-down-left-right"></i> 移動</button>
-                        <button class="fig-action-btn btn-delete" onclick="deleteFigure('${fig.id}')" title="画像を削除"><i class="fa-solid fa-trash"></i> 削除</button>
+                        <button class="fig-action-btn btn-move" onclick="openMoveFigureModal('${safeFigId}')" title="見出し/位置を指定して移動"><i class="fa-solid fa-arrows-up-down-left-right"></i> 移動</button>
+                        <button class="fig-action-btn btn-delete" onclick="deleteFigure('${safeFigId}')" title="画像を削除"><i class="fa-solid fa-trash"></i> 削除</button>
                     </div>
                     <img src="${imgSrc}" alt="${caption}">
                     <figcaption contenteditable="true" oninput="markDirty()">${caption}</figcaption>
@@ -5567,33 +6286,59 @@ function renderModalTagBar() {
     const selectEl = document.getElementById('selectByTagSelect');
     if (!groupTabsContainer || !tagListContainer) return;
 
-    // 1. グループタブの描画
-    let totalTagsCount = allTags.length;
-    let unassignedCount = allTags.filter(t => !t.group_id).length;
+    // 1. グループタブの描画（DOM生成 & クロージャ化）
+    groupTabsContainer.innerHTML = '';
+    const totalTagsCount = allTags.length;
+    const unassignedCount = allTags.filter(t => !t.group_id).length;
 
-    let tabsHtml = `
-        <button class="group-tab-btn ${modalActiveGroup === 'all' ? 'active' : ''}" onclick="switchModalTagGroup('all')">
-            すべて (${totalTagsCount})
-        </button>
-        <button class="group-tab-btn ${modalActiveGroup === 'unassigned' ? 'active' : ''}" onclick="switchModalTagGroup('unassigned')">
-            未分類 (${unassignedCount})
-        </button>
-    `;
+    // 「すべて」タブ
+    const allBtn = document.createElement('button');
+    allBtn.className = `group-tab-btn ${modalActiveGroup === 'all' ? 'active' : ''}`;
+    allBtn.textContent = `すべて (${totalTagsCount})`;
+    allBtn.onclick = () => switchModalTagGroup('all');
+    groupTabsContainer.appendChild(allBtn);
 
+    // 「未分類」タブ
+    const unassignedBtn = document.createElement('button');
+    unassignedBtn.className = `group-tab-btn ${modalActiveGroup === 'unassigned' ? 'active' : ''}`;
+    unassignedBtn.textContent = `未分類 (${unassignedCount})`;
+    unassignedBtn.onclick = () => switchModalTagGroup('unassigned');
+    groupTabsContainer.appendChild(unassignedBtn);
+
+    // 各グループタブ（g.name のダブルクォート・シングルクォート脱出を完全封鎖）
     tagGroups.forEach(g => {
         const isAct = (modalActiveGroup === g.id);
         const groupTagCount = allTags.filter(t => t.group_id === g.id).length;
-        tabsHtml += `
-            <button class="group-tab-btn ${isAct ? 'active' : ''}" onclick="switchModalTagGroup('${g.id}')">
-                <i class="fa-solid fa-folder${isAct ? '-open' : ''}"></i>
-                <span>${g.name} (${groupTagCount})</span>
-                <i class="fa-solid fa-trash-can group-del-icon" onclick="event.stopPropagation(); deleteTagGroupConfirm('${g.id}', '${g.name}')" title="グループ『${g.name}』を削除 (所属タグは未分類になります)"></i>
-            </button>
-        `;
-    });
-    groupTabsContainer.innerHTML = tabsHtml;
 
-    // 2. 選択中グループのタグ一覧描画
+        const btn = document.createElement('button');
+        btn.className = `group-tab-btn ${isAct ? 'active' : ''}`;
+        btn.onclick = () => switchModalTagGroup(g.id);
+
+        const icon = document.createElement('i');
+        icon.className = `fa-solid fa-folder${isAct ? '-open' : ''}`;
+        btn.appendChild(icon);
+
+        const nameSpan = document.createElement('span');
+        nameSpan.style.marginLeft = '4px';
+        nameSpan.textContent = ` ${g.name} (${groupTagCount})`;
+        btn.appendChild(nameSpan);
+
+        const delIcon = document.createElement('i');
+        delIcon.className = 'fa-solid fa-trash-can group-del-icon';
+        // DOMプロパティ代入: HTML属性パーサーを経由しないため、生値でも100%安全（属性脱出不能）
+        delIcon.title = `グループ『${g.name}』を削除 (所属タグは未分類になります)`;
+        // クロージャで直接変数を引き渡し（JS文字列リテラルのエスケープ問題も発生しない）
+        delIcon.onclick = (e) => {
+            e.stopPropagation();
+            deleteTagGroupConfirm(g.id, g.name);
+        };
+        btn.appendChild(delIcon);
+
+        groupTabsContainer.appendChild(btn);
+    });
+
+    // 2. 選択中グループのタグ一覧描画（DOM生成 & クロージャ化）
+    tagListContainer.innerHTML = '';
     let displayedTags = allTags;
     if (modalActiveGroup === 'unassigned') {
         displayedTags = allTags.filter(t => !t.group_id);
@@ -5602,35 +6347,104 @@ function renderModalTagBar() {
     }
 
     if (displayedTags.length === 0) {
-        tagListContainer.innerHTML = '<span style="font-size:0.8rem; color:var(--text-muted); padding:4px 0;">このグループにタグはありません。「+ 新規タグ作成」で作成できます。</span>';
+        const emptySpan = document.createElement('span');
+        emptySpan.style.cssText = 'font-size:0.8rem; color:var(--text-muted); padding:4px 0;';
+        emptySpan.textContent = 'このグループにタグはありません。「+ 新規タグ作成」で作成できます。';
+        tagListContainer.appendChild(emptySpan);
     } else {
-        tagListContainer.innerHTML = displayedTags.map(t => {
+        displayedTags.forEach(t => {
             const count = t.doc_count !== undefined ? t.doc_count : 0;
-            const groupOptions = tagGroups.map(g => 
-                `<option value="${g.id}" ${t.group_id === g.id ? 'selected' : ''}>📁 ${g.name}</option>`
-            ).join('');
+            const item = document.createElement('div');
+            item.className = 'tag-manager-item';
+            item.style.borderLeft = `3px solid ${t.color || '#2563eb'}`;
 
-            return `
-                <div class="tag-manager-item" style="border-left: 3px solid ${t.color};">
-                    <div style="cursor: pointer; display: inline-flex; align-items: center; gap: 5px;" onclick="assignTagToSelected('${t.id}')" title="クリックして選択中ファイルにタグ『${t.name}』を付与">
-                        <i class="fa-solid fa-tag" style="color:${t.color}; font-size:0.75rem;"></i>
-                        <span style="font-weight: 600; font-size: 0.82rem; color: #1e293b;">${t.name}</span>
-                        <span style="font-size: 0.72rem; color: #64748b;">(${count})</span>
-                    </div>
-                    <i class="fa-solid fa-magnifying-glass tag-action-icon" onclick="event.stopPropagation(); quickViewTagDocs('${t.id}')" title="このタグのファイルを表示"></i>
-                    <i class="fa-solid fa-pen-to-square tag-action-icon" onclick="event.stopPropagation(); promptRenameTag('${t.id}', '${t.name.replace(/'/g, "\\'")}')" title="タグ名を変更"></i>
-                    <select class="tag-group-select-mini" onchange="setTagGroup('${t.id}', this.value)" title="所属グループを変更">
-                        <option value="" ${!t.group_id ? 'selected' : ''}>(未所属)</option>
-                        ${groupOptions}
-                    </select>
-                    <i class="fa-solid fa-xmark remove-tag-btn" onclick="event.stopPropagation(); deleteTagConfirm('${t.id}', '${t.name.replace(/'/g, "\\'")}')" title="タグ『${t.name}』を削除"></i>
-                </div>
-            `;
-        }).join('');
+            // 左側クリックエリア（選択中ファイルへのタグ付与）
+            const assignWrap = document.createElement('div');
+            assignWrap.style.cssText = 'cursor: pointer; display: inline-flex; align-items: center; gap: 5px;';
+            assignWrap.title = `クリックして選択中ファイルにタグ『${t.name}』を付与`;
+            assignWrap.onclick = () => assignTagToSelected(t.id);
+
+            const tagIcon = document.createElement('i');
+            tagIcon.className = 'fa-solid fa-tag';
+            tagIcon.style.color = t.color || '#2563eb';
+            tagIcon.style.fontSize = '0.75rem';
+            assignWrap.appendChild(tagIcon);
+
+            const tagNameSpan = document.createElement('span');
+            tagNameSpan.style.cssText = 'font-weight: 600; font-size: 0.82rem; color: #1e293b;';
+            tagNameSpan.textContent = t.name;
+            assignWrap.appendChild(tagNameSpan);
+
+            const countSpan = document.createElement('span');
+            countSpan.style.cssText = 'font-size: 0.72rem; color: #64748b;';
+            countSpan.textContent = `(${count})`;
+            assignWrap.appendChild(countSpan);
+
+            item.appendChild(assignWrap);
+
+            // 虫眼鏡アイコン（タグ文書クイック表示）
+            const searchIcon = document.createElement('i');
+            searchIcon.className = 'fa-solid fa-magnifying-glass tag-action-icon';
+            searchIcon.title = 'このタグのファイルを表示';
+            searchIcon.onclick = (e) => {
+                e.stopPropagation();
+                quickViewTagDocs(t.id);
+            };
+            item.appendChild(searchIcon);
+
+            // 鉛筆アイコン（タグ名変更）
+            const editIcon = document.createElement('i');
+            editIcon.className = 'fa-solid fa-pen-to-square tag-action-icon';
+            editIcon.title = 'タグ名を変更';
+            editIcon.onclick = (e) => {
+                e.stopPropagation();
+                promptRenameTag(t.id, t.name);
+            };
+            item.appendChild(editIcon);
+
+            // 所属グループ変更セレクトボックス
+            const grpSelect = document.createElement('select');
+            grpSelect.className = 'tag-group-select-mini';
+            grpSelect.title = '所属グループを変更';
+            grpSelect.onchange = (e) => setTagGroup(t.id, e.target.value);
+
+            const optUnassigned = document.createElement('option');
+            optUnassigned.value = '';
+            optUnassigned.textContent = '(未所属)';
+            if (!t.group_id) optUnassigned.selected = true;
+            grpSelect.appendChild(optUnassigned);
+
+            tagGroups.forEach(g => {
+                const opt = document.createElement('option');
+                opt.value = g.id;
+                opt.textContent = `📁 ${g.name}`;
+                if (t.group_id === g.id) opt.selected = true;
+                grpSelect.appendChild(opt);
+            });
+            item.appendChild(grpSelect);
+
+            // タグ削除アイコン
+            const delBtn = document.createElement('i');
+            delBtn.className = 'fa-solid fa-xmark remove-tag-btn';
+            delBtn.title = `タグ『${t.name}』を削除`;
+            delBtn.onclick = (e) => {
+                e.stopPropagation();
+                deleteTagConfirm(t.id, t.name);
+            };
+            item.appendChild(delBtn);
+
+            tagListContainer.appendChild(item);
+        });
     }
 
     // 3. ツールバーの「特定タグを全選択」プルダウン更新
     if (selectEl) {
+        selectEl.innerHTML = '';
+        const defOpt = document.createElement('option');
+        defOpt.value = '';
+        defOpt.textContent = '🎯 タグで選択 ▾';
+        selectEl.appendChild(defOpt);
+
         let tagsForSelect = allTags;
         if (modalActiveGroup === 'unassigned') {
             tagsForSelect = allTags.filter(t => !t.group_id);
@@ -5638,11 +6452,13 @@ function renderModalTagBar() {
             tagsForSelect = allTags.filter(t => t.group_id === modalActiveGroup);
         }
 
-        selectEl.innerHTML = '<option value="">🎯 タグで選択 ▾</option>' + 
-            tagsForSelect.map(t => {
-                const grpLabel = (modalActiveGroup === 'all' && t.group_name) ? `[${t.group_name}] ` : '';
-                return `<option value="${t.id}">${grpLabel}${escapeHtml(t.name)} (${t.doc_count || 0}件)</option>`;
-            }).join('');
+        tagsForSelect.forEach(t => {
+            const opt = document.createElement('option');
+            opt.value = t.id;
+            const grpLabel = (modalActiveGroup === 'all' && t.group_name) ? `[${t.group_name}] ` : '';
+            opt.textContent = `${grpLabel}${t.name} (${t.doc_count || 0}件)`;
+            selectEl.appendChild(opt);
+        });
     }
 }
 
@@ -7034,6 +7850,572 @@ function resetEditorOptionsToDefault() {
     }
 }
 
+// =============================================================================
+// 書式スタイル管理システム (StyleGalleryPopover & StyleEditModal - KaisoRTextEditor互換)
+// =============================================================================
+
+const DEFAULT_CHARACTER_STYLES = [
+    { id: 'char-line1', name: 'LINE1', category: 'character', textDecoration: 'underline', underlineColor: '#991b1b', underlineStyle: 'solid', textColor: '#1e293b', isBuiltin: true },
+    { id: 'char-line2', name: 'LINE2', category: 'character', textDecoration: 'underline', underlineColor: '#166534', underlineStyle: 'solid', textColor: '#1e293b', isBuiltin: true },
+    { id: 'char-line3', name: 'LINE3', category: 'character', textDecoration: 'underline', underlineColor: '#991b1b', underlineStyle: 'wavy', textColor: '#1e293b', isBuiltin: true },
+    { id: 'char-txt1', name: 'TXT 1', category: 'character', textColor: '#dc2626', isBuiltin: true },
+    { id: 'char-txt2', name: 'TXT 2', category: 'character', textColor: '#16a34a', isBuiltin: true },
+    { id: 'char-txt3', name: 'TXT 3', category: 'character', textColor: '#c2410c', isBuiltin: true },
+    { id: 'char-marker1', name: 'マーカー1', category: 'character', backgroundColor: '#fef08a', textColor: '#0f172a', isBuiltin: true },
+    { id: 'char-marker2', name: 'マーカー2', category: 'character', backgroundColor: '#c2410c', textColor: '#ffffff', fontWeight: 'bold', isBuiltin: true },
+    { id: 'char-marker3', name: 'マーカー3', category: 'character', backgroundColor: '#bbf7d0', textColor: '#0f172a', isBuiltin: true },
+    { id: 'char-strong', name: '強調', category: 'character', fontWeight: 'bold', textColor: '#0f172a', isBuiltin: true },
+    { id: 'char-strong-bold', name: '強調太字', category: 'character', fontWeight: 'bold', fontSize: '16px', textColor: '#1e3a8a', isBuiltin: true },
+    { id: 'char-subtle', name: '控えめ', category: 'character', textColor: '#64748b', fontStyle: 'italic', isBuiltin: true },
+    { id: 'char-strike', name: '打消線', category: 'character', textDecoration: 'line-through', textColor: '#94a3b8', isBuiltin: true },
+    { id: 'char-code-inline', name: 'コード', category: 'character', fontFamily: 'monospace', backgroundColor: '#f1f5f9', textColor: '#e11d48', fontSize: '13px', isBuiltin: true }
+];
+
+const DEFAULT_PARAGRAPH_STYLES = [
+    { id: 'para-normal', name: '標準', category: 'paragraph', symbolPrefix: '↵', headingLevel: 'p', fontSize: '14px', lineHeight: '1.6', textColor: '#1e293b', isBuiltin: true },
+    { id: 'para-h1', name: '見出し 1', category: 'paragraph', symbolPrefix: '↵', headingLevel: 'h1', fontSize: '24px', fontWeight: 'bold', lineHeight: '1.3', textColor: '#0f172a', marginTop: '0.8em', marginBottom: '0.4em', isBuiltin: true },
+    { id: 'para-h2', name: '見出し 2', category: 'paragraph', symbolPrefix: '↵', headingLevel: 'h2', fontSize: '20px', fontWeight: 'bold', lineHeight: '1.35', textColor: '#1e293b', marginTop: '0.7em', marginBottom: '0.35em', isBuiltin: true },
+    { id: 'para-h3', name: '見出し 3', category: 'paragraph', symbolPrefix: '↵', headingLevel: 'h3', fontSize: '17px', fontWeight: 'bold', lineHeight: '1.4', textColor: '#334155', marginTop: '0.6em', marginBottom: '0.3em', isBuiltin: true },
+    { id: 'para-h4', name: '見出し 4', category: 'paragraph', symbolPrefix: '↵', headingLevel: 'h4', fontSize: '15px', fontWeight: '600', lineHeight: '1.45', textColor: '#475569', marginTop: '0.5em', marginBottom: '0.25em', isBuiltin: true },
+    { id: 'para-h5', name: '見出し 5', category: 'paragraph', symbolPrefix: '↵', headingLevel: 'h5', fontSize: '13px', fontWeight: '600', lineHeight: '1.5', textColor: '#64748b', marginTop: '0.4em', marginBottom: '0.2em', isBuiltin: true },
+    { id: 'para-indent', name: '字下げ', category: 'paragraph', symbolPrefix: '↵', headingLevel: 'p', textIndent: '1.2em', fontSize: '14px', lineHeight: '1.6', textColor: '#1e293b', isBuiltin: true },
+    { id: 'para-compact', name: 'コンパクト', category: 'paragraph', symbolPrefix: '↵', headingLevel: 'p', fontSize: '14px', lineHeight: '1.2', textColor: '#1e293b', isBuiltin: true },
+    { id: 'para-quote', name: '引用', category: 'paragraph', symbolPrefix: '↵', headingLevel: 'blockquote', fontSize: '13px', lineHeight: '1.5', textColor: '#475569', isBuiltin: true }
+];
+
+let customEditorStyles = loadCustomStylesFromStorage();
+let currentStyleGalleryTab = 'all';
+let currentEditingStyleId = null;
+let currentModalCategory = 'character';
+
+function loadCustomStylesFromStorage() {
+    try {
+        const raw = localStorage.getItem('custom_editor_text_styles');
+        if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+                return parsed;
+            }
+        }
+    } catch(e) {
+        console.warn('Failed to load custom styles from localStorage:', e);
+    }
+    return [...DEFAULT_CHARACTER_STYLES, ...DEFAULT_PARAGRAPH_STYLES];
+}
+
+function saveCustomStylesToStorage() {
+    try {
+        localStorage.setItem('custom_editor_text_styles', JSON.stringify(customEditorStyles));
+    } catch(e) {
+        console.error('Failed to save custom styles to localStorage:', e);
+    }
+}
+
+function renderStyleGalleryPopover() {
+    const grid = document.getElementById('styleGalleryGrid');
+    if (!grid) return;
+
+    const charList = customEditorStyles.filter(s => s.category === 'character');
+    const paraList = customEditorStyles.filter(s => s.category === 'paragraph');
+
+    const countCharEl = document.getElementById('countStyleChar');
+    if (countCharEl) countCharEl.textContent = charList.length;
+    const countParaEl = document.getElementById('countStylePara');
+    if (countParaEl) countParaEl.textContent = paraList.length;
+
+    const totalLabel = document.getElementById('totalStyleCountLabel');
+    if (totalLabel) totalLabel.textContent = `合計 ${customEditorStyles.length} スタイル`;
+
+    let displayed = customEditorStyles;
+    if (currentStyleGalleryTab === 'character') {
+        displayed = charList;
+    } else if (currentStyleGalleryTab === 'paragraph') {
+        displayed = paraList;
+    }
+
+    grid.innerHTML = '';
+    displayed.forEach(style => {
+        const card = document.createElement('div');
+        card.className = 'style-card';
+        card.title = `${style.name} (${style.category === 'paragraph' ? '段落書式' : '文字書式'}) - クリックして適用`;
+
+        // プレビュー領域 (か力漢)
+        const prevWrap = document.createElement('div');
+        prevWrap.className = 'style-card-preview';
+        const sampleSpan = document.createElement('span');
+        sampleSpan.textContent = 'か力漢';
+        
+        // スタイル適用
+        if (style.fontFamily) sampleSpan.style.fontFamily = style.fontFamily;
+        if (style.fontSize) {
+            const num = parseInt(style.fontSize);
+            sampleSpan.style.fontSize = (!isNaN(num) && num > 20) ? '17px' : (!isNaN(num) && num < 12) ? '11px' : '13px';
+        }
+        if (style.fontWeight) sampleSpan.style.fontWeight = style.fontWeight;
+        if (style.fontStyle) sampleSpan.style.fontStyle = style.fontStyle;
+        if (style.textColor) sampleSpan.style.color = style.textColor;
+        if (style.backgroundColor && style.backgroundColor !== 'transparent') {
+            sampleSpan.style.backgroundColor = style.backgroundColor;
+            sampleSpan.style.padding = '1px 3px';
+            sampleSpan.style.borderRadius = '2px';
+        }
+        if (style.textDecoration) {
+            sampleSpan.style.textDecoration = style.textDecoration;
+            if (style.underlineStyle) sampleSpan.style.textDecorationStyle = style.underlineStyle;
+            if (style.underlineColor) sampleSpan.style.textDecorationColor = style.underlineColor;
+        }
+        prevWrap.appendChild(sampleSpan);
+        card.appendChild(prevWrap);
+
+        // スタイル名
+        const nameDiv = document.createElement('div');
+        nameDiv.className = 'style-card-name';
+        nameDiv.textContent = (style.category === 'paragraph' && style.symbolPrefix ? style.symbolPrefix : '') + style.name;
+        card.appendChild(nameDiv);
+
+        // ホバー時のアクションボタン (✏️, 🗑️)
+        const actDiv = document.createElement('div');
+        actDiv.className = 'style-card-actions';
+
+        const editBtn = document.createElement('button');
+        editBtn.type = 'button';
+        editBtn.className = 'style-card-action-btn';
+        editBtn.title = 'このスタイルを変更・編集';
+        editBtn.innerHTML = '<i class="fa-solid fa-pen-to-square"></i>';
+        editBtn.onclick = (e) => {
+            e.stopPropagation();
+            openStyleEditModal(style.id);
+        };
+        actDiv.appendChild(editBtn);
+
+        const delBtn = document.createElement('button');
+        delBtn.type = 'button';
+        delBtn.className = 'style-card-action-btn btn-del';
+        delBtn.title = 'このスタイルを削除';
+        delBtn.innerHTML = '<i class="fa-solid fa-trash-can"></i>';
+        delBtn.onclick = (e) => {
+            e.stopPropagation();
+            deleteCustomStyle(style.id);
+        };
+        actDiv.appendChild(delBtn);
+
+        card.appendChild(actDiv);
+
+        // クリックで適用
+        card.onclick = () => {
+            applyPresetStyle(style.id);
+        };
+
+        grid.appendChild(card);
+    });
+}
+
+function applyPresetStyle(styleId) {
+    const style = customEditorStyles.find(s => s.id === styleId);
+    if (!style) return;
+
+    const editor = document.getElementById('editorContent');
+    if (!editor) return;
+    editor.focus();
+    restoreSelection();
+
+    if (style.category === 'character') {
+        const sel = window.getSelection();
+        if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+            const range = sel.getRangeAt(0);
+            const span = document.createElement('span');
+            if (style.fontFamily) span.style.fontFamily = style.fontFamily;
+            if (style.fontSize) span.style.fontSize = style.fontSize;
+            if (style.fontWeight) span.style.fontWeight = style.fontWeight;
+            if (style.fontStyle) span.style.fontStyle = style.fontStyle;
+            if (style.textColor) span.style.color = style.textColor;
+            if (style.backgroundColor && style.backgroundColor !== 'transparent') {
+                span.style.backgroundColor = style.backgroundColor;
+            }
+            if (style.textDecoration) {
+                span.style.textDecoration = style.textDecoration;
+                if (style.underlineStyle) span.style.textDecorationStyle = style.underlineStyle;
+                if (style.underlineColor) span.style.textDecorationColor = style.underlineColor;
+            }
+            span.appendChild(range.extractContents());
+            range.insertNode(span);
+            range.selectNodeContents(span);
+            sel.removeAllRanges();
+            sel.addRange(range);
+        } else {
+            showToast('書式を適用するテキストを選択してください');
+            return;
+        }
+    } else {
+        // 段落書式
+        const heading = style.headingLevel || 'p';
+        formatHeading(heading);
+
+        const sel = window.getSelection();
+        let target = (sel && sel.rangeCount > 0) ? sel.anchorNode : null;
+        if (target && target.nodeType === Node.TEXT_NODE) target = target.parentElement;
+
+        let block = target;
+        while (block && block !== editor && !['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'blockquote', 'li'].includes(block.tagName.toLowerCase())) {
+            block = block.parentElement;
+        }
+
+        if (block && block !== editor) {
+            if (style.lineHeight) block.style.lineHeight = style.lineHeight;
+            if (style.textIndent) block.style.textIndent = style.textIndent;
+            else block.style.textIndent = '';
+            if (style.marginTop) block.style.marginTop = style.marginTop;
+            if (style.marginBottom) block.style.marginBottom = style.marginBottom;
+            if (style.textAlign) block.style.textAlign = style.textAlign;
+            if (style.textColor) block.style.color = style.textColor;
+            if (style.fontSize) block.style.fontSize = style.fontSize;
+            if (style.fontWeight) block.style.fontWeight = style.fontWeight;
+        }
+    }
+
+    saveSelection();
+    onEditorInput();
+    updateToolbarState();
+    closeStyleGalleryPopover();
+    showToast(`スタイル「${style.name}」を適用しました`);
+}
+
+function clearPresetFormat() {
+    const editor = document.getElementById('editorContent');
+    if (!editor) return;
+    editor.focus();
+    restoreSelection();
+
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+        document.execCommand('removeFormat', false, null);
+        const range = sel.getRangeAt(0);
+        const container = range.commonAncestorContainer;
+        const spans = (container.nodeType === Node.ELEMENT_NODE ? container : container.parentElement).querySelectorAll('span[style]');
+        spans.forEach(s => {
+            if (sel.containsNode(s, true)) {
+                s.removeAttribute('style');
+            }
+        });
+    } else {
+        formatHeading('p');
+        const target = (sel && sel.rangeCount > 0) ? sel.anchorNode : null;
+        let block = target && target.nodeType === Node.TEXT_NODE ? target.parentElement : target;
+        while (block && block !== editor && !['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'blockquote'].includes(block.tagName.toLowerCase())) {
+            block = block.parentElement;
+        }
+        if (block && block !== editor) {
+            block.removeAttribute('style');
+        }
+    }
+
+    saveSelection();
+    onEditorInput();
+    updateToolbarState();
+    closeStyleGalleryPopover();
+    showToast('書式をクリアしました');
+}
+
+function openStyleEditModal(styleId = null, defaultCategory = 'character') {
+    closeStyleGalleryPopover();
+    currentEditingStyleId = styleId;
+
+    const modalTitle = document.getElementById('styleEditModalTitle');
+    const delBtn = document.getElementById('btnDeleteStyleFromModal');
+    const nameInput = document.getElementById('styleInputName');
+
+    if (styleId) {
+        const style = customEditorStyles.find(s => s.id === styleId);
+        if (!style) return;
+        currentModalCategory = style.category || 'character';
+        if (modalTitle) modalTitle.textContent = `書式スタイルの変更 (${style.name})`;
+        if (delBtn) delBtn.style.display = 'inline-flex';
+        if (nameInput) nameInput.value = style.name;
+
+        document.getElementById('styleInputFontFamily').value = style.fontFamily || '';
+        document.getElementById('styleInputFontSize').value = style.fontSize || '';
+        document.getElementById('styleInputBold').checked = (style.fontWeight === 'bold' || style.fontWeight === '700');
+        document.getElementById('styleInputItalic').checked = (style.fontStyle === 'italic');
+        document.getElementById('styleInputStrike').checked = Boolean(style.textDecoration && style.textDecoration.includes('line-through'));
+        document.getElementById('styleInputTextColor').value = style.textColor || '#0f172a';
+
+        const hasUnderline = Boolean(style.textDecoration && style.textDecoration.includes('underline'));
+        document.getElementById('styleInputHasUnderline').checked = hasUnderline;
+        document.getElementById('styleInputUnderlineStyle').value = style.underlineStyle || 'solid';
+        document.getElementById('styleInputUnderlineColor').value = style.underlineColor || '#991b1b';
+
+        const hasBg = Boolean(style.backgroundColor && style.backgroundColor !== 'transparent');
+        document.getElementById('styleInputHasBg').checked = hasBg;
+        document.getElementById('styleInputBgColor').value = style.backgroundColor || 'transparent';
+
+        document.getElementById('styleInputHeadingLevel').value = style.headingLevel || 'p';
+        document.getElementById('styleInputLineHeight').value = style.lineHeight || '1.6';
+        document.getElementById('styleInputTextAlign').value = style.textAlign || 'left';
+        document.getElementById('styleInputIndent').checked = Boolean(style.textIndent);
+        document.getElementById('styleInputMarginTop').value = style.marginTop || '';
+        document.getElementById('styleInputMarginBottom').value = style.marginBottom || '';
+    } else {
+        currentModalCategory = defaultCategory || 'character';
+        if (modalTitle) modalTitle.textContent = '新しい書式スタイルの登録';
+        if (delBtn) delBtn.style.display = 'none';
+        if (nameInput) nameInput.value = '';
+
+        document.getElementById('styleInputFontFamily').value = '';
+        document.getElementById('styleInputFontSize').value = currentModalCategory === 'paragraph' ? '14px' : '';
+        document.getElementById('styleInputBold').checked = false;
+        document.getElementById('styleInputItalic').checked = false;
+        document.getElementById('styleInputStrike').checked = false;
+        document.getElementById('styleInputTextColor').value = '#0f172a';
+        document.getElementById('styleInputHasUnderline').checked = false;
+        document.getElementById('styleInputUnderlineStyle').value = 'solid';
+        document.getElementById('styleInputUnderlineColor').value = '#991b1b';
+        document.getElementById('styleInputHasBg').checked = false;
+        document.getElementById('styleInputBgColor').value = 'transparent';
+
+        document.getElementById('styleInputHeadingLevel').value = 'p';
+        document.getElementById('styleInputLineHeight').value = '1.6';
+        document.getElementById('styleInputTextAlign').value = 'left';
+        document.getElementById('styleInputIndent').checked = false;
+        document.getElementById('styleInputMarginTop').value = '';
+        document.getElementById('styleInputMarginBottom').value = '';
+    }
+
+    switchModalCategory(currentModalCategory);
+    updateStyleEditModalPreview();
+
+    const modal = document.getElementById('styleEditModal');
+    if (modal) modal.classList.add('show');
+}
+
+function closeStyleEditModal() {
+    const modal = document.getElementById('styleEditModal');
+    if (modal) modal.classList.remove('show');
+}
+
+function switchModalCategory(cat) {
+    currentModalCategory = cat;
+    const btnChar = document.getElementById('btnCatChar');
+    const btnPara = document.getElementById('btnCatPara');
+    const paraSec = document.getElementById('styleModalParaSection');
+
+    if (cat === 'character') {
+        if (btnChar) btnChar.classList.add('active');
+        if (btnPara) btnPara.classList.remove('active');
+        if (paraSec) paraSec.style.display = 'none';
+    } else {
+        if (btnChar) btnChar.classList.remove('active');
+        if (btnPara) btnPara.classList.add('active');
+        if (paraSec) paraSec.style.display = 'block';
+    }
+    updateStyleEditModalPreview();
+}
+
+function updateStyleEditModalPreview() {
+    const target = document.getElementById('styleModalPreviewTarget');
+    if (!target) return;
+
+    const font = document.getElementById('styleInputFontFamily')?.value || '';
+    const size = document.getElementById('styleInputFontSize')?.value || '';
+    const bold = document.getElementById('styleInputBold')?.checked;
+    const italic = document.getElementById('styleInputItalic')?.checked;
+    const strike = document.getElementById('styleInputStrike')?.checked;
+    const textColor = document.getElementById('styleInputTextColor')?.value || '#0f172a';
+    const hasUnderline = document.getElementById('styleInputHasUnderline')?.checked;
+    const underlineStyle = document.getElementById('styleInputUnderlineStyle')?.value || 'solid';
+    const underlineColor = document.getElementById('styleInputUnderlineColor')?.value || '#991b1b';
+    const hasBg = document.getElementById('styleInputHasBg')?.checked;
+    const bgColor = document.getElementById('styleInputBgColor')?.value || 'transparent';
+
+    target.style.fontFamily = font || '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "BIZ UDPGothic", Meiryo, sans-serif';
+    target.style.fontSize = size || '14px';
+    target.style.fontWeight = bold ? 'bold' : 'normal';
+    target.style.fontStyle = italic ? 'italic' : 'normal';
+    target.style.color = textColor;
+    target.style.backgroundColor = (hasBg && bgColor !== 'transparent') ? bgColor : 'transparent';
+    target.style.padding = (hasBg && bgColor !== 'transparent') ? '2px 6px' : '0';
+    target.style.borderRadius = (hasBg && bgColor !== 'transparent') ? '3px' : '0';
+
+    let decos = [];
+    if (hasUnderline) decos.push('underline');
+    if (strike) decos.push('line-through');
+    target.style.textDecoration = decos.length > 0 ? decos.join(' ') : 'none';
+    if (hasUnderline) {
+        target.style.textDecorationStyle = underlineStyle;
+        target.style.textDecorationColor = underlineColor;
+    } else {
+        target.style.textDecorationStyle = '';
+        target.style.textDecorationColor = '';
+    }
+
+    if (currentModalCategory === 'paragraph') {
+        const lh = document.getElementById('styleInputLineHeight')?.value || '1.6';
+        const align = document.getElementById('styleInputTextAlign')?.value || 'left';
+        const indent = document.getElementById('styleInputIndent')?.checked;
+        target.style.lineHeight = lh;
+        target.style.textAlign = align;
+        target.style.textIndent = indent ? '1.2em' : '0';
+    } else {
+        target.style.lineHeight = '1.6';
+        target.style.textAlign = 'left';
+        target.style.textIndent = '0';
+    }
+}
+
+function saveCustomStyleFromModal() {
+    const nameInput = document.getElementById('styleInputName');
+    const name = nameInput ? nameInput.value.trim() : '';
+    if (!name) {
+        alert('スタイル名を入力してください。');
+        if (nameInput) nameInput.focus();
+        return;
+    }
+
+    const font = document.getElementById('styleInputFontFamily')?.value || '';
+    const size = document.getElementById('styleInputFontSize')?.value || '';
+    const bold = document.getElementById('styleInputBold')?.checked;
+    const italic = document.getElementById('styleInputItalic')?.checked;
+    const strike = document.getElementById('styleInputStrike')?.checked;
+    const textColor = document.getElementById('styleInputTextColor')?.value || '#0f172a';
+    const hasUnderline = document.getElementById('styleInputHasUnderline')?.checked;
+    const underlineStyle = document.getElementById('styleInputUnderlineStyle')?.value || 'solid';
+    const underlineColor = document.getElementById('styleInputUnderlineColor')?.value || '#991b1b';
+    const hasBg = document.getElementById('styleInputHasBg')?.checked;
+    const bgColor = document.getElementById('styleInputBgColor')?.value || 'transparent';
+
+    let textDecoration = 'none';
+    if (hasUnderline && strike) textDecoration = 'underline line-through';
+    else if (hasUnderline) textDecoration = 'underline';
+    else if (strike) textDecoration = 'line-through';
+
+    const newStyle = {
+        id: currentEditingStyleId || `style-${Date.now()}`,
+        name: name,
+        category: currentModalCategory,
+        fontFamily: font || undefined,
+        fontSize: size || undefined,
+        fontWeight: bold ? 'bold' : 'normal',
+        fontStyle: italic ? 'italic' : 'normal',
+        textColor: textColor,
+        textDecoration: textDecoration !== 'none' ? textDecoration : undefined,
+        underlineStyle: hasUnderline ? underlineStyle : undefined,
+        underlineColor: hasUnderline ? underlineColor : undefined,
+        backgroundColor: (hasBg && bgColor !== 'transparent') ? bgColor : undefined,
+        isBuiltin: false
+    };
+
+    if (currentModalCategory === 'paragraph') {
+        const heading = document.getElementById('styleInputHeadingLevel')?.value || 'p';
+        const lh = document.getElementById('styleInputLineHeight')?.value || '1.6';
+        const align = document.getElementById('styleInputTextAlign')?.value || 'left';
+        const indent = document.getElementById('styleInputIndent')?.checked;
+        const mt = document.getElementById('styleInputMarginTop')?.value.trim();
+        const mb = document.getElementById('styleInputMarginBottom')?.value.trim();
+
+        newStyle.symbolPrefix = '↵';
+        newStyle.headingLevel = heading;
+        newStyle.lineHeight = lh;
+        newStyle.textAlign = align;
+        newStyle.textIndent = indent ? '1.2em' : undefined;
+        newStyle.marginTop = mt || undefined;
+        newStyle.marginBottom = mb || undefined;
+    }
+
+    if (currentEditingStyleId) {
+        const idx = customEditorStyles.findIndex(s => s.id === currentEditingStyleId);
+        if (idx !== -1) {
+            customEditorStyles[idx] = newStyle;
+        } else {
+            customEditorStyles.push(newStyle);
+        }
+    } else {
+        customEditorStyles.push(newStyle);
+    }
+
+    saveCustomStylesToStorage();
+    renderStyleGalleryPopover();
+    closeStyleEditModal();
+    showToast(`スタイル「${name}」を保存しました`);
+}
+
+function deleteCustomStyle(styleId) {
+    const style = customEditorStyles.find(s => s.id === styleId);
+    if (!style) return;
+    if (confirm(`スタイル「${style.name}」を削除してもよろしいですか？`)) {
+        customEditorStyles = customEditorStyles.filter(s => s.id !== styleId);
+        saveCustomStylesToStorage();
+        renderStyleGalleryPopover();
+        showToast(`スタイル「${style.name}」を削除しました`);
+    }
+}
+
+function onDeleteCurrentEditingStyle() {
+    if (!currentEditingStyleId) return;
+    deleteCustomStyle(currentEditingStyleId);
+    closeStyleEditModal();
+}
+
+function resetCustomStylesToDefault() {
+    if (confirm('スタイル一覧を出荷時の初期状態（LINE1〜3、TXT1〜3、マーカー1〜3、見出し1〜5等）に戻しますか？（※自作したカスタムスタイルは初期化されます）')) {
+        customEditorStyles = [...DEFAULT_CHARACTER_STYLES, ...DEFAULT_PARAGRAPH_STYLES];
+        saveCustomStylesToStorage();
+        renderStyleGalleryPopover();
+        showToast('スタイル一覧を初期状態に戻しました');
+    }
+}
+
+function toggleStyleGalleryPopover(e) {
+    if (e) {
+        e.stopPropagation();
+        e.preventDefault();
+    }
+    const popover = document.getElementById('styleGalleryPopover');
+    if (!popover) return;
+    const wasOpen = popover.classList.contains('show');
+    closeAllDropdownMenus();
+    if (!wasOpen) {
+        renderStyleGalleryPopover();
+        popover.classList.add('show');
+    }
+}
+
+function closeStyleGalleryPopover() {
+    const popover = document.getElementById('styleGalleryPopover');
+    if (popover) popover.classList.remove('show');
+}
+
+function switchStyleGalleryTab(tab) {
+    currentStyleGalleryTab = tab;
+    document.querySelectorAll('.style-gallery-tab-btn').forEach(btn => btn.classList.remove('active'));
+    if (tab === 'all') document.getElementById('tabBtnStyleAll')?.classList.add('active');
+    else if (tab === 'character') document.getElementById('tabBtnStyleChar')?.classList.add('active');
+    else if (tab === 'paragraph') document.getElementById('tabBtnStylePara')?.classList.add('active');
+    renderStyleGalleryPopover();
+}
+
+async function scanPCFontsForModal() {
+    if ('queryLocalFonts' in window) {
+        try {
+            const fonts = await window.queryLocalFonts();
+            const sel = document.getElementById('styleInputFontFamily');
+            if (sel && fonts && fonts.length > 0) {
+                const uniqueFamilies = Array.from(new Set(fonts.map(f => f.family))).sort();
+                uniqueFamilies.forEach(fam => {
+                    const opt = document.createElement('option');
+                    opt.value = `"${fam}", sans-serif`;
+                    opt.textContent = `💻 ${fam}`;
+                    sel.appendChild(opt);
+                });
+                showToast(`PCから ${uniqueFamilies.length} 種類のフォントを読み込みました`);
+            }
+        } catch(e) {
+            showToast('PCフォントの読み込みはブラウザ設定で拒否されたか非対応です');
+        }
+    } else {
+        alert('お使いのブラウザはローカルフォント照会APIに対応していません。フォント名を手動選択または入力してください。');
+    }
+}
+
 </script>
 </body>
 </html>
+

@@ -61,112 +61,24 @@ def remove_cjk_spaces(s: str) -> str:
 
 def heal_mixed_script_lines(lines: List[Dict[str, Any]], img_path: Optional[Path] = None, doc_type: str = "japanese") -> List[Dict[str, Any]]:
     """
-    縦書き和文中に挿入された横書き英単語・記号（例: counterintelligence, KGB, Cheka, VCheka, FSB, SVR,
-    lustration, Question More, both sides, Bothsidesism, RT等）により
-    NDLOCR-Lite / WinOCRが括弧閉じや英字・直後の日本語テキストを取りこぼし・誤認識した場合に、
-    高精度正規化および精密補正で欠損・誤認識を自動修復する。
+    縦書き和文・横書き文書において、文字間の不要な空白を除去し、
+    旧字体の新字体への正規化およびテキストの正規化を行う。
     """
     if not lines or doc_type != "japanese":
         return lines
 
+    try:
+        from app.ocr_pipeline.kanji_normalizer import normalize_kyujitai
+    except ImportError:
+        try:
+            from kanji_normalizer import normalize_kyujitai
+        except ImportError:
+            normalize_kyujitai = lambda x: x
+
     for l in lines:
         raw_t = l.get("text", "")
         t = remove_cjk_spaces(raw_t)
-
-        # 1. 7ページ: 防諜 (counterintelligence), KGB, Cheka, VCheka, FSB, SVR
-        if ("防" in t or "体制を護持" in t) and ("8 目" in t or "e 一 目" in t or "counter" in t.lower() or "8)" in t):
-            t = re.sub(r'防\s*[鼕聾]?\s*\([^\)]*\)', '防諜 (counterintelligence)', t)
-            if "counterintelligence" not in t:
-                t = re.sub(r'防\s*[鼕聾]?', '防諜 (counterintelligence)', t)
-
-        if "の前身は、十月革命後" in t and "KGB" not in t:
-            t = "KGBの前身は、十月革命後の一九一七年十二月二十日に創設された反革命・サボタージ"
-
-        if "チェーカー" in t and ("( )" in t or "（ ）" in t or "Cheka" not in t):
-            t = re.sub(r'チェーカー\s*[\(（]\s*[\)）]', 'チェーカー (Cheka)', t)
-            if "Cheka" not in t and "いわゆる「チェーカー" in t:
-                t = t.replace("いわゆる「チェーカー", "いわゆる「チェーカー (Cheka)")
-
-        if "VCheka" in t:
-            t = re.sub(r'[\(（]VCheka[^\)）]*[\)）ご]?\s*」?', '(VCheka)」', t)
-
-        if "ロシア連邦保安庁" in t or "ロシア対外諜報庁" in t:
-            if "FSB" not in t:
-                t = t.replace("ロシア連邦保安庁", "ロシア連邦保安庁 (FSB)")
-            if "SVR" not in t:
-                t = re.sub(r'ロシア対外諜報庁\s*[\(（]?[^\)）]*[\)）]?', 'ロシア対外諜報庁 (SVR)', t)
-
-        # 2. 44ページ: 浄化政策 (lustration)
-        if "浄化政策" in t:
-            t = re.sub(r'「?\s*浄化政策\s*[0-9\s]*[岳\w\s]*tration\s*\)?\s*」?', '「浄化政策 (lustration)」', t)
-            if "(lustration)" not in t:
-                t = re.sub(r'「?\s*浄化政策\s*」?', '「浄化政策 (lustration)」', t)
-
-        # 3. 64ページ: both sides, Bothsidesism, RT, Question More
-        if ("このような態度" in t or "手 こ の" in t or "中立主義ではなく" in t) and ("both" in t.lower() or "双方" in t or "という言葉" in t):
-            t = "このような態度は、中立主義ではなく、「双方 (both sides)」という言葉から作られた「両"
-
-        if ("論併記主義" in t or "術 論" in t or "Bothsidesism" in t.lower() or "呼 e" in t):
-            t = "論併記主義 (Bothsidesism)」であると批判されている。両論併記主義者が注意しなければな"
-
-        if "ロシアを連想させない" in t and "RT" not in t:
-            t = "二〇〇八年のロシア・ジョージア戦争後、ロシアを連想させない「RT」にチャンネル名を"
-
-        if "Question" in t or "もっと疑え" in t:
-            t = re.sub(r'「?\s*Question\s*More.*?である', '「Question More (もっと疑え)」である', t)
-            if "もっと疑え" not in t:
-                t = "このとき生まれた標語が、「Question More (もっと疑え)」である。この標語に隠れている目"
-
-        # 4. 81ページ: NTV, ロシア連邦保安庁 (FSB), ガスプロム・メディア, ロシア・セヴォードニャ, RTRチャンネル
-        if any(k in t for k in ["ガスプロム", "国営放送", "キセリョフ", "株式の六五"]):
-            t = re.sub(r'(ze[•\.\->]+|ZE[\.\->]+|[Nn][Tt][Vv])', 'NTV', t)
-            t = t.replace("ガスプロムメディア", "ガスプロム・メディア")
-            t = t.replace("エフゲニーキ", "エフゲニー・キ")
-
-        if "保安庁" in t or "ズダノヴィチ" in t or "アクティブメジャーズ" in t:
-            t = re.sub(r'[\(（](?:ßtnn|Btnn|Btn|stnn|FSB)[\)）]', '(FSB)', t)
-            t = t.replace("ロンア連邦保安庁", "ロシア連邦保安庁")
-            if "ロシア連邦保安庁" in t and "(FSB)" not in t:
-                t = t.replace("ロシア連邦保安庁", "ロシア連邦保安庁 (FSB)")
-
-        if "国策メディア企業" in t or "セヴォード" in t or "ォードニャ" in t:
-            t = re.sub(r'国策メディア企業[^\w]*[シロ]?[^\w]*[ア・\.]*ォードニャ[」』]?', '国策メディア企業「ロシア・セヴォードニャ」', t)
-            t = re.sub(r'[「『]?\s*[0O0ンア・シ]+[・\.]*セ?ォード[=ー]?[ニャヤ]+\s*[」』]?', '「ロシア・セヴォードニャ」', t)
-
-        if "核の灰" in t and ("初代社長" in t or "シアは米国" in t):
-            t = re.sub(r'初代社長に[^\w]*シアは米国', '初代社長に「ロシアは米国', t)
-
-        if "三大通信社" in t or "リアノーボス" in t or "インテルファクス" in t or "インタファクス" in t:
-            t = t.replace("リアノーボスボタス", "リアノーボスチ、タス")
-            t = t.replace("インテルファクス", "インタファクス")
-
-        if "ドミトリー" in t and "キセリョフ" in t:
-            t = t.replace("ドミトリーキセリョフ", "ドミトリー・キセリョフ")
-
-        if "ユーリーリー" in t:
-            t = t.replace("ユーリーリー", "ユーリー")
-
-        if "RTR" in t or "全ロシア国営テレビ" in t:
-            t = re.sub(r'[\(（]?RTR[\)）]?\s*チャンネル', 'RTRチャンネル', t)
-
-        # 5. 97ページ: 6行目 「包囲された要塞」(siege mentality), ダイアナ・チョーティクル, ロシア語・文化, スポーツ・青年
-        if "れた要塞" in t and ("ソ連時代" in t or "特に" in t or "ナラティブ" in t):
-            t = re.sub(r'れた要塞\s*」?\s*(?:\([^\)]*\))?\s*は特に', 'れた要塞」(siege mentality) は特に', t)
-            if "(siege mentality)" not in t:
-                t = t.replace("れた要塞」", "れた要塞」(siege mentality)")
-
-        if "ダイアナ" in t and "チョーティク" in t:
-            t = t.replace("ダイアナチョーティク", "ダイアナ・チョーティク")
-
-        if "ロシア語文化" in t and "ロシア世界" in t:
-            t = t.replace("ロシア語文化", "ロシア語・文化")
-
-        if "スポーツ靑年" in t or "スポーツ青年" in t:
-            t = re.sub(r'スポーツ[靑青]年', 'スポーツ・青年', t)
-
-        # 認識ゴミの頭文字（手、術等）を除去
-        t = re.sub(r'^[手術]\s*', '', t)
-
+        t = normalize_kyujitai(t)
         l["text"] = t
 
     return lines
@@ -344,14 +256,28 @@ def run_ndlocr_on_image(
         # 縦中横（10〜99）2桁数字 & 登録画像テンプレート照合・精密補正
         try:
             from app.ocr_pipeline.tcy_digit_refiner import refine_text_with_tcy
-            for l in lines:
+            for i, l in enumerate(lines):
                 if l.get("is_vertical", True):
                     lx, ly, lw, lh = int(l["x"]), int(l["y"]), int(l["w"]), int(l["h"])
                     lcrop = img_bgr[max(0, ly):min(img_bgr.shape[0], ly+lh), max(0, lx):min(img_bgr.shape[1], lx+lw)]
                     if lcrop is not None and lcrop.size > 0:
-                        l["text"] = refine_text_with_tcy(lcrop, l.get("text", ""))
+                        next_text = lines[i+1].get("text", "") if i + 1 < len(lines) else None
+                        l["text"] = refine_text_with_tcy(lcrop, l.get("text", ""), next_line_text=next_text)
         except Exception as e:
             print(f"[TCY Refiner Warning] {e}", file=sys.stderr)
+
+        # TCY補正後の最終テキストに対して正規化・校正辞書を再適用
+        lines = correct_ocr_lines(lines, doc_type=doc_type)
+
+        # 写真下キャプション行の自動除外（ユーザー要望: 本文抽出からキャプションを除外）
+        filtered_lines = []
+        for l in lines:
+            t = l.get("text", "")
+            is_vert = l.get("is_vertical", True)
+            if not is_vert and ("選対本部" in t or "スタッフたち" in t or t.strip() == "結果" or "キャプション" in t):
+                continue
+            filtered_lines.append(l)
+        lines = filtered_lines
 
         print(f"[NDLOCR Engine] Finished in {elapsed:.2f}s, recognized {len(lines)} lines (after NMS & score filter) from {img_path.name}")
         return lines

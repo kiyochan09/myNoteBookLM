@@ -804,8 +804,8 @@ def filter_matching_lines(
             cx = lx + lw / 2
             x_in = (rx - 2) <= cx <= (rx + rw + 2)
             x_ov = max(0, min(lx + lw, rx + rw) - max(lx, rx))
-            # 縦書き本文領域の中に横書きの写真キャプション(細長い横書き)が誤混入するのを防止
-            if is_page_vert and rtype == "body" and lw > lh * 2.5 and lh < 35:
+            # 縦書き本文領域の中に横書きの写真キャプション・図版説明文が誤混入するのを防止
+            if is_page_vert and rtype == "body":
                 continue
             if y_in and (x_in or x_ov >= lw * 0.50):
                 matching.append(line)
@@ -1454,12 +1454,72 @@ def process_scanned_page_layout(
                     body_h = max(10, body_max_y - body_y)
 
                     if deck_count <= 1:
-                        all_regions.append({
-                            "id": "reg-body-1", "name": "本文 (1段組)", "type": "body", "color": COLOR_BODY,
-                            "x": body_x, "y": body_y, "w": body_w, "h": body_h,
-                            "text": "",
-                            "reading_order": len(all_regions) + 1
-                        })
+                        # 縦書き小見出しの自動検出（例: 「故郷を訪れて」「対露抵抗を象徴する人物とは」等）
+                        heading_line = None
+                        if is_vert and len(target_lines) >= 3:
+                            for idx, l in enumerate(target_lines):
+                                lt = l.get("text", "").strip()
+                                lh = l.get("h", 0)
+                                lw = l.get("w", 0)
+                                lx = l.get("x", 0)
+                                ly = l.get("y", 0)
+                                # 小見出し条件: 短い文字列(2〜16文字)、文末記号なし、短尺ブロック(h<350)、上部配置(y<300)、かつ前後に十分な本文行がある
+                                if 2 <= len(lt) <= 16 and lh < 350 and ly < 280:
+                                    if not any(lt.endswith(p) for p in ("。", "、", "」", "』", "）", ")", "！", "？")):
+                                        if 0 < idx < len(target_lines) - 1:
+                                            # 前後の行が通常の本文行（十分な長さ）か確認
+                                            prev_len = len(target_lines[idx - 1].get("text", ""))
+                                            next_len = len(target_lines[idx + 1].get("text", ""))
+                                            if prev_len >= 15 and next_len >= 15:
+                                                heading_line = l
+                                                break
+
+                        if heading_line is not None:
+                            hx = heading_line["x"]
+                            # 縦書きなので X降順: X > hx が前半本文、X < hx が後半本文
+                            col1_lines = [l for l in target_lines if l["x"] > hx + 10]
+                            col2_lines = [l for l in target_lines if l["x"] < hx - 10]
+                            
+                            r_order = len(all_regions) + 1
+                            if col1_lines:
+                                b1_x = max(0, min(l['x'] for l in col1_lines) - 8)
+                                b1_w = max(10, min(img_w, max(l['x'] + l['w'] for l in col1_lines) + 8) - b1_x)
+                                b1_y = max(0, min(l['y'] for l in col1_lines) - 8)
+                                b1_h = max(10, min(img_h, max(l['y'] + l['h'] for l in col1_lines) + 8) - b1_y)
+                                all_regions.append({
+                                    "id": "reg-body-1", "name": "本文 (1段組)", "type": "body", "color": COLOR_BODY,
+                                    "x": b1_x, "y": b1_y, "w": b1_w, "h": b1_h,
+                                    "text": "", "reading_order": r_order
+                                })
+                                r_order += 1
+                            
+                            htext = heading_line.get("text", "").strip()
+                            all_regions.append({
+                                "id": "reg-heading-1", "name": f"見出し: {htext}", "type": "heading", "color": COLOR_HEADING,
+                                "x": max(0, heading_line["x"] - 6), "y": max(0, heading_line["y"] - 8),
+                                "w": max(10, heading_line["w"] + 12), "h": max(10, heading_line["h"] + 16),
+                                "text": htext, "reading_order": r_order
+                            })
+                            headings_list.append({"title": htext, "level": 2, "page": pno + 1})
+                            r_order += 1
+
+                            if col2_lines:
+                                b2_x = max(0, min(l['x'] for l in col2_lines) - 8)
+                                b2_w = max(10, min(img_w, max(l['x'] + l['w'] for l in col2_lines) + 8) - b2_x)
+                                b2_y = max(0, min(l['y'] for l in col2_lines) - 8)
+                                b2_h = max(10, min(img_h, max(l['y'] + l['h'] for l in col2_lines) + 8) - b2_y)
+                                all_regions.append({
+                                    "id": "reg-body-2", "name": "本文 (1段組)", "type": "body", "color": COLOR_BODY,
+                                    "x": b2_x, "y": b2_y, "w": b2_w, "h": b2_h,
+                                    "text": "", "reading_order": r_order
+                                })
+                        else:
+                            all_regions.append({
+                                "id": "reg-body-1", "name": "本文 (1段組)", "type": "body", "color": COLOR_BODY,
+                                "x": body_x, "y": body_y, "w": body_w, "h": body_h,
+                                "text": "",
+                                "reading_order": len(all_regions) + 1
+                            })
                     elif deck_count == 2:
                         if is_vert:
                             half_h = int((body_h - 20) / 2)
