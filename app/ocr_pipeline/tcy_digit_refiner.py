@@ -18,6 +18,12 @@ class TcyDigitRefiner:
     """
     _instance = None
 
+    # 方針①・方針②の幾何・インク判定パラメータ閾値
+    EXCESS_INK_RATIO_THRESH = 0.350
+    EXCESS_INK_DEADZONE = 0.150
+    SINGLE_DIGIT_MIN_SCORE = 0.885
+    HORIZONTAL_GAP_RATIO = 0.40
+
     @classmethod
     def get_instance(cls):
         if cls._instance is None:
@@ -102,26 +108,32 @@ class TcyDigitRefiner:
                 except Exception:
                     pass
 
-    def match_1digit_patch(self, patch_gray: np.ndarray) -> Tuple[Optional[str], float]:
+    def match_1digit_patch_detailed(self, patch_gray: np.ndarray, ch: int = None) -> Tuple[Optional[str], float, Optional[Tuple[int, int]], Optional[np.ndarray]]:
         """
-        単一パッチを登録済み1桁数字（0〜9）テンプレートと高精度照合（NCC）する。
+        単一パッチを登録済み1桁数字（0〜9）テンプレートと高精度照合（NCC）し、
+        ベストマッチ数字、スコア、最適位置、および最適スケーリングテンプレートを返却する。
         """
         if patch_gray is None or patch_gray.size == 0:
-            return None, 0.0
+            return None, 0.0, None, None
         ph, pw = patch_gray.shape
         if ph < 8 or pw < 4:
-            return None, 0.0
+            return None, 0.0, None, None
 
         if np.mean(patch_gray) < 100:
             patch_gray = 255 - patch_gray
 
         best_digit = None
         best_s = -1.0
+        best_pos = None
+        best_scaled_t = None
+
+        base_h = ch if ch is not None else ph
+
         for d, t_list in self.single_templates.items():
             for t in t_list:
                 th, tw = t.shape
-                for scale_h in [0.70, 0.85, 0.95, 1.05, 1.15]:
-                    target_h = int(ph * scale_h)
+                for scale_h in [0.80, 0.90, 1.00, 1.10, 1.20]:
+                    target_h = int(base_h * scale_h)
                     if target_h < 8 or target_h >= ph:
                         continue
                     target_w = max(4, int(tw * (target_h / th)))
@@ -135,7 +147,53 @@ class TcyDigitRefiner:
                     if s > best_s:
                         best_s = s
                         best_digit = d
+                        best_pos = np.unravel_index(res.argmax(), res.shape)
+                        best_scaled_t = scaled_t
+
+        return best_digit, best_s, best_pos, best_scaled_t
+
+    def match_1digit_patch(self, patch_gray: np.ndarray, ch: int = None) -> Tuple[Optional[str], float]:
+        """
+        単一パッチを登録済み1桁数字（0〜9）テンプレートと高精度照合（NCC）する。
+        """
+        best_digit, best_s, _, _ = self.match_1digit_patch_detailed(patch_gray, ch)
         return best_digit, best_s
+
+    def calculate_excess_ink(self, patch_gray: np.ndarray, best_pos: Optional[Tuple[int, int]], best_scaled_t: Optional[np.ndarray], kernel_size=(5, 5)) -> Tuple[float, int, int]:
+        """
+        テンプレート領域外の余剰インク比率（R_excess = A_excess / A_tmpl）を算出する。
+        - テンプレートマスクに対して kernel_size の矩形カーネルで1回膨張（スキャンブレ・セリフの許容マージン）
+        - 膨張マスク外に存在するインク画素数を A_excess、テンプレートインク画素数を A_tmpl とする
+        """
+        if best_pos is None or best_scaled_t is None:
+            return 0.0, 0, 0
+
+        by, bx = best_pos
+        th, tw = best_scaled_t.shape
+        ph, pw = patch_gray.shape
+
+        patch_ink = (patch_gray < 200).astype(np.uint8)
+        tmpl_ink = (best_scaled_t < 200).astype(np.uint8)
+
+        a_tmpl = int(np.sum(tmpl_ink))
+        if a_tmpl == 0:
+            return 0.0, 0, 0
+
+        tmpl_mask_in_patch = np.zeros((ph, pw), dtype=np.uint8)
+        y2 = min(ph, by + th)
+        x2 = min(pw, bx + tw)
+        tmpl_sub_h = y2 - by
+        tmpl_sub_w = x2 - bx
+
+        tmpl_mask_in_patch[by:y2, bx:x2] = tmpl_ink[:tmpl_sub_h, :tmpl_sub_w]
+
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, kernel_size)
+        dilated_tmpl_mask = cv2.dilate(tmpl_mask_in_patch, kernel, iterations=1)
+
+        excess_mask = (patch_ink == 1) & (dilated_tmpl_mask == 0)
+        a_excess = int(np.sum(excess_mask))
+        r_excess = float(a_excess) / float(a_tmpl)
+        return r_excess, a_excess, a_tmpl
 
     def match_2digit_patch(self, patch_gray: np.ndarray) -> Tuple[Optional[int], float]:
         """
@@ -185,7 +243,8 @@ class TcyDigitRefiner:
         if lh < 30 or lw < 15:
             return []
 
-        _, bin_img = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY_INV)
+        # 方針④: 大津の二値化 (Otsu) に統一して安定した輪郭抽出
+        otsu_thresh, bin_img = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
         num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(bin_img)
 
         components = []
@@ -213,6 +272,22 @@ class TcyDigitRefiner:
 
                     h_gap = right_c["x1"] - left_c["x2"]
                     if -8 <= h_gap <= 24:
+                        # 方針②拡張: ペアのいずれかが同一高さ帯の別コンポーネントと近接している場合（3つ以上のパーツからなる複合漢字）は除外
+                        c_pair_ids = {c1["id"], c2["id"]}
+                        has_third_part = False
+                        for other in components:
+                            if other["id"] in c_pair_ids:
+                                continue
+                            y_ov = min(max(c1["y2"], c2["y2"]), other["y2"]) - max(min(c1["y1"], c2["y1"]), other["y1"])
+                            if y_ov > 0:
+                                g1 = c1["x1"] - other["x2"] if c1["x1"] >= other["x2"] else other["x1"] - c1["x2"]
+                                g2 = c2["x1"] - other["x2"] if c2["x1"] >= other["x2"] else other["x1"] - c2["x2"]
+                                if min(g1, g2) < lw * self.HORIZONTAL_GAP_RATIO:
+                                    has_third_part = True
+                                    break
+                        if has_third_part:
+                            continue
+
                         y1 = max(0, min(c1["y1"], c2["y1"]) - 2)
                         y2 = min(lh, max(c1["y2"], c2["y2"]) + 2)
                         x1 = max(0, left_c["x1"] - 2)
@@ -249,20 +324,22 @@ class TcyDigitRefiner:
                                     final_n = comb_n
                                     final_s = base_s
 
-                                # 漢字ストローク誤爆防止（11等は厳格化）
-                                if final_n != 11 or final_s >= 0.90:
-                                    if final_s >= 0.75:
-                                        detected.append({
-                                            "num": final_n,
-                                            "num_str": str(final_n),
-                                            "score": final_s,
-                                            "y1": y1,
-                                            "y2": y2,
-                                            "rel_y": (y1 + y2) / (2.0 * lh),
-                                            "method": "2digit_patch_match"
-                                        })
-                                        used_comp_ids.add(c1["id"])
-                                        used_comp_ids.add(c2["id"])
+                                # 漢字ストローク誤爆防止（11等は全体2桁テンプレート照合で0.88以上のみ許容）
+                                if final_n == 11 and (num_patch != 11 or s_patch < 0.88):
+                                    continue
+
+                                if final_s >= 0.75:
+                                    detected.append({
+                                        "num": final_n,
+                                        "num_str": str(final_n),
+                                        "score": final_s,
+                                        "y1": y1,
+                                        "y2": y2,
+                                        "rel_y": (y1 + y2) / (2.0 * lh),
+                                        "method": "2digit_patch_match"
+                                    })
+                                    used_comp_ids.add(c1["id"])
+                                    used_comp_ids.add(c2["id"])
 
         # Step 1.5: 単一コンポーネントの2桁数字照合（接触・連結した2桁数字）
         for c in components:
@@ -292,23 +369,58 @@ class TcyDigitRefiner:
         for c in components:
             if c["id"] in used_comp_ids:
                 continue
+
+            # 方針②: 水平近傍Gap判定（門構え等の複合漢字パーツの除外）
+            min_neighbor_gap = None
+            for other in components:
+                if other["id"] == c["id"]:
+                    continue
+                y_overlap = min(c["y2"], other["y2"]) - max(c["y1"], other["y1"])
+                if y_overlap > 0:
+                    gap = c["x1"] - other["x2"] if c["x1"] >= other["x2"] else other["x1"] - c["x2"]
+                    if min_neighbor_gap is None or gap < min_neighbor_gap:
+                        min_neighbor_gap = gap
+
+            if min_neighbor_gap is not None and min_neighbor_gap < lw * self.HORIZONTAL_GAP_RATIO:
+                continue
+
+            # 方針①: 幾何サイズ適合 & 余剰インク比率による減点・足切り
             if 8 <= c["h"] <= 65 and 4 <= c["w"] <= lw * 0.85:
                 y1 = max(0, c["y1"] - 2)
                 y2 = min(lh, c["y2"] + 2)
                 x1 = max(0, c["x1"] - 2)
                 x2 = min(lw, c["x2"] + 2)
                 patch = gray[y1:y2, x1:x2]
-                d, s = self.match_1digit_patch(patch)
-                if d is not None and s >= 0.78:
-                    detected.append({
-                        "num": int(d),
-                        "num_str": str(d),
-                        "score": s,
-                        "y1": y1,
-                        "y2": y2,
-                        "rel_y": (y1 + y2) / (2.0 * lh),
-                        "method": "1digit_patch_match"
-                    })
+
+                d, s, pos, scaled_t = self.match_1digit_patch_detailed(patch, ch=c["h"])
+                if d is not None and s >= 0.70:
+                    r_excess, a_excess, a_tmpl = self.calculate_excess_ink(patch, pos, scaled_t, kernel_size=(5, 5))
+
+                    # 余剰インク足切り閾値 (0.350)
+                    if r_excess > self.EXCESS_INK_RATIO_THRESH:
+                        continue
+
+                    # スキャンにじみ・セリフの不感帯(0.150)を考慮したペナルティ減点
+                    excess_over_deadzone = max(0.0, r_excess - self.EXCESS_INK_DEADZONE)
+                    penalty_factor = max(0.0, 1.0 - 2.0 * excess_over_deadzone)
+                    final_score = s * penalty_factor
+
+                    # 単体1桁スコア基準閾値 (0.885)
+                    if final_score >= self.SINGLE_DIGIT_MIN_SCORE:
+                        detected.append({
+                            "num": int(d),
+                            "num_str": str(d),
+                            "score": final_score,
+                            "raw_score": s,
+                            "r_excess": r_excess,
+                            "y1": y1,
+                            "y2": y2,
+                            "w": c["w"],
+                            "h": c["h"],
+                            "comp_id": c["id"],
+                            "rel_y": (y1 + y2) / (2.0 * lh),
+                            "method": "1digit_patch_match"
+                        })
         # Step 2.5: 縦並び1桁数字ペアの幾何学的グルーピング（Layer 1: Y近接・X同軸性・幾何平均信頼度）
         one_digit_items = [it for it in detected if it.get("method") == "1digit_patch_match"]
         grouped_2digit = []
@@ -486,210 +598,227 @@ class TcyDigitRefiner:
 
         return text
 
+    def _segment_line_adaptive(self, line_img: np.ndarray) -> List[Tuple[int, int]]:
+        """
+        【適応型インクプロファイル分割】
+        行画像全体を大津の二値化により適応的に二値化し、
+        行幅 lw に連動した動的ギャップで行内のインク塊（文字ブロック）区間を抽出する。
+        """
+        if line_img is None or line_img.size == 0:
+            return []
+
+        if line_img.ndim == 3:
+            gray = cv2.cvtColor(line_img, cv2.COLOR_BGR2GRAY)
+        else:
+            gray = line_img.copy()
+
+        lh, lw = gray.shape
+        if lh < 20 or lw < 10:
+            return []
+
+        # 大津の二値化（Otsu）によりスキャンムラ・紙の黄ばみを自動吸収
+        if np.mean(gray) < 100:
+            gray = 255 - gray
+        _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+
+        # 行幅 lw 連動の動的ギャップ（文字内部ストローク空隙での誤分裂を防止）
+        dynamic_min_gap = max(3, int(lw * 0.15))
+        noise_ink_thresh = max(1, int(lw * 0.05))
+
+        # 水平方向インク射影ヒストグラム
+        proj = np.sum(binary > 0, axis=1)
+        is_ink = proj > noise_ink_thresh
+
+        # 連続インク区間の抽出
+        raw_blocks: List[Tuple[int, int]] = []
+        in_block = False
+        start_y = 0
+        for y in range(len(is_ink)):
+            if is_ink[y] and not in_block:
+                start_y = y
+                in_block = True
+            elif not is_ink[y] and in_block:
+                raw_blocks.append((start_y, y))
+                in_block = False
+        if in_block:
+            raw_blocks.append((start_y, len(is_ink)))
+
+        if not raw_blocks:
+            return []
+
+        # 動的ギャップによる近接ブロック結合
+        merged_blocks: List[Tuple[int, int]] = []
+        for b in raw_blocks:
+            if merged_blocks and (b[0] - merged_blocks[-1][1]) < dynamic_min_gap:
+                merged_blocks[-1] = (merged_blocks[-1][0], b[1])
+            else:
+                merged_blocks.append(b)
+
+        # 極小ノイズブロックを除外
+        valid_blocks = [
+            b for b in merged_blocks
+            if (b[1] - b[0]) >= max(4, int(lw * 0.10))
+        ]
+        return valid_blocks
+
+    def _get_tcy_rank_in_blocks(self, tcy_item: Dict[str, Any], blocks: List[Tuple[int, int]]) -> int:
+        """
+        検出されたTCY候補の中心Y座標より上方にある文字ブロック数（手前の文字数 k）を返す。
+        """
+        if not blocks:
+            return 0
+        tcy_cy = (tcy_item["y1"] + tcy_item["y2"]) / 2.0
+        rank = 0
+        for b_start, b_end in blocks:
+            b_cy = (b_start + b_end) / 2.0
+            if b_cy < tcy_cy:
+                rank += 1
+            else:
+                break
+        return rank
+
+    def _locate_and_embed_locked_digits(
+        self,
+        text: str,
+        locked_items: List[Dict[str, Any]],
+        line_blocks: List[Tuple[int, int]]
+    ) -> str:
+        """
+        【画像主導・即時確定型 配置エンジン】
+        画像照合で確定した数字アイテムを、画像上の物理位置（ブロック順位 k）を
+        絶対的な根拠としてテキスト内に配置する。
+        ※文脈判定や文字種による足切り・判定は完全撤廃。ノイズ文字や誤読数字の置換、
+          または基準物理位置への直接割り込み挿入により100%出力する。
+        """
+        if not locked_items or not text:
+            return text
+
+        text_len = len(text)
+        has_blocks = bool(line_blocks)
+
+        # 配置プランのリスト: (開始インデックス, 終了インデックス, 置換・挿入文字列)
+        placements = []
+
+        # 上から下への物理配置を保つため、Y座標順にソート
+        sorted_locked = sorted(locked_items, key=lambda it: it["y1"])
+
+        for item in sorted_locked:
+            num = item["num"]
+            num_str = str(num)
+            rel_y = item["rel_y"]
+
+            # -------------------------------------------------------------
+            # ステップ1: 手前ブロック数 k を直接ベース位置とする
+            # （グローバル比率換算を撤廃し、遠隔の文字数誤差を遮断）
+            # -------------------------------------------------------------
+            if has_blocks:
+                k = self._get_tcy_rank_in_blocks(item, line_blocks)
+                base_idx = max(0, min(text_len, k))
+            else:
+                base_idx = int(round(rel_y * text_len))
+                base_idx = max(0, min(text_len, base_idx))
+
+            # -------------------------------------------------------------
+            # ステップ2: 近傍スナップ（吸着）探索
+            # base_idx の周辺 (±2文字) に、自然な合致先がないかを探索
+            # -------------------------------------------------------------
+            window_start = max(0, base_idx - 2)
+            window_end = min(text_len, base_idx + 3)
+            window_str = text[window_start:window_end]
+
+            snapped = False
+
+            # スナップ優先度①: 典型的な誤読・ノイズ記号（切, !, ?, |, 空白）の置換
+            for noise_token in ['切', '!', '?', '|', ' ', '　']:
+                local_pos = window_str.find(noise_token)
+                if local_pos != -1:
+                    target_pos = window_start + local_pos
+                    placements.append((target_pos, target_pos + 1, num_str))
+                    snapped = True
+                    break
+
+            # スナップ優先度②: 丸括弧スロット （ ） や ( ) への充填
+            if not snapped:
+                paren_match = re.search(r'([（\(])\s*([0-9０-９!|lI\s]{0,3})\s*([）\)])', window_str)
+                if paren_match:
+                    p_start = window_start + paren_match.start(2)
+                    p_end = window_start + paren_match.end(2)
+                    placements.append((p_start, p_end, num_str))
+                    snapped = True
+
+            # スナップ優先度③: 基準位置周辺にOCR誤読された1〜2桁数字がある場合はその位置を置換
+            if not snapped:
+                digit_match = re.search(r'[0-9０-９]{1,2}', window_str)
+                if digit_match:
+                    d_start = window_start + digit_match.start()
+                    d_end = window_start + digit_match.end()
+                    placements.append((d_start, d_end, num_str))
+                    snapped = True
+
+            # スナップ優先度④: 【無条件フォールバック（直接割り込み挿入）】
+            # 画像照合スコアで確定した数字を、ブロック順位 k の基準位置に挿入
+            # ※長音符「ー」の保護: 基準位置周辺にすでに「ー」が存在している場合は「1」の割り込み挿入を行わない
+            if not snapped:
+                is_chouon_conflict = (num_str == "1" and (
+                    'ー' in window_str or
+                    (base_idx < text_len and text[base_idx] == 'ー') or
+                    (base_idx > 0 and text[base_idx - 1] == 'ー')
+                ))
+                if not is_chouon_conflict:
+                    placements.append((base_idx, base_idx, num_str))
+
+        if not placements:
+            return text
+
+        # -------------------------------------------------------------
+        # ステップ3: テキストへの統合
+        # インデックスのズレを防ぐため、後ろ（末尾側）から順に置換・挿入
+        # -------------------------------------------------------------
+        placements.sort(key=lambda x: -x[0])
+        result_text = text
+        for s_idx, e_idx, num_str in placements:
+            result_text = result_text[:s_idx] + num_str + result_text[e_idx:]
+
+        return result_text
+
     def refine_line(self, line_img: np.ndarray, text: str, next_line_text: Optional[str] = None) -> str:
+        """
+        行画像とOCR認識テキストを受け取り、縦中横の即時確定・配置補正を行う。
+        """
         if not text:
             return text
 
-        refined = self.refine_kanji_years_and_dates(line_img, text)
+        # 1. 画像解析による縦中横の検出
         tcy_items = self.find_tcy_in_vertical_line(line_img)
         if not tcy_items:
-            return refined
+            return self.refine_kanji_years_and_dates(line_img, text)
 
-        # 優先度ソート:
-        # 1. 2桁縦中横（2digit_patch_match）を最優先（漢字の直線ストローク誤爆に競り負けない）
-        # 2. 1桁数字（非1/7）
-        # 3. 1桁数字（1または7）
-        def get_priority(it):
-            method = it.get("method", "")
-            num = it.get("num", 0)
-            if method == "2digit_patch_match":
-                return (0, -it["score"])
-            elif num not in [1, 7]:
-                return (1, -it["score"])
-            else:
-                return (2, -it["score"])
-
-        # 漢字・仮名ストローク等の誤爆フィルタリング（特に縦棒ストローク「1」と払い「7」の厳格判定）
-        clean_items = []
+        # 2. ★【画像スコアに基づく即時確定（Lock-in）】
+        locked_digits = []
         for it in tcy_items:
             method = it.get("method", "")
-            num = it.get("num", 0)
             score = it.get("score", 0.0)
-            if method == "2digit_patch_match":
-                clean_items.append(it)
-            elif num == 1:
-                if score >= 0.96:
-                    clean_items.append(it)
-            elif num == 7:
-                if score >= 0.90:
-                    clean_items.append(it)
-            elif score >= 0.78:
-                clean_items.append(it)
+            num = it.get("num", 0)
+            is_2d = (method == "2digit_patch_match")
 
-        # 2桁縦中横のバウンディングボックスと重なる1桁誤爆を除外
-        final_items = []
-        for it in clean_items:
-            if it.get("method") == "1digit_patch_match":
-                inside = any(abs(it["rel_y"] - d2["rel_y"]) < 0.025 for d2 in clean_items if d2.get("method") == "2digit_patch_match")
-                if inside:
-                    continue
-            final_items.append(it)
+            if is_2d and score >= 0.78:
+                locked_digits.append(it)
+            elif not is_2d and num in [1, 7] and score >= self.SINGLE_DIGIT_MIN_SCORE:
+                locked_digits.append(it)
+            elif not is_2d and num not in [1, 7] and score >= 0.85:
+                locked_digits.append(it)
 
-        sorted_items = sorted(final_items, key=get_priority)
-        used_item_indices = set()
+        if not locked_digits:
+            return self.refine_kanji_years_and_dates(line_img, text)
 
-        # Step 1: 西暦年号範囲の幾何照合（例: 1909~59年, 1914~18年）
-        # NDLOCRが「1909~5年」と1文字落としたり、ノイズ記号になったりするのを高精度2桁アイテムで救済
-        m_yr_range = re.search(r'([12][0-9]{3}\s*[~〜ー\-]\s*)([0-9]{1,2})\s*(年)', refined)
-        if m_yr_range:
-            cur_len = max(1, len(refined))
-            s_idx, e_idx = m_yr_range.start(), m_yr_range.end()
-            yr_center = (s_idx + e_idx) / (2.0 * cur_len)
-            best_yr_idx = None
-            best_yr_dist = 999.0
-            for idx, it in enumerate(sorted_items):
-                if idx in used_item_indices:
-                    continue
-                if it.get("method") == "2digit_patch_match" and it["score"] >= 0.85:
-                    d = abs(it["rel_y"] - yr_center)
-                    if d < best_yr_dist and d < 0.18:
-                        best_yr_dist = d
-                        best_yr_idx = idx
-            if best_yr_idx is not None:
-                it = sorted_items[best_yr_idx]
-                used_item_indices.add(best_yr_idx)
-                prefix_yr = m_yr_range.group(1)
-                refined = refined[:s_idx] + f"{prefix_yr}{it['num']}年" + refined[e_idx:]
+        # 3. 行のインクプロファイル（文字ブロック）を適応型二値化で抽出
+        line_blocks = self._segment_line_adaptive(line_img)
 
-        # Step 3: 日付ペア「○月○日」の幾何学的照合（原本画像の上から下への物理的配置に基づき、月と日の順序逆転を完全防止）
-        date_match = re.search(rf'([0-9０-９!一二三四五六七八九十I|l冗らろへー・\s]{{0,4}})月\s*([0-9０-９!一二三四五六七八九十I|l冗らろへー・\s]{{0,4}})日', refined)
-        if date_match:
-            cur_len = max(1, len(refined))
-            date_center = (date_match.start() + date_match.end()) / (2.0 * cur_len)
-            best_date_pair = None
-            best_cost = 999.0
-            for i in range(len(sorted_items)):
-                if i in used_item_indices: continue
-                for j in range(i + 1, len(sorted_items)):
-                    if j in used_item_indices: continue
-                    itA, itB = sorted_items[i], sorted_items[j]
-                    if itA["rel_y"] > itB["rel_y"]:
-                        itA, itB = itB, itA
-                    y_diff = itB["rel_y"] - itA["rel_y"]
-                    # 月と日の物理的離隔距離（0.030 <= y_diff <= 0.12）
-                    if 0.030 <= y_diff <= 0.12:
-                        pair_center = (itA["rel_y"] + itB["rel_y"]) / 2.0
-                        cost = abs(pair_center - date_center)
-                        if 1 <= itA["num"] <= 12 and 1 <= itB["num"] <= 31:
-                            cost *= 0.5
-                        if cost < best_cost and cost < 0.22:
-                            best_cost = cost
-                            best_date_pair = (i, j, itA, itB)
-            if best_date_pair:
-                i, j, itA, itB = best_date_pair
-                used_item_indices.add(i)
-                used_item_indices.add(j)
-                refined = refined[:date_match.start()] + f"{itA['num']}月{itB['num']}日" + refined[date_match.end():]
+        # 4. ★【確定した数字を、物理位置（ブロック順位 k）を主軸にしてテキストへ確実に配置】
+        refined = self._locate_and_embed_locked_digits(text, locked_digits, line_blocks)
 
-        # 4桁年号および年号範囲（例: 2014年、1909~59年、(1909~59年)）の出現範囲を取得
-        text_len = max(1, len(refined))
-        protected_year_ranges = []
-        for my in re.finditer(r'([（\(]?\s*[12][0-9]{3})(?:\s*[~〜ー\-]\s*[0-9]{1,4})?\s*年\s*[）\)]?', refined):
-            y_start_rel = my.start() / float(text_len)
-            y_end_rel = my.end() / float(text_len)
-            protected_year_ranges.append((y_start_rel, y_end_rel, my.start(), my.end()))
-
-        # パターン1: 見出し「第X章」→「第{num}章」
-        for item in sorted_items:
-            num = item["num"]
-            rel_y = item["rel_y"]
-            if "第" in refined and any(s in refined for s in ["章", "条", "回", "巻"]) and rel_y < 0.40:
-                m_sec = re.search(r'第\s*([0-9０-９Ⅰ-Ⅻ!一二三四五六七八九十\s]*)\s*([章条回巻節号話部編])', refined)
-                if m_sec:
-                    refined = refined[:m_sec.start()] + f'第{num}{m_sec.group(2)}' + refined[m_sec.end():]
-                    break
-
-        # パターン2.5: 丸括弧内の数字照合（年齢・付番・注釈番号、例: タチアナ（41）、ビクテ(60)、（12）など）
-        # 閉じ括弧がOCRで欠落している場合（例: ビクテ(()）もスロットとして認識し、適切に補正
-        paren_replacements = []
-        cur_text_len = max(1, len(refined))
-        for m in re.finditer(r'([（\(]+)\s*([0-9０-９!|lI\s]{0,4})\s*([）\)]*)', refined):
-            s_idx = m.start()
-            e_idx = m.end()
-
-            # 西暦年号・年号範囲（例: (1909~59年), (2014年)）の内部または直前の括弧はスキップ
-            if any(p_s <= s_idx and e_idx <= p_e for _, _, p_s, p_e in protected_year_ranges):
-                continue
-            # 括弧内に4桁数字が含まれる、または直後に年号・波ダッシュが続く場合は年号表記のためスキップ
-            sub_snippet = refined[s_idx:min(len(refined), e_idx + 4)]
-            if re.search(r'[12][0-9]{3}|[~〜ー\-]|年', sub_snippet):
-                continue
-
-            open_p = m.group(1)[0]
-            close_p = m.group(3)[-1] if m.group(3) else ("）" if open_p == "（" else ")")
-            match_rel_y = (s_idx + e_idx) / (2.0 * float(cur_text_len))
-
-            best_item_idx = None
-            best_dist = 999.0
-
-            # 丸括弧近傍に2桁縦中横アイテムが存在する場合、1桁数字（漢字ストローク等の誤爆）に優先
-            has_nearby_2d = any(
-                idx not in used_item_indices and it.get("method") == "2digit_patch_match" and abs(match_rel_y - it["rel_y"]) < 0.12
-                for idx, it in enumerate(sorted_items)
-            )
-
-            for idx, it in enumerate(sorted_items):
-                if idx in used_item_indices:
-                    continue
-                item_rel_y = it["rel_y"]
-                is_2d = (it.get("method") == "2digit_patch_match")
-                if has_nearby_2d and not is_2d:
-                    continue
-                dist = abs(match_rel_y - item_rel_y)
-                effective_dist = dist * 0.5 if is_2d else dist
-                if effective_dist < best_dist and dist < 0.20:
-                    best_dist = effective_dist
-                    best_item_idx = idx
-
-            if best_item_idx is not None:
-                it = sorted_items[best_item_idx]
-                used_item_indices.add(best_item_idx)
-                paren_replacements.append((s_idx, e_idx, f"{open_p}{it['num']}{close_p}", it['num']))
-
-        # パターン3: 単位記号「%」「％」直前の縦中横数字補正
-        # 縦書き文書でパーセンテージ（例: 57%、42%）は縦中横で配置され、NDLOCRが1桁落ち（ 7%）や
-        # 漢字ストローク誤読（必%、但%、必42%）を起こすのを幾何学的に修復
-        cur_text_len = max(1, len(refined))
-        pct_replacements = []
-        for m in re.finditer(r'([0-9０-９!I|l必但ハ八\s]{0,4})\s*([%％])', refined):
-            s_idx = m.start()
-            e_idx = m.end()
-            pct_char = m.group(2)
-            pct_rel_y = (s_idx + e_idx) / (2.0 * float(cur_text_len))
-
-            best_item_idx = None
-            best_dist = 999.0
-            for idx, it in enumerate(sorted_items):
-                if idx in used_item_indices:
-                    continue
-                # %の直上または近傍（縦書きでは上から下へ流れるため it["rel_y"] <= pct_rel_y + 0.08）
-                diff = pct_rel_y - it["rel_y"]
-                if -0.06 <= diff <= 0.20:
-                    d = abs(diff)
-                    if it.get("method") == "2digit_patch_match":
-                        d *= 0.5
-                    if d < best_dist and d < 0.25:
-                        best_dist = d
-                        best_item_idx = idx
-
-            if best_item_idx is not None:
-                it = sorted_items[best_item_idx]
-                used_item_indices.add(best_item_idx)
-                pct_replacements.append((s_idx, e_idx, f"{it['num']}{pct_char}"))
-
-        pct_replacements.sort(key=lambda r: -r[0])
-        for s_idx, e_idx, rep_str in pct_replacements:
-            refined = refined[:s_idx] + rep_str + refined[e_idx:]
+        # 5. 年号範囲（1909~59年等）や日付ペアなどの最終テキスト正規化
+        refined = self.refine_kanji_years_and_dates(line_img, refined)
 
         return refined
 
