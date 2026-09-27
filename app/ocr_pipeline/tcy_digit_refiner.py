@@ -2,12 +2,15 @@ import os
 import sys
 import re
 import math
+import logging
 import tempfile
 from pathlib import Path
 from typing import List, Dict, Tuple, Optional, Any
 import numpy as np
 import cv2
 from PIL import Image, ImageDraw, ImageFont
+
+logger = logging.getLogger(__name__)
 
 class TcyDigitRefiner:
     """
@@ -22,7 +25,7 @@ class TcyDigitRefiner:
     EXCESS_INK_RATIO_THRESH = 0.350
     EXCESS_INK_DEADZONE = 0.150
     SINGLE_DIGIT_MIN_SCORE = 0.885
-    TWO_DIGIT_MIN_SCORE = 0.840
+    TWO_DIGIT_MIN_SCORE = 0.780
     HORIZONTAL_GAP_RATIO = 0.40
 
     @classmethod
@@ -214,7 +217,8 @@ class TcyDigitRefiner:
         for num, t_list in self.tcy_2digit_templates.items():
             for t in t_list:
                 th, tw = t.shape
-                for scale_h in [0.75, 0.85, 0.95, 1.05]:
+                # 3,600件テンプレート損失分析および実スキャン整数ピクセル網羅に基づく最適3段階
+                for scale_h in [0.74, 0.77, 0.80]:
                     target_h = int(ph * scale_h)
                     if target_h < 8 or target_h >= ph:
                         continue
@@ -257,11 +261,19 @@ class TcyDigitRefiner:
         detected = []
         used_comp_ids = set()
 
+        # 【対策2】2桁数字の候補となり得るコンポーネントのみを事前抽出
+        # 実績データ（17〜21px）に適合する 8 <= h <= 32px, 3 <= w <= lw*0.65 で絞り込み
+        lw_thresh = lw * 0.65
+        digit_candidate_comps = [
+            c for c in components
+            if 8 <= c["h"] <= 32 and 3 <= c["w"] <= lw_thresh and c["area"] >= 20
+        ]
+
         # Step 1: 2桁数字ペアの検出（横並びコンポーネント照合）
-        for i in range(len(components)):
-            for j in range(i + 1, len(components)):
-                c1 = components[i]
-                c2 = components[j]
+        for i in range(len(digit_candidate_comps)):
+            for j in range(i + 1, len(digit_candidate_comps)):
+                c1 = digit_candidate_comps[i]
+                c2 = digit_candidate_comps[j]
 
                 y_overlap = max(0, min(c1["y2"], c2["y2"]) - max(c1["y1"], c2["y1"]))
                 min_h = min(c1["h"], c2["h"])
@@ -294,9 +306,21 @@ class TcyDigitRefiner:
                         x1 = max(0, left_c["x1"] - 2)
                         x2 = min(lw, right_c["x2"] + 2)
                         combined_patch = gray[y1:y2, x1:x2]
+                        ph, pw = combined_patch.shape
 
-                        num_patch, s_patch = self.match_2digit_patch(combined_patch)
+                        num_patch, s_patch = None, 0.0
+                        # 00〜99悉皆調査（3,600件）に基づく幾何事前フィルタ (0.70 <= W/H <= 1.70, 15% <= Fill <= 60%)
+                        if ph >= 10 and pw >= 10:
+                            ar = pw / float(ph)
+                            if 0.70 <= ar <= 1.70:
+                                fill = np.sum(combined_patch < 200) / float(ph * pw)
+                                if 0.15 <= fill <= 0.60:
+                                    num_patch, s_patch = self.match_2digit_patch(combined_patch)
+
                         if num_patch is not None and s_patch >= 0.75:
+                            # 漢字縦画ストローク誤爆防止（11等は全体照合で0.85以上のみ許容）
+                            if num_patch == 11 and s_patch < 0.85:
+                                continue
                             detected.append({
                                 "num": num_patch,
                                 "num_str": str(num_patch),
@@ -359,28 +383,36 @@ class TcyDigitRefiner:
                                     used_comp_ids.add(c2["id"])
 
         # Step 1.5: 単一コンポーネントの2桁数字照合（接触・連結した2桁数字）
+        # ※実在未確認かつ漢字誤爆（742回/頁）の主因となっていたため重いNCC総当たり探索は完全停止。
+        # 将来の未知書籍における不慮の連結を早期発見するための軽量診断ログ（テレメトリ）のみ記録。
+        ENABLE_STEP15_SINGLE_COMP = False
         for c in components:
             if c["id"] in used_comp_ids:
                 continue
-            # 横幅が十分にあり、かつ縦横比が2桁数字に適している場合（接触連結している2桁数字）
-            if 8 <= c["h"] <= 35 and 13 <= c["w"] and (c["w"] / float(max(1, c["h"]))) >= 0.60:
-                y1 = max(0, c["y1"] - 2)
-                y2 = min(lh, c["y2"] + 2)
-                x1 = max(0, c["x1"] - 2)
-                x2 = min(lw, c["x2"] + 2)
-                patch = gray[y1:y2, x1:x2]
-                num_patch, s_patch = self.match_2digit_patch(patch)
-                if num_patch is not None and s_patch >= 0.78:
-                    detected.append({
-                        "num": num_patch,
-                        "num_str": str(num_patch),
-                        "score": s_patch,
-                        "y1": y1,
-                        "y2": y2,
-                        "rel_y": (y1 + y2) / (2.0 * lh),
-                        "method": "2digit_patch_match"
-                    })
-                    used_comp_ids.add(c["id"])
+            if 8 <= c["h"] <= 35 and 13 <= c["w"]:
+                ar = c["w"] / float(max(1, c["h"]))
+                if 0.70 <= ar <= 1.70:
+                    y1 = max(0, c["y1"] - 2)
+                    y2 = min(lh, c["y2"] + 2)
+                    x1 = max(0, c["x1"] - 2)
+                    x2 = min(lw, c["x2"] + 2)
+                    patch = gray[y1:y2, x1:x2]
+                    fill = np.sum(patch < 200) / float(max(1, patch.size))
+                    if 0.15 <= fill <= 0.60:
+                        logger.debug(f"[TCY-DIAG] Potential connected 2-digit candidate in line: comp_id={c['id']}, bbox=({c['x1']},{c['y1']},{c['w']},{c['h']}), ar={ar:.2f}, fill={fill:.2f}")
+                        if ENABLE_STEP15_SINGLE_COMP:
+                            num_patch, s_patch = self.match_2digit_patch(patch)
+                            if num_patch is not None and s_patch >= 0.78:
+                                detected.append({
+                                    "num": num_patch,
+                                    "num_str": str(num_patch),
+                                    "score": s_patch,
+                                    "y1": y1,
+                                    "y2": y2,
+                                    "rel_y": (y1 + y2) / (2.0 * lh),
+                                    "method": "2digit_patch_match"
+                                })
+                                used_comp_ids.add(c["id"])
 
         # Step 2: 1桁数字の検出（未使用コンポーネントの単体照合）
         for c in components:
@@ -517,6 +549,11 @@ class TcyDigitRefiner:
         return filtered
 
     def refine_kanji_years_and_dates(self, line_img: np.ndarray, text: str) -> str:
+        # 【対策1: 完全撤廃】
+        # TCY本体（R_excess、近傍Gap、大津二値化）と異なり画像的検証がなく、
+        # WinOCR誤読を無検証挿入するリスクを排除。PowerShell起動コスト（約44秒/P）も解消。
+        return text
+
         if not text or line_img is None or line_img.size == 0:
             return text
         
@@ -658,8 +695,8 @@ class TcyDigitRefiner:
             gray = 255 - gray
         _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
 
-        # 行幅 lw 連動の動的ギャップ（文字内部ストローク空隙での誤分裂を防止）
-        dynamic_min_gap = max(3, int(lw * 0.15))
+        # 行幅 lw 連動の動的ギャップ（文字内部ストローク空隙での誤分裂を防止しつつ活字間隔を分離）
+        dynamic_min_gap = max(2, int(lw * 0.10))
         noise_ink_thresh = max(1, int(lw * 0.05))
 
         # 水平方向インク射影ヒストグラム
@@ -691,10 +728,10 @@ class TcyDigitRefiner:
             else:
                 merged_blocks.append(b)
 
-        # 極小ノイズブロックを除外
+        # 極小ノイズブロックを除外（中黒「・」h=3pxを保持し、1〜2pxのスキャンノイズ・ゴミを遮断）
         valid_blocks = [
             b for b in merged_blocks
-            if (b[1] - b[0]) >= max(4, int(lw * 0.10))
+            if (b[1] - b[0]) >= max(3, int(lw * 0.08))
         ]
         return valid_blocks
 
@@ -765,8 +802,8 @@ class TcyDigitRefiner:
 
             snapped = False
 
-            # スナップ優先度①: 典型的な誤読・ノイズ記号（切, !, ?, |, 空白）の置換
-            for noise_token in ['切', '!', '?', '|', ' ', '　']:
+            # スナップ優先度①: 典型的な誤読・ノイズ記号（切, !, ?, |, 空白, %）の置換
+            for noise_token in ['切', '!', '?', '|', ' ', '　', '%']:
                 local_pos = window_str.find(noise_token)
                 if local_pos != -1:
                     target_pos = window_start + local_pos
@@ -818,6 +855,103 @@ class TcyDigitRefiner:
 
         return result_text
 
+    def _detect_latin_runaway(self, text: str, line_img: np.ndarray) -> bool:
+        """
+        縦書き和文行において、NDLOCRのデコーダーが英字モード暴走（ハルシネーション）
+        に陥っているかを客観的画像・テキスト幾何証拠に基づき判定する。
+        """
+        if line_img is None or line_img.size == 0 or not text:
+            return False
+        lh, lw = line_img.shape[:2]
+        # 縦書きアスペクト比（高さが幅の2倍以上）
+        if lh < lw * 2:
+            return False
+
+        # 5文字以上の連続ラテン英字列を検出（例: 'MHITH', 'CHITHICH' 等）
+        latin_runs = re.findall(r'[A-Za-z]{5,}', text)
+        if not latin_runs:
+            return False
+
+        # 暴走英字列の総文字数が5文字以上
+        return sum(len(r) for r in latin_runs) >= 5
+
+    def _recover_chunked_runaway(self, line_img: np.ndarray, text: str, locked_item: Dict[str, Any]) -> str:
+        """
+        【オンデマンド物理分割救済】
+        画像照合で確定した縦中横ブロックの境界（y_start）で画像を物理的に分割し、
+        NDLOCR推論を行って英字暴走を物理遮断・消失テキストを完全復元する。
+        """
+        try:
+            import subprocess, tempfile, shutil
+            from pathlib import Path
+
+            cut_y1 = max(0, locked_item['y1'] - 2)
+            cut_y2 = min(line_img.shape[0], locked_item['y2'] + 2)
+
+            part_head = line_img[0:cut_y1, :]
+            part_tail = line_img[cut_y2:, :]
+
+            if part_head.shape[0] < 20 or part_tail.shape[0] < 20:
+                return text
+
+            tmp_dir = Path(tempfile.mkdtemp(prefix="tcy_recover_"))
+            try:
+                in_dir = tmp_dir / "in"
+                out_dir = tmp_dir / "out"
+                in_dir.mkdir()
+                out_dir.mkdir()
+
+                # パディングを付与して保存
+                h_img = cv2.copyMakeBorder(part_head, 30, 30, 50, 50, cv2.BORDER_CONSTANT, value=(255, 255, 255))
+                t_img = cv2.copyMakeBorder(part_tail, 30, 30, 50, 50, cv2.BORDER_CONSTANT, value=(255, 255, 255))
+                cv2.imwrite(str(in_dir / "01_head.png"), h_img)
+                cv2.imwrite(str(in_dir / "02_tail.png"), t_img)
+
+                cmd = [
+                    r"C:\Users\natur\source\repos\OCR_Translator\ocr_engine\venv\Scripts\python.exe",
+                    "-m", "ocr",
+                    "--sourcedir", str(in_dir),
+                    "--output", str(out_dir),
+                    "--json-only",
+                    "--device", "cpu",
+                    "--det-score-threshold", "0.15",
+                    "--det-conf-threshold", "0.15"
+                ]
+                subprocess.run(
+                    cmd,
+                    cwd=r"C:\Users\natur\source\repos\OCR_Translator\ocr_engine",
+                    capture_output=True,
+                    text=True,
+                    timeout=60
+                )
+
+                head_json = out_dir / "01_head.json"
+                tail_json = out_dir / "02_tail.json"
+                if head_json.exists() and tail_json.exists():
+                    import json
+                    with open(head_json, "r", encoding="utf-8") as f:
+                        d_h = json.load(f)
+                    with open(tail_json, "r", encoding="utf-8") as f:
+                        d_t = json.load(f)
+                    t_h_lines = d_h.get("contents", [[]])[0]
+                    t_t_lines = d_t.get("contents", [[]])[0]
+                    txt_head = t_h_lines[0].get("text", "").strip() if t_h_lines else ""
+                    txt_tail = t_t_lines[0].get("text", "").strip() if t_t_lines else ""
+
+                    # 先頭の微小誤読（短冊切出しによる < や ( ➔ 全角「（」）を正規化
+                    if txt_head.startswith("<") or txt_head.startswith("("):
+                        txt_head = "（" + txt_head[1:]
+
+                    num_str = str(locked_item['num'])
+                    recovered = txt_head + num_str + txt_tail
+                    logger.info(f"[TCY Runaway Recovered] '{text}' -> '{recovered}'")
+                    return recovered
+            finally:
+                shutil.rmtree(tmp_dir, ignore_errors=True)
+        except Exception as e:
+            logger.warning(f"Runaway recovery failed: {e}")
+        return text
+
     def refine_line(self, line_img: np.ndarray, text: str, next_line_text: Optional[str] = None) -> str:
         """
         行画像とOCR認識テキストを受け取り、縦中横の即時確定・配置補正を行う。
@@ -847,6 +981,12 @@ class TcyDigitRefiner:
 
         if not locked_digits:
             return self.refine_kanji_years_and_dates(line_img, text)
+
+        # 2.5 ★【オンデマンド・ガードレール】縦書き英字・縦中横混在による英字モード暴走（ハルシネーション）の遮断・救済
+        if self._detect_latin_runaway(text, line_img):
+            recovered = self._recover_chunked_runaway(line_img, text, locked_digits[0])
+            if recovered != text:
+                return self.refine_kanji_years_and_dates(line_img, recovered)
 
         # 3. 行のインクプロファイル（文字ブロック）を適応型二値化で抽出
         line_blocks = self._segment_line_adaptive(line_img)
