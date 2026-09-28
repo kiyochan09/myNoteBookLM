@@ -2773,16 +2773,29 @@
 
                 try {
                     const formData = new FormData();
-                    formData.append("file", currentPdfFile);
+                    if (currentPdfFile && currentPdfFile.name) {
+                        formData.append("filename", currentPdfFile.name);
+                    } else if (currentPdfFile) {
+                        formData.append("file", currentPdfFile);
+                    }
                     formData.append("page_number", p);
                     formData.append("orientation", currentOrientation.includes("縦") ? "vertical" : "horizontal");
                     formData.append("doc_type", currentDocType.includes("和書") ? "japanese" : "western");
                     formData.append("deck", deckNum);
 
-                    const res = await fetch("http://127.0.0.1:8000/api/ocr/analyze-pdf-page", {
+                    let res = await fetch("http://127.0.0.1:8000/api/ocr/analyze-pdf-page", {
                         method: "POST",
                         body: formData
                     });
+                    if (!res.ok && res.status === 404 && currentPdfFile) {
+                        const fbData = new FormData();
+                        fbData.append("file", currentPdfFile);
+                        fbData.append("page_number", p);
+                        fbData.append("orientation", currentOrientation.includes("縦") ? "vertical" : "horizontal");
+                        fbData.append("doc_type", currentDocType.includes("和書") ? "japanese" : "western");
+                        fbData.append("deck", deckNum);
+                        res = await fetch("http://127.0.0.1:8000/api/ocr/analyze-pdf-page", { method: "POST", body: fbData });
+                    }
                     if (!res.ok) throw new Error("HTTP " + res.status);
                     const data = await res.json();
 
@@ -3109,13 +3122,24 @@
         if (!pageCache[target] || !pageCache[target].imgInfo || !pageCache[target].imgInfo.image_base64) {
             appendLog("ページレンダリング", `第 ${target} ページの画像を取得中...`);
             const formData = new FormData();
-            formData.append("file", currentPdfFile);
+            if (currentPdfFile && currentPdfFile.name) {
+                formData.append("filename", currentPdfFile.name);
+            } else if (currentPdfFile) {
+                formData.append("file", currentPdfFile);
+            }
             formData.append("page_number", target);
             try {
-                const res = await fetch("http://127.0.0.1:8000/api/ocr/render-page-only", {
+                let res = await fetch("http://127.0.0.1:8000/api/ocr/render-page-only", {
                     method: "POST",
                     body: formData
                 });
+                if (!res.ok && res.status === 404 && currentPdfFile) {
+                    const fbData = new FormData();
+                    fbData.append("file", currentPdfFile);
+                    fbData.append("page_number", target);
+                    res = await fetch("http://127.0.0.1:8000/api/ocr/render-page-only", { method: "POST", body: fbData });
+                }
+                if (!res.ok) throw new Error("HTTP " + res.status);
                 const renderData = await res.json();
                 if (!pageCache[target]) {
                     pageCache[target] = {
@@ -3150,11 +3174,12 @@
             renderTables(currentDocData.tables || []);
             renderFigures(currentDocData.figures || []);
 
-            // バッチ切替時、または本文エリアが未展開の場合はバッチデータをUI展開
-            const richText = document.getElementById("richTextBox1").innerText.trim();
+            // バッチ切替時、本文エリアが未展開、または対象ページアンカー欠落の場合はバッチデータをUI展開
+            const richText = document.getElementById("richTextBox1")?.innerText?.trim() || "";
             const bStartNow = parseInt(document.getElementById("numPageStart").value) || 1;
             const bEndNow = parseInt(document.getElementById("numPageEnd").value) || totalPages;
-            if (batchChanged || !richText || !richText.includes("--- ページ")) {
+            const hasTargetAnchor = document.getElementById(`pageAnchor_${target}`) !== null;
+            if (batchChanged || !richText || !richText.includes("--- ページ") || !hasTargetAnchor) {
                 loadBatchDataToUi(bStartNow, bEndNow);
             }
 
