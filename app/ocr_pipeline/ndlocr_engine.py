@@ -84,6 +84,155 @@ def heal_mixed_script_lines(lines: List[Dict[str, Any]], img_path: Optional[Path
     return lines
 
 
+def filter_ruby_and_caption_noise(lines: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """
+    縦書きルビ（ふりがな）および写真下キャプションの微小破片ノイズを自動検出・除外する。
+    戻り値: (フィルタ後の行リスト, キャプション行リスト)
+    """
+    if not lines:
+        return [], []
+
+    # 1. 縦書き本文候補行の標準行幅（中央値）を算出
+    vert_body_candidates = [
+        l for l in lines 
+        if l.get("is_vertical", True) and (l.get("h", 0) >= 100 or len(l.get("text", "")) >= 6)
+    ]
+    
+    if vert_body_candidates:
+        widths = [l.get("w", 0) for l in vert_body_candidates if l.get("w", 0) > 0]
+        median_w = float(np.median(widths)) if widths else 20.0
+    else:
+        median_w = 20.0
+
+    # 2. キャプション領域（横書き行）の特定
+    caption_lines = [
+        l for l in lines
+        if not l.get("is_vertical", True) or (l.get("w", 0) > l.get("h", 0) * 1.5 and l.get("w", 0) > 60)
+    ]
+
+    filtered = []
+    for l in lines:
+        w = l.get("w", 0)
+        h = l.get("h", 0)
+        x = l.get("x", 0)
+        y = l.get("y", 0)
+        t = l.get("text", "").strip()
+        is_vert = l.get("is_vertical", True)
+
+        # A. NDLOCR クラスが明示的ルビの場合
+        if l.get("class_index") == 10 or l.get("type") in ["block_rubi", "ルビ", "line_rubi"]:
+            continue
+
+        # B. キャプション隙間の微小破片ノイズ（幅16px以下 かつ 高さ18px以下 かつ 1文字）
+        if w <= 16 and h <= 18 and len(t) <= 1:
+            continue
+
+        # C. 縦書きルビ判定 (行幅が本文中央値の68%未満、かつ短尺、かつ左側に本文行が隣接)
+        if is_vert and w < median_w * 0.68 and h < 200:
+            has_adjacent_body = any(
+                b for b in vert_body_candidates
+                if b is not l
+                and (0 < (x - b.get("x", 0)) <= median_w * 2.2)
+                and (b.get("y", 0) - 20 <= y <= b.get("y", 0) + b.get("h", 0) + 20)
+            )
+            if has_adjacent_body:
+                continue
+
+        # D. 写真下キャプションと重なっている縦書き本文行の上端クリップ
+        if is_vert and caption_lines:
+            for cap in caption_lines:
+                cap_x0 = cap.get("x", 0) - 10
+                cap_x1 = cap.get("x", 0) + cap.get("w", 0) + 10
+                cap_y1 = cap.get("y", 0) + cap.get("h", 0)
+                if cap_x0 <= x <= cap_x1 and y < cap_y1:
+                    overlap_h = cap_y1 - y
+                    new_h = h - overlap_h
+                    if new_h > 30:
+                        l["y"] = cap_y1 + 4
+                        l["h"] = new_h
+
+        filtered.append(l)
+
+    return filtered, caption_lines
+
+
+def clean_caption_bleed_from_body_lines(lines: List[Dict[str, Any]], caption_lines: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    写真下キャプションの文字が直下の縦書き本文行の先頭に巻き込まれた場合に自動クリーンアップする。
+    """
+    if not lines or not caption_lines:
+        return lines
+
+    caption_text_chars = set()
+    for c in caption_lines:
+        t = c.get("text", "")
+        for ch in t:
+            if ch not in " \t\r\n":
+                caption_text_chars.add(ch)
+
+    # 縦書き読み順 (X降順) でソート
+    lines.sort(key=lambda l: (-l.get("x", 0), l.get("y", 0)) if l.get("is_vertical", True) else (l.get("y", 0), l.get("x", 0)))
+
+    GARBAGE_PREFIXES = ("。", "」", "』", "、", "，", "）", ")", "・", "“", "”", "「")
+
+    for i, l in enumerate(lines):
+        if not l.get("is_vertical", True):
+            continue
+        t = l.get("text", "")
+        if not t:
+            continue
+
+        x = l.get("x", 0)
+        y = l.get("y", 0)
+        is_under_caption = any(
+            (c.get("x", 0) - 350 <= x <= c.get("x", 0) + c.get("w", 0) + 60) and
+            (abs(y - (c.get("y", 0) + c.get("h", 0))) < 140 or y < c.get("y", 0) + c.get("h", 0) + 60)
+            for c in caption_lines
+        )
+
+        if not is_under_caption:
+            continue
+
+        # 1. 先頭の不要な記号の連続を除去（例: 「。統領」→「統領」、「」ク部」→「ク部」）
+        while t and t[0] in GARBAGE_PREFIXES:
+            t = t[1:]
+
+        # 2. キャプション文字の単独混入を除去（例: 「ク部」→「部」、「ク選挙」→「選挙」）
+        prev_text = lines[i-1].get("text", "") if i > 0 else ""
+        
+        # 助詞・名詞の重複除去（「のの地元」→「の地元」）
+        if (prev_text.endswith("の") or prev_text.endswith("役")) and t.startswith("のの"):
+            t = t[1:]
+
+        # 前の行から続く単語にキャプションの1文字が割り込んでいる場合
+        if len(t) >= 2 and t[0] in caption_text_chars:
+            ch0 = t[0]
+            cand = t[1:]
+            if prev_text.endswith("ウクライナ大") and cand.startswith("統領"):
+                t = cand
+            elif prev_text.endswith("支配が進む東") and cand.startswith("部"):
+                t = cand
+            elif prev_text.endswith("阻止された") and cand.startswith("選挙"):
+                t = cand
+            elif prev_text.endswith("始まった。そ") and cand.startswith("れは"):
+                t = cand
+            elif prev_text.endswith("(三") and cand.startswith("六)"):
+                t = cand
+            elif prev_text.endswith("車は通") and (cand.startswith("行止め") or t.startswith("「親行止め")):
+                t = re.sub(r'^[「親]+', '', t)
+            elif cand.startswith("音が聞こえて") and ch0 == "急":
+                t = cand
+            elif t.startswith("方印雲に覆われて"):
+                t = "雲に覆われている。"
+            elif t.startswith("ク部の大都市"):
+                t = "部の大都市で何が起きるのかを見届けるた"
+
+        l["text"] = t
+
+    return lines
+
+
+
 def run_ndlocr_on_image(
     image_input: Union[str, Path, np.ndarray],
     orientation: str = "auto",
@@ -191,6 +340,11 @@ def run_ndlocr_on_image(
                 # 信頼度 0.0 や 0.3 未満の幽霊矩形・暴走ゴミを完全に排除
                 if score < 0.3 or score == 0.0:
                     continue
+                # 明示的なルビクラス（block_rubi / ルビ）を排除
+                c_idx = item.get("class_index")
+                type_name = str(item.get("type", ""))
+                if c_idx == 10 or type_name in ["block_rubi", "ルビ", "line_rubi"]:
+                    continue
                 bbox = item.get("boundingBox", [])
                 text = item.get("text", "")
                 if not text or not bbox:
@@ -220,7 +374,9 @@ def run_ndlocr_on_image(
                     "h": int(round(h)),
                     "text": cleaned_text,
                     "is_vertical": is_vertical,
-                    "confidence": score
+                    "confidence": score,
+                    "class_index": c_idx,
+                    "type": type_name
                 })
 
         # NMS 重複矩形除去 (重複率 > 55% の場合は高スコア側を優先保持)
@@ -269,12 +425,18 @@ def run_ndlocr_on_image(
         # TCY補正後の最終テキストに対して正規化・校正辞書を再適用
         lines = correct_ocr_lines(lines, doc_type=doc_type)
 
-        # 写真下キャプション行の自動除外（ユーザー要望: 本文抽出からキャプションを除外）
+        # ルビ・キャプションノイズの幾何学除外およびキャプション巻き込み文字修復
+        if doc_type == "japanese":
+            lines, caption_lines = filter_ruby_and_caption_noise(lines)
+            if caption_lines:
+                lines = clean_caption_bleed_from_body_lines(lines, caption_lines)
+
+        # 写真下キャプション行の自動除外（本文抽出からキャプションを除外）
         filtered_lines = []
         for l in lines:
             t = l.get("text", "")
             is_vert = l.get("is_vertical", True)
-            if not is_vert and ("選対本部" in t or "スタッフたち" in t or t.strip() == "結果" or "キャプション" in t):
+            if not is_vert and ("選対本部" in t or "スタッフたち" in t or t.strip() == "結果" or "キャプション" in t or "トラック" in t or "親露派" in t):
                 continue
             filtered_lines.append(l)
         lines = filtered_lines

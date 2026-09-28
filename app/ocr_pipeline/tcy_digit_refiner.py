@@ -696,7 +696,8 @@ class TcyDigitRefiner:
         _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
 
         # 行幅 lw 連動の動的ギャップ（文字内部ストローク空隙での誤分裂を防止しつつ活字間隔を分離）
-        dynamic_min_gap = max(2, int(lw * 0.10))
+        # 係数 0.07: lw <= 42px では 2px を維持し、lw >= 43px の大判本でのみ 3px 以上へ自然にスケール
+        dynamic_min_gap = max(2, int(lw * 0.07))
         noise_ink_thresh = max(1, int(lw * 0.05))
 
         # 水平方向インク射影ヒストグラム
@@ -794,10 +795,11 @@ class TcyDigitRefiner:
 
             # -------------------------------------------------------------
             # ステップ2: 近傍スナップ（吸着）探索
-            # base_idx の周辺 (±2文字) に、自然な合致先がないかを探索
+            # base_idx の周辺 (前後4〜6文字) に、自然な合致先がないかを探索
+            # (NDLOCRの文字挿入・脱落によるオフセットを安全に吸収)
             # -------------------------------------------------------------
-            window_start = max(0, base_idx - 2)
-            window_end = min(text_len, base_idx + 3)
+            window_start = max(0, base_idx - 4)
+            window_end = min(text_len, base_idx + 7)
             window_str = text[window_start:window_end]
 
             snapped = False
@@ -820,14 +822,30 @@ class TcyDigitRefiner:
                     placements.append((p_start, p_end, num_str))
                     snapped = True
 
-            # スナップ優先度③: 基準位置周辺にOCR誤読された1〜2桁数字がある場合はその位置を置換
+            # スナップ優先度②.5: 一般的な型番・英数字複合トークンの末尾への付加
+            # パターン: 数字で始まり英字で終わるトークン (例: "9M", "AN26" 等) の直後に確定数字を安全に配置
             if not snapped:
-                digit_match = re.search(r'[0-9０-９]{1,2}', window_str)
-                if digit_match:
-                    d_start = window_start + digit_match.start()
-                    d_end = window_start + digit_match.end()
-                    placements.append((d_start, d_end, num_str))
-                    snapped = True
+                model_match = re.search(r'([0-9]+[A-Za-z]+)', window_str)
+                if model_match:
+                    m_end = window_start + model_match.end()
+                    # 型番直後が数字でなければ、型番番号として末尾に挿入
+                    if m_end >= text_len or not text[m_end].isdigit():
+                        placements.append((m_end, m_end, num_str))
+                        snapped = True
+
+            # スナップ優先度③: 基準位置周辺にOCR誤読された1〜2桁数字がある場合はその位置を置換
+            # ※【安全策】前後に英字が隣接していない「真に独立した単独数字」のみを置換対象とする
+            # （型番内部の「9」などが誤って無差別に上書きされるのを完全に防止）
+            if not snapped:
+                for m in re.finditer(r'[0-9０-９]{1,2}', window_str):
+                    d_s = window_start + m.start()
+                    d_e = window_start + m.end()
+                    has_left_alpha = (d_s > 0 and text[d_s - 1].isalpha())
+                    has_right_alpha = (d_e < text_len and text[d_e].isalpha())
+                    if not has_left_alpha and not has_right_alpha:
+                        placements.append((d_s, d_e, num_str))
+                        snapped = True
+                        break
 
             # スナップ優先度④: 【無条件フォールバック（直接割り込み挿入）】
             # 画像照合スコアで確定した数字を、ブロック順位 k の基準位置に挿入
@@ -852,6 +870,25 @@ class TcyDigitRefiner:
         result_text = text
         for s_idx, e_idx, num_str in placements:
             result_text = result_text[:s_idx] + num_str + result_text[e_idx:]
+
+        # -------------------------------------------------------------
+        # ステップ4: アテンション誤認による重複ゴーストトークンの一般化クリーンアップ
+        # 画像内で確定数字が1回しか存在しないにもかかわらず、テキスト内に同一数字が
+        # 助数詞なしで孤立して重複している場合、正当位置から遠い重複を除去
+        # -------------------------------------------------------------
+        if len(locked_items) == 1 and placements:
+            sole_num = str(locked_items[0]["num"])
+            placed_target_pos = placements[0][0]
+            # 助数詞が後続しない孤立した同一数字トークンを探す
+            ghost_pattern = rf'(?<![0-9A-Za-z])({sole_num})(?![0-9A-Za-z年月日時分秒代歳人個度%])'
+            g_matches = list(re.finditer(ghost_pattern, result_text))
+            if len(g_matches) > 1:
+                ghost_removals = []
+                for gm in g_matches:
+                    if abs(gm.start() - placed_target_pos) > 5:
+                        ghost_removals.append((gm.start(), gm.end()))
+                for gs, ge in reversed(ghost_removals):
+                    result_text = result_text[:gs] + result_text[ge:]
 
         return result_text
 

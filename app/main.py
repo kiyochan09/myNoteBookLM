@@ -14,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse, StreamingResponse
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel
 import re
 import fitz
@@ -48,6 +49,8 @@ MEDIA_DIR = BASE_DIR / "data" / "media"
 MEDIA_DIR.mkdir(parents=True, exist_ok=True)
 TEMP_UPLOAD_DIR = BASE_DIR / "data" / "temp_uploads"
 TEMP_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+PDF_CACHE_DIR = BASE_DIR / "data" / "pdf_cache"
+PDF_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 # アプリケーション共通セキュリティトークン (暗号学的一意性)
 APP_SECURITY_TOKEN = secrets.token_hex(32)
@@ -794,9 +797,10 @@ def save_ocr_page_to_disk(filename: str, page_number: int, data: Dict[str, Any])
             if len(body_regs) == 1:
                 body_regs[0]["text"] = body_text
             elif len(body_regs) > 1:
-                body_regs[0]["text"] = body_text
-                for br in body_regs[1:]:
-                    br["text"] = ""
+                # 複数領域の場合、各領域にすでにテキストがあれば保持し、全領域が空の場合のみ第1領域に設定
+                has_any_text = any(bool(br.get("text")) for br in body_regs)
+                if not has_any_text:
+                    body_regs[0]["text"] = body_text
             save_dict["regions"] = regions
 
         json_path = page_dir / "page_data.json"
@@ -829,13 +833,28 @@ def save_ocr_page_to_disk(filename: str, page_number: int, data: Dict[str, Any])
         print(f"Error saving page data to disk: {e}")
         return False
 
-@app.post("/api/ocr/render-page-only")
-async def render_page_only(file: UploadFile = File(...), page_number: int = Form(1)):
-    if not (file.filename and file.filename.lower().endswith(".pdf")):
-        raise HTTPException(status_code=400, detail="PDFファイルを指定してください (.pdf)")
-    content = await file.read()
-    if not content:
-        raise HTTPException(status_code=400, detail="PDFファイルの内容が空です")
+def get_pdf_bytes_sync(filename: str) -> Optional[bytes]:
+    clean_stem = Path(filename).stem
+    cache_path = PDF_CACHE_DIR / f"{clean_stem}.pdf"
+    if cache_path.exists():
+        return cache_path.read_bytes()
+    candidates = [
+        BASE_DIR / "data" / "ocr_results" / clean_stem / f"{clean_stem}.pdf",
+        BASE_DIR / "data" / "raw_pdfs" / filename,
+        Path(r"C:\Users\natur\Downloads") / filename,
+        Path(r"C:\Users\natur\Downloads") / f"{clean_stem}.pdf"
+    ]
+    for c in candidates:
+        if c.exists():
+            content = c.read_bytes()
+            try:
+                cache_path.write_bytes(content)
+            except Exception:
+                pass
+            return content
+    return None
+
+def _render_page_only_core(content: bytes, filename: str, page_number: int) -> dict:
     try:
         doc = fitz.open(stream=content, filetype="pdf")
     except Exception as e:
@@ -846,7 +865,6 @@ async def render_page_only(file: UploadFile = File(...), page_number: int = Form
             raise HTTPException(status_code=400, detail="PDF内にページが存在しません")
         pno = max(0, min(page_number - 1, total_pages - 1))
         page = doc[pno]
-        # 高精細レンダリング (300 DPI相当のzoom=2.0)、高画質JPEG (88%) でキャンバス座標と1:1一致
         zoom = 2.0
         mat = fitz.Matrix(zoom, zoom)
         pix = page.get_pixmap(matrix=mat, alpha=False)
@@ -856,7 +874,7 @@ async def render_page_only(file: UploadFile = File(...), page_number: int = Form
         del pix
         del img_bytes
         return {
-            "filename": file.filename,
+            "filename": filename,
             "total_pages": total_pages,
             "current_page": pno + 1,
             "image_width": w,
@@ -866,49 +884,126 @@ async def render_page_only(file: UploadFile = File(...), page_number: int = Form
     finally:
         doc.close()
 
-@app.post("/api/ocr/analyze-pdf-page")
-async def analyze_pdf_page(file: UploadFile = File(...), page_number: int = Form(1), orientation: str = Form("auto"), doc_type: str = Form("japanese"), deck: str = Form("2")):
-    if not (file.filename and file.filename.lower().endswith(".pdf")):
-        raise HTTPException(status_code=400, detail="PDFファイルを指定してください (.pdf)")
-    content = await file.read()
-    if not content:
-        raise HTTPException(status_code=400, detail="PDFファイルの内容が空です")
+def _analyze_pdf_page_core(content: bytes, filename: str, page_number: int, orientation: str, doc_type: str, deck_num: int) -> dict:
     try:
         doc = fitz.open(stream=content, filetype="pdf")
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"PDFファイルの展開に失敗しました: {str(e)}")
     try:
-        try:
-            deck_num = int(re.sub(r"\D", "", deck)) if re.sub(r"\D", "", deck) else 2
-        except Exception:
-            deck_num = 2
-        res = analyze_pdf_core(doc, filename=file.filename, page_number=page_number, deck_count=deck_num, orientation=orientation, doc_type=doc_type)
-        save_ocr_page_to_disk(file.filename, page_number, res)
+        res = analyze_pdf_core(doc, filename=filename, page_number=page_number, deck_count=deck_num, orientation=orientation, doc_type=doc_type)
+        save_ocr_page_to_disk(filename, page_number, res)
         return res
     finally:
         doc.close()
 
-@app.post("/api/ocr/recognize-regions")
-async def recognize_regions_endpoint(file: UploadFile = File(...), page_number: int = Form(1), regions_json: str = Form(...), orientation: str = Form("auto"), doc_type: str = Form("japanese")):
-    if not (file.filename and file.filename.lower().endswith(".pdf")):
-        raise HTTPException(status_code=400, detail="PDFファイルを指定してください (.pdf)")
-    content = await file.read()
-    if not content:
-        raise HTTPException(status_code=400, detail="PDFファイルの内容が空です")
+def _recognize_regions_core(content: bytes, filename: str, page_number: int, regions: list, orientation: str, doc_type: str) -> dict:
     try:
         doc = fitz.open(stream=content, filetype="pdf")
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"PDFファイルの展開に失敗しました: {str(e)}")
     try:
-        try:
-            regions = json.loads(regions_json)
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Invalid regions JSON: {e}")
-        updated_data = recognize_custom_regions(doc=doc, page_number=page_number, regions=regions, orientation=orientation, doc_type=doc_type, filename=file.filename)
-        save_ocr_page_to_disk(file.filename, page_number, updated_data)
+        updated_data = recognize_custom_regions(doc=doc, page_number=page_number, regions=regions, orientation=orientation, doc_type=doc_type, filename=filename)
+        save_ocr_page_to_disk(filename, page_number, updated_data)
         return updated_data
     finally:
         doc.close()
+
+@app.post("/api/ocr/render-page-only")
+async def render_page_only(
+    file: Optional[UploadFile] = File(None),
+    filename: Optional[str] = Form(None),
+    page_number: int = Form(1)
+):
+    target_filename = file.filename if (file and file.filename) else filename
+    if not target_filename or not target_filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="PDFファイルを指定してください (.pdf)")
+
+    if file and file.filename:
+        content = await file.read()
+        if not content:
+            raise HTTPException(status_code=400, detail="PDFファイルの内容が空です")
+        clean_stem = Path(target_filename).stem
+        try:
+            (PDF_CACHE_DIR / f"{clean_stem}.pdf").write_bytes(content)
+        except Exception:
+            pass
+    else:
+        content = await run_in_threadpool(get_pdf_bytes_sync, target_filename)
+        if not content:
+            raise HTTPException(status_code=404, detail=f"PDFファイル「{target_filename}」がサーバー上に見つかりません。初回はファイルを選択して開いてください。")
+
+    res = await run_in_threadpool(_render_page_only_core, content, target_filename, page_number)
+    return res
+
+@app.post("/api/ocr/analyze-pdf-page")
+async def analyze_pdf_page(
+    file: Optional[UploadFile] = File(None),
+    filename: Optional[str] = Form(None),
+    page_number: int = Form(1),
+    orientation: str = Form("auto"),
+    doc_type: str = Form("japanese"),
+    deck: str = Form("2")
+):
+    target_filename = file.filename if (file and file.filename) else filename
+    if not target_filename or not target_filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="PDFファイルを指定してください (.pdf)")
+
+    if file and file.filename:
+        content = await file.read()
+        if not content:
+            raise HTTPException(status_code=400, detail="PDFファイルの内容が空です")
+        clean_stem = Path(target_filename).stem
+        try:
+            (PDF_CACHE_DIR / f"{clean_stem}.pdf").write_bytes(content)
+        except Exception:
+            pass
+    else:
+        content = await run_in_threadpool(get_pdf_bytes_sync, target_filename)
+        if not content:
+            raise HTTPException(status_code=404, detail=f"PDFファイル「{target_filename}」がサーバー上に見つかりません。")
+
+    try:
+        deck_num = int(re.sub(r"\D", "", deck)) if re.sub(r"\D", "", deck) else 2
+    except Exception:
+        deck_num = 2
+
+    res = await run_in_threadpool(_analyze_pdf_page_core, content, target_filename, page_number, orientation, doc_type, deck_num)
+    return res
+
+@app.post("/api/ocr/recognize-regions")
+async def recognize_regions_endpoint(
+    file: Optional[UploadFile] = File(None),
+    filename: Optional[str] = Form(None),
+    page_number: int = Form(1),
+    regions_json: str = Form(...),
+    orientation: str = Form("auto"),
+    doc_type: str = Form("japanese")
+):
+    target_filename = file.filename if (file and file.filename) else filename
+    if not target_filename or not target_filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="PDFファイルを指定してください (.pdf)")
+
+    if file and file.filename:
+        content = await file.read()
+        if not content:
+            raise HTTPException(status_code=400, detail="PDFファイルの内容が空です")
+        clean_stem = Path(target_filename).stem
+        try:
+            (PDF_CACHE_DIR / f"{clean_stem}.pdf").write_bytes(content)
+        except Exception:
+            pass
+    else:
+        content = await run_in_threadpool(get_pdf_bytes_sync, target_filename)
+        if not content:
+            raise HTTPException(status_code=404, detail=f"PDFファイル「{target_filename}」がサーバー上に見つかりません。")
+
+    try:
+        regions = json.loads(regions_json)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid regions JSON: {e}")
+
+    updated_data = await run_in_threadpool(_recognize_regions_core, content, target_filename, page_number, regions, orientation, doc_type)
+    return updated_data
 
 class ExtractTableGridRequest(BaseModel):
     filename: str

@@ -469,84 +469,47 @@ class ExportService:
 
             if b_text:
                 # body_text を元に段落・見出しを構築
-                raw_blocks = [b.strip() for b in re.split(r'\n{2,}', b_text) if b.strip()]
-                for blk in raw_blocks:
-                    lines = [ln.strip() for ln in blk.split('\n') if ln.strip()]
-                    cur_para_lines = []
+                # 改行（\n）で区切られた各行を尊重し、ページ内で勝手に前後の文に接続（結合）させない
+                raw_lines = [ln.strip() for ln in b_text.split('\n') if ln.strip()]
+                for ln in raw_lines:
+                    # 見出し判定 (マーカー)
+                    m_midashi = re.match(r"^【(?:大|中|小)?見出し】\s*(.+)$", ln)
+                    if m_midashi:
+                        m_title = m_midashi.group(1).strip()
+                        clean_m = correct_japanese_text(m_title)
+                        h_lvl = headings_map.get(clean_m, headings_map.get(m_title, 2))
+                        page_elements.append({
+                            "type": "heading",
+                            "text": clean_m,
+                            "level": h_lvl,
+                            "page": p_num
+                        })
+                        emitted_headings.add(clean_m)
+                        emitted_headings.add(m_title)
+                        continue
 
-                    def flush_para():
-                        if cur_para_lines:
-                            raw_p = '\n'.join(cur_para_lines)
-                            p_clean = re.sub(r'([^\x00-\x7F])\n+([^\x00-\x7F])', r'\1\2', raw_p)
-                            p_clean = re.sub(r'([a-zA-Z0-9])\n+([a-zA-Z0-9])', r'\1 \2', p_clean)
-                            p_clean = re.sub(r'\n+', '', p_clean).strip()
-                            p_clean = correct_japanese_text(p_clean)
-                            if p_clean:
-                                page_elements.append({
-                                    "type": "para",
-                                    "text": p_clean,
-                                    "page": p_num
-                                })
-                            cur_para_lines.clear()
+                    # 見出し判定 (辞書マッチ)
+                    clean_ln = correct_japanese_text(ln)
+                    if (ln in headings_map or clean_ln in headings_map) and (len(ln) < 40) and clean_ln not in emitted_headings:
+                        h_lvl = headings_map.get(clean_ln, headings_map.get(ln, 2))
+                        page_elements.append({
+                            "type": "heading",
+                            "text": clean_ln,
+                            "level": h_lvl,
+                            "page": p_num
+                        })
+                        emitted_headings.add(clean_ln)
+                        emitted_headings.add(ln)
+                        continue
 
-                    for ln in lines:
-                        # 見出し判定 (マーカー)
-                        m_midashi = re.match(r"^【(?:大|中|小)?見出し】\s*(.+)$", ln)
-                        if m_midashi:
-                            flush_para()
-                            m_title = m_midashi.group(1).strip()
-                            clean_m = correct_japanese_text(m_title)
-                            h_lvl = headings_map.get(clean_m, headings_map.get(m_title, 2))
-                            page_elements.append({
-                                "type": "heading",
-                                "text": clean_m,
-                                "level": h_lvl,
-                                "page": p_num
-                            })
-                            emitted_headings.add(clean_m)
-                            emitted_headings.add(m_title)
-                            continue
-
-                        # 見出し判定 (辞書マッチ)
-                        clean_ln = correct_japanese_text(ln)
-                        if (ln in headings_map or clean_ln in headings_map) and (len(ln) < 40) and clean_ln not in emitted_headings:
-                            flush_para()
-                            h_lvl = headings_map.get(clean_ln, headings_map.get(ln, 2))
-                            page_elements.append({
-                                "type": "heading",
-                                "text": clean_ln,
-                                "level": h_lvl,
-                                "page": p_num
-                            })
-                            emitted_headings.add(clean_ln)
-                            emitted_headings.add(ln)
-                            continue
-
-                        # 段落切れ目判定 (空行以外の自然な日本語文末・会話文の区切り)
-                        if cur_para_lines:
-                            prev_line = cur_para_lines[-1]
-                            ends_with_period = bool(re.search(r'[。！？\?!][」』\)]*$', prev_line))
-                            ends_with_close_quote = bool(re.search(r'[」』]$', prev_line))
-                            starts_with_open_quote = bool(re.match(r'^[「『（\(]', ln))
-                            starts_with_particle = any(ln.startswith(p) for p in japanese_particles)
-                            is_prev_title_like = (len(cur_para_lines) == 1 and len(prev_line) <= 20 and not re.search(r'[、,とおよびの]$', prev_line) and not bool(re.search(r'[。！？\?!」』\)]$', prev_line)))
-
-                            should_split = False
-                            if is_prev_title_like:
-                                should_split = True
-                            elif starts_with_open_quote and not starts_with_particle:
-                                should_split = True
-                            elif ends_with_period and not starts_with_particle:
-                                should_split = True
-                            elif ends_with_close_quote and not starts_with_particle:
-                                should_split = True
-
-                            if should_split:
-                                flush_para()
-
-                        cur_para_lines.append(ln)
-
-                    flush_para()
+                    # 通常段落: 改行されている各行は独立した段落として保持（前後の文へ勝手に接続しない）
+                    p_clean = correct_japanese_text(clean_ln)
+                    if p_clean:
+                        page_elements.append({
+                            "type": "para",
+                            "text": p_clean,
+                            "page": p_num
+                        })
             elif p_data.get("regions"):
                 # body_text が一切ない場合のみ、regions にフォールバック
                 sorted_regs = sorted(p_data.get("regions", []), key=lambda r: r.get("reading_order", 0))
@@ -569,12 +532,9 @@ class ExportService:
                         emitted_headings.add(clean_h)
                         emitted_headings.add(rtext.strip())
                     elif rtype in ["body", "paragraph", None]:
-                        blocks = [b.strip() for b in re.split(r'\n{2,}', rtext) if b.strip()]
-                        for b in blocks:
-                            p_clean = re.sub(r'([^\x00-\x7F])\n+([^\x00-\x7F])', r'\1\2', b)
-                            p_clean = re.sub(r'([a-zA-Z0-9])\n+([a-zA-Z0-9])', r'\1 \2', p_clean)
-                            p_clean = re.sub(r'\n+', '', p_clean).strip()
-                            p_clean = correct_japanese_text(p_clean)
+                        lines = [ln.strip() for ln in rtext.split('\n') if ln.strip()]
+                        for ln in lines:
+                            p_clean = correct_japanese_text(ln)
                             if p_clean:
                                 page_elements.append({
                                     "type": "para",
