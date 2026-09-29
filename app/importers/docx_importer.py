@@ -456,16 +456,17 @@ class DocxImporter(BaseImporter):
                 is_heading = False
                 h_level = 1
 
-                if meta["outline_level"] is not None:
-                    is_heading = True
-                    h_level = min(max(meta["outline_level"], 1), 6)
-                elif style_outline_lvl is not None:
-                    is_heading = True
-                    h_level = min(max(style_outline_lvl, 1), 6)
-                elif style_id in ('1', '2', '3', '4', '5', '6'):
-                    is_heading = True
-                    h_level = int(style_id)
-                elif re.match(r'^(?:Heading|見出し|Titre|Title|Header|Headline|H)\s*([1-6])$', style_id, re.IGNORECASE):
+                # ガード: 長文段落や句点（。）を含む段落、引用閉じ括弧で終わる段落は本文（Paragraph）と判定
+                is_sentence_like = (
+                    len(plain_text) > 40 or
+                    "。" in plain_text or
+                    plain_text.endswith("」") or
+                    plain_text.endswith("』") or
+                    plain_text.endswith("）") or
+                    meta["is_list"]
+                )
+
+                if re.match(r'^(?:Heading|見出し|Titre|Title|Header|Headline|H)\s*([1-6])$', style_id, re.IGNORECASE):
                     m = re.match(r'^(?:Heading|見出し|Titre|Title|Header|Headline|H)\s*([1-6])$', style_id, re.IGNORECASE)
                     is_heading = True
                     h_level = int(m.group(1))
@@ -479,6 +480,16 @@ class DocxImporter(BaseImporter):
                 elif style_id.lower() in ('subtitle', 'サブタイトル', '副題') or style_display_name.lower() in ('subtitle', 'サブタイトル', '副題'):
                     is_heading = True
                     h_level = 2
+                elif style_id in ('1', '2', '3', '4', '5', '6'):
+                    is_heading = True
+                    h_level = int(style_id)
+                elif not is_sentence_like:
+                    if meta["outline_level"] is not None:
+                        is_heading = True
+                        h_level = min(max(meta["outline_level"], 1), 6)
+                    elif style_outline_lvl is not None:
+                        is_heading = True
+                        h_level = min(max(style_outline_lvl, 1), 6)
 
                 align_attr = f' style="text-align: {meta["align"]};"' if meta["align"] else ""
 

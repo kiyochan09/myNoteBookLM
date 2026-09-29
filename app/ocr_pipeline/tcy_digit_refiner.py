@@ -235,7 +235,7 @@ class TcyDigitRefiner:
                         best_num = num
         return best_num, best_s
 
-    def find_tcy_in_vertical_line(self, line_img: np.ndarray) -> List[Dict[str, Any]]:
+    def find_tcy_in_vertical_line(self, line_img: np.ndarray, text: Optional[str] = None) -> List[Dict[str, Any]]:
         if line_img is None or line_img.size == 0:
             return []
 
@@ -358,7 +358,10 @@ class TcyDigitRefiner:
                                 base_s = math.sqrt(s_eff_left * s_eff_right)
                                 comb_n = int(d_left) * 10 + int(d_right)
                                 # もし2桁丸ごとパッチ照合で候補があり有意（>=0.74）であれば個別照合の誤爆（12等）より優先
-                                if num_patch is not None and s_patch >= 0.74:
+                                if num_patch is not None and comb_n == num_patch:
+                                    final_n = comb_n
+                                    final_s = max(base_s, s_patch)
+                                elif num_patch is not None and s_patch >= 0.74:
                                     final_n = num_patch
                                     final_s = s_patch
                                 else:
@@ -382,37 +385,58 @@ class TcyDigitRefiner:
                                     used_comp_ids.add(c1["id"])
                                     used_comp_ids.add(c2["id"])
 
-        # Step 1.5: 単一コンポーネントの2桁数字照合（接触・連結した2桁数字）
-        # ※実在未確認かつ漢字誤爆（742回/頁）の主因となっていたため重いNCC総当たり探索は完全停止。
-        # 将来の未知書籍における不慮の連結を早期発見するための軽量診断ログ（テレメトリ）のみ記録。
-        ENABLE_STEP15_SINGLE_COMP = False
-        for c in components:
-            if c["id"] in used_comp_ids:
-                continue
-            if 8 <= c["h"] <= 35 and 13 <= c["w"]:
-                ar = c["w"] / float(max(1, c["h"]))
-                if 0.70 <= ar <= 1.70:
-                    y1 = max(0, c["y1"] - 2)
-                    y2 = min(lh, c["y2"] + 2)
-                    x1 = max(0, c["x1"] - 2)
-                    x2 = min(lw, c["x2"] + 2)
-                    patch = gray[y1:y2, x1:x2]
-                    fill = np.sum(patch < 200) / float(max(1, patch.size))
-                    if 0.15 <= fill <= 0.60:
-                        logger.debug(f"[TCY-DIAG] Potential connected 2-digit candidate in line: comp_id={c['id']}, bbox=({c['x1']},{c['y1']},{c['w']},{c['h']}), ar={ar:.2f}, fill={fill:.2f}")
-                        if ENABLE_STEP15_SINGLE_COMP:
-                            num_patch, s_patch = self.match_2digit_patch(patch)
-                            if num_patch is not None and s_patch >= 0.78:
-                                detected.append({
-                                    "num": num_patch,
-                                    "num_str": str(num_patch),
-                                    "score": s_patch,
-                                    "y1": y1,
-                                    "y2": y2,
-                                    "rel_y": (y1 + y2) / (2.0 * lh),
-                                    "method": "2digit_patch_match"
-                                })
-                                used_comp_ids.add(c["id"])
+        # Step 1.5: 【オンデマンド局所照合】接触・連結した単一コンポーネント2桁数字の救済
+        # ※無差別総当たりは完全停止。テキスト中にノイズ記号やカタカナ型番誤読の兆候が
+        #   存在する場合にのみ、該当位置の近傍コンポーネントに限定して照合を実行。
+        # ※不正確なブロック配列添字決め打ちは行わず、常に比率推定（rel）による大まかな物理Y窓に一本化。
+        if text:
+            triggers = []
+            for m in re.finditer(r'[%!|?]', text):
+                triggers.append(m.start())
+            for m in re.finditer(r'([ァ-ヴー]{2,})([ァ-ヴー])([がをにはとのへとで、。])', text):
+                triggers.append(m.start(2))
+
+            if triggers:
+                text_len = len(text)
+                used_y_ranges = [(d["y1"], d["y2"]) for d in detected]
+
+                for t_pos in triggers:
+                    # テキスト位置から大まかな物理Y座標中心を比率推定
+                    rel = (t_pos + 0.5) / float(max(1, text_len))
+                    y_center = rel * lh
+                    window_half = max(25.0, lh / float(max(1, text_len)) * 1.5)
+
+                    for c in components:
+                        if c["id"] in used_comp_ids:
+                            continue
+                        if any(max(c["y1"], uy1) < min(c["y2"], uy2) for uy1, uy2 in used_y_ranges):
+                            continue
+
+                        c_y_mid = (c["y1"] + c["y2"]) / 2.0
+                        if abs(c_y_mid - y_center) <= window_half:
+                            ar = c["w"] / float(max(1, c["h"]))
+                            if 8 <= c["h"] <= 35 and 13 <= c["w"] and 0.70 <= ar <= 1.70:
+                                y1 = max(0, c["y1"] - 2)
+                                y2 = min(lh, c["y2"] + 2)
+                                x1 = max(0, c["x1"] - 2)
+                                x2 = min(lw, c["x2"] + 2)
+                                patch = gray[y1:y2, x1:x2]
+                                fill = np.sum(patch < 200) / float(max(1, patch.size))
+                                if 0.15 <= fill <= 0.60:
+                                    num_patch, s_patch = self.match_2digit_patch(patch)
+                                    if num_patch is not None and s_patch >= 0.78:
+                                        detected.append({
+                                            "num": num_patch,
+                                            "num_str": str(num_patch),
+                                            "score": s_patch,
+                                            "y1": y1,
+                                            "y2": y2,
+                                            "rel_y": (y1 + y2) / (2.0 * lh),
+                                            "method": "2digit_patch_match"
+                                        })
+                                        used_comp_ids.add(c["id"])
+                                        used_y_ranges.append((y1, y2))
+                                        logger.info(f"[TCY-ONDEMAND] Detected connected 2-digit {num_patch} (score={s_patch:.3f}) at trigger pos {t_pos}")
 
         # Step 2: 1桁数字の検出（未使用コンポーネントの単体照合）
         for c in components:
@@ -795,7 +819,7 @@ class TcyDigitRefiner:
 
             # -------------------------------------------------------------
             # ステップ2: 近傍スナップ（吸着）探索
-            # base_idx の周辺 (前後4〜6文字) に、自然な合致先がないかを探索
+            # base_idx の周辺 (前後4〜7文字) に、自然な合致先がないかを探索
             # (NDLOCRの文字挿入・脱落によるオフセットを安全に吸収)
             # -------------------------------------------------------------
             window_start = max(0, base_idx - 4)
@@ -834,16 +858,31 @@ class TcyDigitRefiner:
                         snapped = True
 
             # スナップ優先度③: 基準位置周辺にOCR誤読された1〜2桁数字がある場合はその位置を置換
-            # ※【安全策】前後に英字が隣接していない「真に独立した単独数字」のみを置換対象とする
-            # （型番内部の「9」などが誤って無差別に上書きされるのを完全に防止）
+            # ※【安全策】ラテン英字（A-Za-z）のみを対象とし、カタカナ・漢字を誤認しないよう厳密化
             if not snapped:
                 for m in re.finditer(r'[0-9０-９]{1,2}', window_str):
                     d_s = window_start + m.start()
                     d_e = window_start + m.end()
-                    has_left_alpha = (d_s > 0 and text[d_s - 1].isalpha())
-                    has_right_alpha = (d_e < text_len and text[d_e].isalpha())
+                    has_left_alpha = (d_s > 0 and bool(re.match(r'[A-Za-z]', text[d_s - 1])))
+                    has_right_alpha = (d_e < text_len and bool(re.match(r'[A-Za-z]', text[d_e])))
                     if not has_left_alpha and not has_right_alpha:
                         placements.append((d_s, d_e, num_str))
+                        snapped = True
+                        break
+
+            # スナップ優先度③.5: ガードA（kベースのトークン範囲包含）によるカタカナ型番誤読置換
+            # （既存優先度①〜③がすべて不発だった場合の、フォールバック直前の最終手段）
+            # ※一律比率換算（char_pitch）による物理座標判定は撤廃し、物理ブロック順位 k 値ベースに一本化
+            if not snapped:
+                for m in re.finditer(r'([ァ-ヴー]{2,})([ァ-ヴー])([がをにはとのへとで、。])', window_str):
+                    m_start = window_start + m.start()
+                    m_end = window_start + m.end()
+                    local_target = m.start(2)
+                    target_idx = window_start + local_target
+
+                    # ガードA: 確定数字の物理ブロック順位 k (base_idx) がマッチした単語の区間内にあること
+                    if m_start - 1 <= base_idx <= m_end:
+                        placements.append((target_idx, target_idx + 1, num_str))
                         snapped = True
                         break
 
@@ -872,23 +911,21 @@ class TcyDigitRefiner:
             result_text = result_text[:s_idx] + num_str + result_text[e_idx:]
 
         # -------------------------------------------------------------
-        # ステップ4: アテンション誤認による重複ゴーストトークンの一般化クリーンアップ
-        # 画像内で確定数字が1回しか存在しないにもかかわらず、テキスト内に同一数字が
-        # 助数詞なしで孤立して重複している場合、正当位置から遠い重複を除去
+        # ステップ4: アテンション誤認による重複ゴーストトークンの検知（実削除は停止）
+        # ※【安全策・設計見直し】配置判定に万一の誤差があった場合に正当な既存数字を
+        #   誤削除して退行を覆い隠すリスクを完全排除するため、実テキストの削除は停止し、
+        #   将来の解析用ログ（テレメトリ）の記録のみに留める。
         # -------------------------------------------------------------
         if len(locked_items) == 1 and placements:
             sole_num = str(locked_items[0]["num"])
             placed_target_pos = placements[0][0]
-            # 助数詞が後続しない孤立した同一数字トークンを探す
             ghost_pattern = rf'(?<![0-9A-Za-z])({sole_num})(?![0-9A-Za-z年月日時分秒代歳人個度%])'
             g_matches = list(re.finditer(ghost_pattern, result_text))
             if len(g_matches) > 1:
-                ghost_removals = []
                 for gm in g_matches:
-                    if abs(gm.start() - placed_target_pos) > 5:
-                        ghost_removals.append((gm.start(), gm.end()))
-                for gs, ge in reversed(ghost_removals):
-                    result_text = result_text[:gs] + result_text[ge:]
+                    g_s = gm.start(1)
+                    if abs(g_s - placed_target_pos) > len(sole_num):
+                        logger.debug(f"[TCY-DIAG] Duplicate ghost candidate '{sole_num}' detected at pos {g_s} (target at {placed_target_pos}) - removal skipped")
 
         return result_text
 
@@ -996,8 +1033,8 @@ class TcyDigitRefiner:
         if not text:
             return text
 
-        # 1. 画像解析による縦中横の検出
-        tcy_items = self.find_tcy_in_vertical_line(line_img)
+        # 1. 画像解析による縦中横の検出（text を渡してオンデマンド局所照合を有効化）
+        tcy_items = self.find_tcy_in_vertical_line(line_img, text=text)
         if not tcy_items:
             return self.refine_kanji_years_and_dates(line_img, text)
 

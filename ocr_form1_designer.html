@@ -2166,8 +2166,9 @@
         const originalFetch = window.fetch;
         function isSameOriginUrl(url) {
             try {
+                if (typeof url === 'string' && url.startsWith('/')) return true;
                 const u = new URL(url, window.location.href);
-                return u.origin === window.location.origin;
+                return u.origin === window.location.origin || u.hostname === '127.0.0.1' || u.hostname === 'localhost';
             } catch(e) {
                 return false;
             }
@@ -2549,10 +2550,7 @@
         formData.append("page_number", 1);
 
         try {
-            // 相対URL (/api/...) を優先使用し、ホスト名/ポート不一致を防止
-            const apiUrl = (window.location.origin && window.location.origin.startsWith("http")) 
-                ? `${window.location.origin}/api/ocr/render-page-only` 
-                : "http://127.0.0.1:8000/api/ocr/render-page-only";
+            const apiUrl = `${API_BASE}/api/ocr/render-page-only`;
 
             const res = await fetch(apiUrl, {
                 method: "POST",
@@ -2585,9 +2583,7 @@
             // ディスク上に既に保存されたOCR結果データが存在するか確認・復元
             let restoredFromDisk = false;
             try {
-                const batchApiUrl = (window.location.origin && window.location.origin.startsWith("http")) 
-                    ? `${window.location.origin}/api/batch/load-all-pages?filename=${encodeURIComponent(file.name)}`
-                    : `http://127.0.0.1:8000/api/batch/load-all-pages?filename=${encodeURIComponent(file.name)}`;
+                const batchApiUrl = `${API_BASE}/api/batch/load-all-pages?filename=${encodeURIComponent(file.name)}`;
                 
                 const diskRes = await fetch(batchApiUrl);
                 if (diskRes.ok) {
@@ -2758,9 +2754,7 @@
         const ALLOWED_TYPES = new Set(["body", "table", "heading", "footnote", "image"]);
         let successCount = 0;
         let failureCount = 0;
-        const baseUrl = (window.location && window.location.origin && window.location.origin.startsWith("http"))
-            ? window.location.origin
-            : "http://127.0.0.1:8000";
+        const baseUrl = API_BASE;
 
         try {
             for (let i = 0; i < validPages.length; i++) {
@@ -3017,7 +3011,7 @@
                 page_number: pageNum,
                 data: docData
             };
-            await fetch("http://127.0.0.1:8000/api/batch/save-page-data", {
+            await fetch(`${API_BASE}/api/batch/save-page-data`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload)
@@ -3195,9 +3189,7 @@
             }
             formData.append("page_number", target);
             try {
-                const pageApiUrl = (window.location.origin && window.location.origin.startsWith("http")) 
-                    ? `${window.location.origin}/api/ocr/render-page-only` 
-                    : "http://127.0.0.1:8000/api/ocr/render-page-only";
+                const pageApiUrl = `${API_BASE}/api/ocr/render-page-only`;
                 let res = await fetch(pageApiUrl, {
                     method: "POST",
                     body: formData
@@ -4922,7 +4914,7 @@
         const fn = currentPdfFile ? currentPdfFile.name : (currentDocData?.filename || "諜報国家ロシア.pdf");
         appendLog("図版一括保存", "バッチ内の全図版画像をPNGファイルとしてディスクに保存・同期中...");
         try {
-            const res = await fetch("http://127.0.0.1:8000/api/figures/ensure-batch-pngs", {
+            const res = await fetch(`${API_BASE}/api/figures/ensure-batch-pngs`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ filename: fn })
@@ -5043,7 +5035,7 @@
         let figures = [];
 
         try {
-            const res = await fetch(`http://127.0.0.1:8000/api/figures/batch-list?filename=${encodeURIComponent(fn)}`);
+            const res = await fetch(`${API_BASE}/api/figures/batch-list?filename=${encodeURIComponent(fn)}`);
             const data = await res.json();
             figures = data.figures || [];
         } catch (e) {
@@ -5195,7 +5187,7 @@
 
             // 3. サーバーAPIでPNGファイルとして即座にディスク永続化
             const fn = currentPdfFile ? currentPdfFile.name : (currentDocData?.filename || "諜報国家ロシア.pdf");
-            const res = await fetch("http://127.0.0.1:8000/api/figures/save-png", {
+            const res = await fetch(`${API_BASE}/api/figures/save-png`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -5344,9 +5336,7 @@
         appendLog("部分再OCR", `選択領域「${targetReg.name}」の文字認識を実行中...`, "info");
 
         try {
-            const baseUrl = (window.location && window.location.origin && window.location.origin.startsWith("http"))
-                ? window.location.origin
-                : "http://127.0.0.1:8000";
+            const baseUrl = API_BASE;
 
             const formData = new FormData();
             formData.append("file", currentPdfFile);
@@ -6285,7 +6275,7 @@
 
         try {
             if (pagesToSave.length > 0) {
-                const res = await fetch("http://127.0.0.1:8000/api/batch/save-batch", {
+                const res = await fetch(`${API_BASE}/api/batch/save-batch`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
@@ -6332,7 +6322,7 @@
         try {
             const formData = new FormData();
             formData.append("filename", currentPdfFile.name);
-            await fetch("http://127.0.0.1:8000/api/batch/delete-disk-data", {
+            await fetch(`${API_BASE}/api/batch/delete-disk-data`, {
                 method: "POST",
                 body: formData
             });

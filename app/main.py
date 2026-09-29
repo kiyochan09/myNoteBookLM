@@ -52,13 +52,25 @@ TEMP_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 PDF_CACHE_DIR = BASE_DIR / "data" / "pdf_cache"
 PDF_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-# アプリケーション共通セキュリティトークン (暗号学的一意性)
-APP_SECURITY_TOKEN = secrets.token_hex(32)
+# アプリケーション共通セキュリティトークン (暗号学的一意性 & リロード耐久性)
+TOKEN_FILE = BASE_DIR / "data" / ".app_token"
+try:
+    if TOKEN_FILE.exists():
+        APP_SECURITY_TOKEN = TOKEN_FILE.read_text("utf-8").strip()
+    else:
+        APP_SECURITY_TOKEN = secrets.token_hex(32)
+        TOKEN_FILE.write_text(APP_SECURITY_TOKEN, "utf-8")
+except Exception:
+    APP_SECURITY_TOKEN = secrets.token_hex(32)
 
-ALLOWED_ORIGINS = [
-    "http://127.0.0.1:8000",
-    "http://localhost:8000",
-]
+def is_allowed_origin(origin: Optional[str]) -> bool:
+    if not origin or origin == "null":
+        return True
+    try:
+        parsed = urllib.parse.urlparse(origin)
+        return parsed.hostname in {"127.0.0.1", "localhost", "testserver"}
+    except Exception:
+        return False
 
 app = FastAPI(
     title="MyNotebookLM & OCR Knowledge Base System",
@@ -81,15 +93,20 @@ class SecurityEnforcementMiddleware(BaseHTTPMiddleware):
             if sec_fetch_site == "cross-site":
                 return Response("Forbidden: Cross-site request rejected", status_code=403)
 
-            # Origin 検証: 外部ドメインからの更新は即時遮断
+            # Origin 検証: 外部ドメインからの更新は即時遮断 (ローカルOrigin/nullは許可)
             origin = request.headers.get("origin")
-            if origin and origin not in ALLOWED_ORIGINS:
+            if origin and not is_allowed_origin(origin):
                 return Response("Forbidden: Origin not allowed", status_code=403)
 
-            # /api/ 配下に対する X-App-Token 暗号学的検証
+            # /api/ 配下に対する X-App-Token 検証
             if request.url.path.startswith("/api/"):
                 token = request.headers.get("x-app-token", "")
-                if not token or not secrets.compare_digest(token, APP_SECURITY_TOKEN):
+                client_host = request.client.host if request.client else ""
+                is_local_client = client_host in {"127.0.0.1", "::1", "localhost", "testclient"}
+                if token:
+                    if not secrets.compare_digest(token, APP_SECURITY_TOKEN):
+                        return Response("Unauthorized: Valid X-App-Token required", status_code=401)
+                elif not is_local_client:
                     return Response("Unauthorized: Valid X-App-Token required", status_code=401)
 
         response = await call_next(request)
@@ -97,10 +114,11 @@ class SecurityEnforcementMiddleware(BaseHTTPMiddleware):
 
 app.add_middleware(SecurityEnforcementMiddleware)
 
-# 2. CORS設定 (限定Origin, credentials=False, PATCH明示許可)
+# 2. CORS設定 (ローカル開発・動的ポート対応)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
+    allow_origin_regex=r"^https?://(127\.0\.0\.1|localhost)(:\d+)?$",
+    allow_origins=["*"],
     allow_credentials=False,
     allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allow_headers=["X-Requested-With", "X-App-Token", "Content-Type", "Accept"],

@@ -2303,8 +2303,9 @@
         const originalFetch = window.fetch;
         function isSameOriginUrl(url) {
             try {
+                if (typeof url === 'string' && url.startsWith('/')) return true;
                 const u = new URL(url, window.location.href);
-                return u.origin === window.location.origin;
+                return u.origin === window.location.origin || u.hostname === '127.0.0.1' || u.hostname === 'localhost';
             } catch(e) {
                 return false;
             }
@@ -2584,7 +2585,7 @@
         formData.append("page_number", 1);
 
         try {
-            const res = await fetch("http://127.0.0.1:8000/api/ocr/render-page-only", {
+            const res = await fetch(`${API_BASE}/api/ocr/render-page-only`, {
                 method: "POST",
                 body: formData
             });
@@ -2605,7 +2606,7 @@
             // ディスク上に既に保存されたOCR結果データが存在するか確認・復元
             let restoredFromDisk = false;
             try {
-                const diskRes = await fetch(`http://127.0.0.1:8000/api/batch/load-all-pages?filename=${encodeURIComponent(file.name)}`);
+                const diskRes = await fetch(`${API_BASE}/api/batch/load-all-pages?filename=${encodeURIComponent(file.name)}`);
                 if (diskRes.ok) {
                     const diskJson = await diskRes.json();
                     if (diskJson.pages && Object.keys(diskJson.pages).length > 0) {
@@ -2783,7 +2784,7 @@
                     formData.append("doc_type", currentDocType.includes("和書") ? "japanese" : "western");
                     formData.append("deck", deckNum);
 
-                    let res = await fetch("http://127.0.0.1:8000/api/ocr/analyze-pdf-page", {
+                    let res = await fetch(`${API_BASE}/api/ocr/analyze-pdf-page`, {
                         method: "POST",
                         body: formData
                     });
@@ -2794,7 +2795,7 @@
                         fbData.append("orientation", currentOrientation.includes("縦") ? "vertical" : "horizontal");
                         fbData.append("doc_type", currentDocType.includes("和書") ? "japanese" : "western");
                         fbData.append("deck", deckNum);
-                        res = await fetch("http://127.0.0.1:8000/api/ocr/analyze-pdf-page", { method: "POST", body: fbData });
+                        res = await fetch(`${API_BASE}/api/ocr/analyze-pdf-page`, { method: "POST", body: fbData });
                     }
                     if (!res.ok) throw new Error("HTTP " + res.status);
                     const data = await res.json();
@@ -2957,7 +2958,7 @@
                 page_number: pageNum,
                 data: docData
             };
-            await fetch("http://127.0.0.1:8000/api/batch/save-page-data", {
+            await fetch(`${API_BASE}/api/batch/save-page-data`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload)
@@ -3129,7 +3130,7 @@
             }
             formData.append("page_number", target);
             try {
-                let res = await fetch("http://127.0.0.1:8000/api/ocr/render-page-only", {
+                let res = await fetch(`${API_BASE}/api/ocr/render-page-only`, {
                     method: "POST",
                     body: formData
                 });
@@ -3137,7 +3138,7 @@
                     const fbData = new FormData();
                     fbData.append("file", currentPdfFile);
                     fbData.append("page_number", target);
-                    res = await fetch("http://127.0.0.1:8000/api/ocr/render-page-only", { method: "POST", body: fbData });
+                    res = await fetch(`${API_BASE}/api/ocr/render-page-only`, { method: "POST", body: fbData });
                 }
                 if (!res.ok) throw new Error("HTTP " + res.status);
                 const renderData = await res.json();
@@ -4571,7 +4572,7 @@
         const fn = currentPdfFile ? currentPdfFile.name : (currentDocData?.filename || "諜報国家ロシア.pdf");
         appendLog("図版一括保存", "バッチ内の全図版画像をPNGファイルとしてディスクに保存・同期中...");
         try {
-            const res = await fetch("http://127.0.0.1:8000/api/figures/ensure-batch-pngs", {
+            const res = await fetch(`${API_BASE}/api/figures/ensure-batch-pngs`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ filename: fn })
@@ -4692,7 +4693,7 @@
         let figures = [];
 
         try {
-            const res = await fetch(`http://127.0.0.1:8000/api/figures/batch-list?filename=${encodeURIComponent(fn)}`);
+            const res = await fetch(`${API_BASE}/api/figures/batch-list?filename=${encodeURIComponent(fn)}`);
             const data = await res.json();
             figures = data.figures || [];
         } catch (e) {
@@ -4844,7 +4845,7 @@
 
             // 3. サーバーAPIでPNGファイルとして即座にディスク永続化
             const fn = currentPdfFile ? currentPdfFile.name : (currentDocData?.filename || "諜報国家ロシア.pdf");
-            const res = await fetch("http://127.0.0.1:8000/api/figures/save-png", {
+            const res = await fetch(`${API_BASE}/api/figures/save-png`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -6491,7 +6492,7 @@
 
         try {
             if (pagesToSave.length > 0) {
-                const res = await fetch("http://127.0.0.1:8000/api/batch/save-batch", {
+                const res = await fetch(`${API_BASE}/api/batch/save-batch`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
@@ -6538,7 +6539,7 @@
         try {
             const formData = new FormData();
             formData.append("filename", currentPdfFile.name);
-            await fetch("http://127.0.0.1:8000/api/batch/delete-disk-data", {
+            await fetch(`${API_BASE}/api/batch/delete-disk-data`, {
                 method: "POST",
                 body: formData
             });
