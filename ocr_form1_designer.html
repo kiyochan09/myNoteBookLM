@@ -554,10 +554,15 @@
         margin-bottom: 10px; border-radius: 0 4px 4px 0;
         font-family: var(--editor-font-family, "Yu Gothic UI", sans-serif);
         font-size: var(--editor-font-size, 11pt); line-height: 1.7; color: #334155;
+        display: flex; align-items: flex-start; gap: 8px;
     }
     .footnote-card .heading-input {
         font-family: var(--editor-font-family, "Yu Gothic UI", sans-serif);
         font-size: var(--editor-font-size, 11pt); color: #334155; border-color: #cbd5e1;
+    }
+    .footnote-textarea {
+        min-height: 42px; height: 42px; line-height: 1.65; resize: vertical;
+        overflow-y: hidden; white-space: pre-wrap; box-sizing: border-box;
     }
 
     /* 5. 図タブ */
@@ -1066,17 +1071,6 @@
                     <div style="padding:10px 16px; background:#f8fafc; border-bottom:1px solid #cbd5e1; display:flex; justify-content:space-between; align-items:center;">
                         <strong style="color:#15803d; font-size:13px;">🔖 抽出・登録された注釈文一覧 (※番号なし・文末配置)</strong>
                         <button class="table-btn" onclick="addFootnoteFromSelection()">＋ 注釈文手動登録</button>
-                    </div>
-                    <div id="footnoteContainer">
-                        <div style="color:#94a3b8; padding:20px;">注釈文はありません。「⚡ 領域自動判定」で自動抽出されます。</div>
-                    </div>
-                </div>
-
-                <!-- 4. 注釈文タブ (tabOcrFootnote) -->
-                <div class="tab-content-panel" id="tabContent-footnote">
-                    <div style="padding:10px 16px; background:#f8fafc; border-bottom:1px solid #cbd5e1; display:flex; justify-content:space-between; align-items:center;">
-                        <strong style="color:#475569; font-size:13px;">検出された注釈文・脚注一覧 (※ページ番号は除外済み)</strong>
-                        <button class="table-btn" onclick="addFootnoteFromSelection()">＋ 脚注手動登録</button>
                     </div>
                     <div id="footnoteContainer">
                         <div style="color:#94a3b8; padding:20px;">注釈文はありません。「⚡ 領域自動判定」で自動抽出されます。</div>
@@ -3223,13 +3217,30 @@
             currentPageImgInfo = pageCache[target].imgInfo;
 
             if (currentPageImgInfo && currentPageImgInfo.image_base64) {
+                const refreshImageRegionsAfterLoad = () => {
+                    if (currentPage !== target || !currentDocData) return;
+                    const missingFigureImage = (currentDocData.regions || []).some(r => {
+                        if (r.type !== "image") return false;
+                        const fig = (currentDocData.figures || []).find(f => f.id === r.id || f.region_id === r.id);
+                        return !fig?.image_base64;
+                    });
+                    if (missingFigureImage) {
+                        syncDocDataAndTabsFromRegions();
+                        saveCurrentPageToCache(true);
+                    }
+                };
+                img.addEventListener("load", refreshImageRegionsAfterLoad, { once: true });
                 img.src = currentPageImgInfo.image_base64;
                 img.style.display = "block";
                 const placeholder = document.getElementById("canvasPlaceholder");
                 if (placeholder) placeholder.style.display = "none";
                 applyZoom();
+                if (img.complete && img.naturalWidth > 0) queueMicrotask(refreshImageRegionsAfterLoad);
             }
 
+            // Persisted heading arrays can lag behind region edits. Rebuild the
+            // tab models from the authoritative page regions whenever a page opens.
+            syncDocDataAndTabsFromRegions();
             renderRegionList(currentDocData.regions || []);
             renderBBoxes(currentDocData.regions || []);
             renderTables(currentDocData.tables || []);
@@ -3400,9 +3411,11 @@
                     return;
                 }
 
-                // 4. ボックス内部のクリック/ドラッグ:
-                // stopPropagation() を呼ばず canvasWrapper へ伝播させる。
-                // canvasWrapper 側で「ドラッグなら新規領域作成」「単なるクリックなら領域選択」を行う。
+                // 4. ボックス内部のクリック/ドラッグ: 選択と領域移動
+                e.stopPropagation();
+                e.preventDefault();
+                if (selectedRegionId !== reg.id) selectRegion(reg.id);
+                startRegionMove(e, reg, scaleX, scaleY);
             };
 
             // 右クリックで区分変更コンテキストメニューを表示 (ブラウザ基本メニューを完全排除)
@@ -3490,13 +3503,18 @@
     // 領域全体のドラッグ移動
     function startRegionMove(e, reg, scaleX, scaleY) {
         isMoving = true;
+        let didMove = false;
         dragStartMouse = { x: e.clientX, y: e.clientY };
         dragStartRegion = { x: reg.x, y: reg.y, w: reg.w, h: reg.h };
 
         function onMouseMove(moveEv) {
             if (!isMoving) return;
-            const dx = (moveEv.clientX - dragStartMouse.x) / scaleX;
-            const dy = (moveEv.clientY - dragStartMouse.y) / scaleY;
+            const clientDx = moveEv.clientX - dragStartMouse.x;
+            const clientDy = moveEv.clientY - dragStartMouse.y;
+            if (!didMove && (clientDx * clientDx + clientDy * clientDy) < 4) return;
+            didMove = true;
+            const dx = clientDx / scaleX;
+            const dy = clientDy / scaleY;
 
             reg.x = Math.max(0, Math.round(dragStartRegion.x + dx));
             reg.y = Math.max(0, Math.round(dragStartRegion.y + dy));
@@ -3515,6 +3533,7 @@
             isMoving = false;
             window.removeEventListener("mousemove", onMouseMove);
             window.removeEventListener("mouseup", onMouseUp);
+            if (!didMove) return;
             renderBBoxes(currentDocData.regions);
             syncDocDataAndTabsFromRegions();
             saveCurrentPageToCache(true);
@@ -4121,12 +4140,32 @@
                 }
             } else {
                 if (band) band.style.display = "none";
-                // ドラッグしなかった場合（単なるクリック）: クリックされた領域を選択
+                // ドラッグしなかった場合（単なるクリック）: クリック位置にある領域を選択
+                // オーバーレイの枠線以外（画像そのもの）をクリックした場合も、画像座標で領域を判定する。
+                let clickedRegionId = null;
                 if (initialClickedBox) {
                     const regId = initialClickedBox.id.replace("bbox-", "");
                     const numId = parseInt(regId, 10);
-                    selectRegion(isNaN(numId) ? regId : numId);
+                    clickedRegionId = isNaN(numId) ? regId : numId;
+                } else if (currentDocData?.regions && img) {
+                    const imageRect = img.getBoundingClientRect();
+                    if (imageRect.width > 0 && imageRect.height > 0 &&
+                        upEv.clientX >= imageRect.left && upEv.clientX <= imageRect.right &&
+                        upEv.clientY >= imageRect.top && upEv.clientY <= imageRect.bottom) {
+                        const naturalW = currentPageImgInfo?.image_width || img.naturalWidth || 1191;
+                        const naturalH = currentPageImgInfo?.image_height || img.naturalHeight || 1684;
+                        const imageX = (upEv.clientX - imageRect.left) * naturalW / imageRect.width;
+                        const imageY = (upEv.clientY - imageRect.top) * naturalH / imageRect.height;
+                        const hitRegions = currentDocData.regions.filter(reg =>
+                            imageX >= reg.x && imageX <= reg.x + reg.w &&
+                            imageY >= reg.y && imageY <= reg.y + reg.h
+                        );
+                        // 領域が重なっている場合は、最も小さい領域（より具体的な領域）を選択する。
+                        hitRegions.sort((a, b) => (a.w * a.h) - (b.w * b.h));
+                        if (hitRegions.length) clickedRegionId = hitRegions[0].id;
+                    }
                 }
+                if (clickedRegionId !== null) selectRegion(clickedRegionId);
             }
 
             isRubberBandShown = false;
@@ -4362,15 +4401,23 @@
 
         // 2. 見出し同期
         const headingRegions = sorted.filter(r => r.type === "heading");
+        const previousHeadings = Array.isArray(currentDocData.headings) ? currentDocData.headings : [];
         currentDocData.headings = headingRegions.map((r, i) => {
-            const existing = currentDocData.headings.find(h => h.id === r.id || h.region_id === r.id);
-            if (existing) return existing;
+            let existing = previousHeadings.find(h => h && typeof h === "object" && (h.id === r.id || h.region_id === r.id));
+            if (!existing) existing = previousHeadings[i];
+            const priorTitle = typeof existing === "string"
+                ? existing.replace(/^\[P\d+\]\s*/, "").trim()
+                : (existing?.title || existing?.text || "");
+            const title = priorTitle || r.text || "";
+            const preserved = existing && typeof existing === "object" ? { ...existing } : {};
             return {
+                ...preserved,
                 id: r.id,
                 region_id: r.id,
-                name: r.name || `見出し${i + 1}`,
-                text: r.text || "",
-                level: 1,
+                name: r.name || preserved.name || `見出し${i + 1}`,
+                title,
+                text: title,
+                level: preserved.level || 1,
                 bbox: [r.x, r.y, r.x + r.w, r.y + r.h]
             };
         });
@@ -4607,7 +4654,7 @@
         html = html.replace(/^(--- ページ (\d+) ---)/gm, '<div id="pageAnchor_$2" class="page-anchor-header" style="color:#2563eb; font-weight:bold; background:#eff6ff; padding:3px 6px; border-left:4px solid #2563eb; margin:10px 0 4px 0;">$1</div>');
         if (headings) {
             headings.forEach(h => {
-                const cleanH = (typeof h === 'string' ? h : (h?.title || "")).replace(/^\[P\d+\]\s*/, '').trim();
+                const cleanH = (typeof h === 'string' ? h : (h?.title || h?.text || "")).replace(/^\[P\d+\]\s*/, '').trim();
                 if (cleanH && html.includes(cleanH)) {
                     html = html.split(cleanH).join(`<span class="subheading-highlight">${cleanH}</span>`);
                 }
@@ -4743,7 +4790,7 @@
             card.className = "heading-card";
             card.style.fontFamily = curFont;
             card.style.fontSize = curSize;
-            const rawTitle = typeof h === 'string' ? h : (h?.title || "");
+            const rawTitle = typeof h === 'string' ? h.replace(/^\[P\d+\]\s*/, "") : (h?.title || h?.text || "");
             const safeVal = rawTitle.replace(/"/g, '&quot;');
             card.innerHTML = `
                 <span style="user-select:none; font-size:14px;">📑</span>
@@ -4804,22 +4851,26 @@
         footnotes.forEach((fn, idx) => {
             const card = document.createElement("div");
             card.className = "footnote-card";
-            card.style.display = "flex";
-            card.style.alignItems = "center";
-            card.style.gap = "8px";
             card.style.fontFamily = curFont;
             card.style.fontSize = curSize;
-            const safeVal = (typeof fn === 'string' ? fn : (fn?.text || "")).replace(/"/g, '&quot;');
+            const safeVal = escapeHtml(typeof fn === 'string' ? fn : (fn?.text || ""));
             card.innerHTML = `
                 <span style="user-select:none; font-size:14px;">🔖</span>
-                <input type="text" class="heading-input" style="flex:1; font-family:${curFont}; font-size:${curSize};" value="${safeVal}" 
+                <textarea class="heading-input footnote-textarea" rows="1" style="flex:1; font-family:${curFont}; font-size:${curSize};"
                        title="注釈文を直接編集できます" 
-                       oninput="onFootnoteInput(${idx}, this.value)"
-                       onchange="saveFootnoteChange(${idx}, this.value)">
+                       oninput="onFootnoteInput(${idx}, this.value); resizeFootnoteTextarea(this)"
+                       onchange="saveFootnoteChange(${idx}, this.value)">${safeVal}</textarea>
                 <button class="table-btn" style="height:26px; font-size:11px; color:#dc2626; border-color:#fca5a5;" onclick="deleteFootnote(${idx})" title="この注釈文を削除">🗑 削除</button>
             `;
             container.appendChild(card);
+            resizeFootnoteTextarea(card.querySelector(".footnote-textarea"));
         });
+    }
+
+    function resizeFootnoteTextarea(textarea) {
+        if (!textarea) return;
+        textarea.style.height = "auto";
+        textarea.style.height = `${Math.max(42, textarea.scrollHeight)}px`;
     }
 
     function onFootnoteInput(idx, val) {
@@ -6189,31 +6240,29 @@
             const c = pageCache[p];
             const data = c ? c.docData : null;
 
-            // 本文（body_text -> regions -> ocr_lines のフォールバックと全ページ必ずヘッダー生成）
+            // 図版だけのページでは図中文字やキャプションを本文へ流し込まない。
             let pageBody = "";
             if (data) {
-                pageBody = (data.body_text || "").trim();
-                if (!pageBody && data.regions && data.regions.length > 0) {
-                    const bodyRegs = data.regions.filter(r => !r.type || r.type === "body" || r.type === "paragraph");
-                    bodyRegs.sort((a, b) => (a.reading_order || 0) - (b.reading_order || 0));
-                    pageBody = bodyRegs.map(r => r.text || "").filter(Boolean).join("\n\n").trim();
-                }
-                if (!pageBody && data.ocr_lines && data.ocr_lines.length > 0) {
-                    const rawLines = data.ocr_lines.map(l => (l.text || "").trim()).filter(Boolean);
-                    let joined = "";
-                    rawLines.forEach(l => {
-                        if (!joined) {
-                            joined = l;
-                        } else {
-                            const lastChar = joined.slice(-1);
-                            if (["。", "！", "？", "!", "?"].includes(lastChar)) {
-                                joined += "\n\n" + l;
-                            } else {
-                                joined += l;
-                            }
-                        }
-                    });
-                    pageBody = joined.trim();
+                const regions = Array.isArray(data.regions) ? data.regions : [];
+                const bodyRegs = regions.filter(r => !r.type || r.type === "body" || r.type === "paragraph");
+                const figureOnlyPage = regions.some(r => r.type === "image") && bodyRegs.length === 0 &&
+                    !regions.some(r => ["heading", "footnote", "table"].includes(r.type));
+                if (!figureOnlyPage) {
+                    pageBody = (data.body_text || "").trim();
+                    if (!pageBody && bodyRegs.length > 0) {
+                        bodyRegs.sort((a, b) => (a.reading_order || 0) - (b.reading_order || 0));
+                        pageBody = bodyRegs.map(r => r.text || "").filter(Boolean).join("\n\n").trim();
+                    }
+                    if (!pageBody && regions.length === 0 && data.ocr_lines && data.ocr_lines.length > 0) {
+                        const rawLines = data.ocr_lines.map(l => (l.text || "").trim()).filter(Boolean);
+                        let joined = "";
+                        rawLines.forEach(l => {
+                            if (!joined) joined = l;
+                            else if (["。", "！", "？", "!", "?"].includes(joined.slice(-1))) joined += "\n\n" + l;
+                            else joined += l;
+                        });
+                        pageBody = joined.trim();
+                    }
                 }
             }
             const cleanBody = pageBody ? pageBody.replace(/^[-=]{3}\s*ページ\s*\d+\s*[-=]{3}\s*/i, "").trim() : "";
@@ -6222,15 +6271,21 @@
             if (!data) continue;
 
             // 見出し (string または {title: ...} オブジェクトに対応)
+            const pageHeadings = [];
             if (data.headings && data.headings.length > 0) {
                 data.headings.forEach(h => {
-                    const rawTitle = typeof h === 'string' ? h : (h?.title || "");
+            const rawTitle = typeof h === 'string' ? h.replace(/^\[P\d+\]\s*/, "") : (h?.title || h?.text || "");
                     const cleanH = rawTitle.replace(/^\[P\d+\]\s*/, "").trim();
                     if (cleanH) {
-                        totalHeadings.push(`[P${p}] ${cleanH}`);
+                        pageHeadings.push(cleanH);
                     }
                 });
             }
+            (data.regions || []).filter(r => r.type === "heading").forEach(r => {
+                const cleanH = (r.text || "").trim();
+                if (cleanH && !pageHeadings.includes(cleanH)) pageHeadings.push(cleanH);
+            });
+            pageHeadings.forEach(h => totalHeadings.push(`[P${p}] ${h}`));
 
             // 注釈文 (string または {text: ...} オブジェクトに対応)
             if (data.footnotes && data.footnotes.length > 0) {
@@ -6403,7 +6458,7 @@
             // 見出し検索
             if (searchHeading && data.headings) {
                 data.headings.forEach(h => {
-                    const textH = typeof h === 'string' ? h : (h?.title || "");
+                    const textH = typeof h === 'string' ? h : (h?.title || h?.text || "");
                     regex.lastIndex = 0;
                     if (regex.test(textH)) {
                         results.push({

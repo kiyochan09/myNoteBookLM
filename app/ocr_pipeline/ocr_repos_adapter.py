@@ -17,7 +17,7 @@ if str(NDLOCR_CORE_DIR) not in sys.path:
 
 import ndlocr_auto_region as nar
 from app.core.db import get_db_connection, DEFAULT_DB_PATH
-from app.ocr_pipeline.ndlocr_engine import get_ndlocr_executable
+from app.ocr_pipeline.engine_paths import get_ndlocr_command, get_project_root
 
 
 class OcrReposPipeline:
@@ -132,10 +132,9 @@ class OcrReposPipeline:
                 # C. NDLOCR-Lite 推論または抽出テキストの取得
                 # NDLOCR-Lite が実行可能な場合は実行、なければ埋め込みテキストからOCR結果オブジェクトを構築
                 ocr_results = []
-                ndlocr_exe = get_ndlocr_executable()
-                if ndlocr_exe:
-                    ndlocr_cmd = [
-                        str(ndlocr_exe),
+                ndlocr_base_cmd = get_ndlocr_command()
+                if ndlocr_base_cmd:
+                    ndlocr_cmd = ndlocr_base_cmd + [
                         "--sourceimg", str(prep_img_path),
                         "--output", str(page_dir),
                         "--json-only", "--device", "cpu",
@@ -145,7 +144,7 @@ class OcrReposPipeline:
                     # --enable-tcy は縦書きカタカナや記号を破壊するため完全撤廃
 
                     try:
-                        res = subprocess.run(ndlocr_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=60)
+                        res = subprocess.run(ndlocr_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=60, cwd=get_project_root())
                         if res.returncode == 0:
                             json_path = nar.find_json_file(page_dir, prep_img_path)
                             ocr_results = nar.parse_ndlocr_json(json_path, transform_info)

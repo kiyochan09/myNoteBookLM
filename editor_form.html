@@ -3078,6 +3078,11 @@
 let currentDocId = null;
 let currentBundle = null;
 let isDirty = false;
+let editorEditRevision = 0;
+let editorSaveInProgress = false;
+let editorSaveQueued = false;
+let autoSaveRetryCount = 0;
+let autoSaveRetryTimer = null;
 
 // 堅牢な fetch ヘルパー（非JSON応答やエラー時も安全にメッセージ抽出）
 async function safeFetchJson(url, options = {}) {
@@ -4312,7 +4317,10 @@ function showToast(msg) {
 }
 
 function markDirty() {
+    editorEditRevision++;
     isDirty = true;
+    autoSaveRetryCount = 0;
+    if (autoSaveRetryTimer) { clearTimeout(autoSaveRetryTimer); autoSaveRetryTimer = null; }
     document.getElementById('syncDot').style.background = 'var(--warning)';
     document.getElementById('syncText').innerText = '未保存の変更あり';
 }
@@ -5385,11 +5393,22 @@ async function createNewDocument() {
 }
 
 async function saveDocument(silent = false) {
+    if (editorSaveInProgress) {
+        editorSaveQueued = true;
+        return;
+    }
+    editorSaveInProgress = true;
+    const syncLabel = document.getElementById('syncText');
+    if (syncLabel) syncLabel.innerText = '保存中…';
+    const saveRevision = editorEditRevision;
+    let savingDocId = currentDocId;
+
     const title = document.getElementById('docTitleInput').value.trim() || '無題のドキュメント';
     const editor = document.getElementById('editorContent');
 
-    if (!currentDocId) {
-        currentDocId = 'doc-' + Math.random().toString(36).substring(2, 10);
+    if (!savingDocId) {
+        savingDocId = 'doc-' + Math.random().toString(36).substring(2, 10);
+        currentDocId = savingDocId;
     }
 
     // 1. テキストノードの正規化（直下のテキストノードをPタグで囲む）
@@ -5489,7 +5508,7 @@ async function saveDocument(silent = false) {
     const payload = {
         bundle: {
             document: {
-                id: currentDocId,
+                id: savingDocId,
                 title: title,
                 source_type: currentBundle?.document?.source_type || 'manual',
                 total_pages: currentBundle?.document?.total_pages || 1
@@ -5503,18 +5522,25 @@ async function saveDocument(silent = false) {
     };
 
     try {
-        const res = await fetch(`/api/editor/document/${currentDocId}/save`, {
+        const res = await fetch(`/api/editor/document/${savingDocId}/save`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
-        const data = await res.json();
-        if (data.status === 'success') {
-            if (!silent) {
-                showToast('データベースへ保存しました');
-            }
-            markSynced();
-            
+        const responseText = await res.text();
+        let data = {};
+        try { data = responseText ? JSON.parse(responseText) : {}; }
+        catch (_) { data = { detail: responseText }; }
+        if (!res.ok) throw new Error(data.detail || `HTTP ${res.status} ${res.statusText}`);
+        if (data.status !== 'success') throw new Error(data.detail || '保存APIが成功を返しませんでした');
+
+        autoSaveRetryCount = 0;
+        if (autoSaveRetryTimer) { clearTimeout(autoSaveRetryTimer); autoSaveRetryTimer = null; }
+        if (currentDocId === savingDocId) {
+            if (editorEditRevision === saveRevision) markSynced();
+            else markDirty();
+            if (!silent) showToast('データベースへ保存しました');
+
             // ローカルバンドル状態および一覧タイトルの即時リアルタイム同期
             if (currentBundle) {
                 if (!currentBundle.document) currentBundle.document = {};
@@ -5523,18 +5549,41 @@ async function saveDocument(silent = false) {
                 currentBundle.blocks = blocks;
                 currentBundle.figures = activeFigures;
             }
-            const foundInList = allDocs.find(d => d.id === currentDocId);
-            if (foundInList) {
-                foundInList.title = title;
-            }
+            const foundInList = allDocs.find(d => d.id === savingDocId);
+            if (foundInList) foundInList.title = title;
             renderNavDocList();
             renderHeaderDocSelect();
             renderFiguresInspector(activeFigures);
             refreshHeadingTree();
         }
     } catch (e) {
+        const message = e && e.message ? e.message : String(e);
+        if (currentDocId === savingDocId) {
+            isDirty = true;
+            const dot = document.getElementById('syncDot');
+            const label = document.getElementById('syncText');
+            if (dot) dot.style.background = 'var(--warning)';
+            if (label) label.innerText = `保存失敗: ${message}`;
+        }
         if (!silent) {
-            alert('保存エラー: ' + e);
+            alert('保存エラー: ' + message);
+        } else if (currentDocId === savingDocId && autoSaveRetryCount < 3) {
+            autoSaveRetryCount++;
+            const retryNo = autoSaveRetryCount;
+            const label = document.getElementById('syncText');
+            if (label) label.innerText = `保存失敗: ${message}（5秒後に再試行 ${retryNo}/3）`;
+            autoSaveRetryTimer = setTimeout(() => {
+                if (isDirty && currentDocId === savingDocId) saveDocument(true);
+            }, 5000);
+        } else if (currentDocId === savingDocId) {
+            const label = document.getElementById('syncText');
+            if (label) label.innerText = `保存失敗: ${message}（自動再試行を停止。Ctrl+Sで再試行できます）`;
+        }
+    } finally {
+        editorSaveInProgress = false;
+        if (editorSaveQueued || (currentDocId === savingDocId && editorEditRevision !== saveRevision)) {
+            editorSaveQueued = false;
+            if (currentDocId) setTimeout(() => saveDocument(true), 0);
         }
     }
 }

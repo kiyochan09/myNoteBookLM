@@ -1308,6 +1308,8 @@ def process_scanned_page_layout(
     else:
         table_bottom = 0
         lang = "ja" if doc_type == "japanese" else "en"
+        # OCR and user-defined regions both use the page image rendered at zoom=2.
+        # Keep recognition boxes in that shared, unscaled coordinate system.
         ocr_lines = run_ndlocr_on_image(img_bgr, orientation=orientation, doc_type=doc_type)
 
         valid_raw_tables = []

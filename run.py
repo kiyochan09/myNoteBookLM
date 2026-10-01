@@ -14,19 +14,13 @@ def is_port_in_use(port: int, host: str = '127.0.0.1') -> bool:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         return s.connect_ex((host, port)) == 0
 
-def find_available_port(start_port: int = 8000, max_attempts: int = 10) -> int:
-    for port in range(start_port, start_port + max_attempts):
-        if not is_port_in_use(port):
-            return port
-    return start_port
 
 if __name__ == "__main__":
     default_port = int(os.environ.get("PORT", 8000))
     port = default_port
     if is_port_in_use(port):
-        alt_port = find_available_port(port + 1)
-        print(f"[Notice] Port {port} is in use. Using port {alt_port} instead.")
-        port = alt_port
+        print(f"[Error] Port {port} is already in use. Stop the existing server before starting another instance.")
+        sys.exit(1)
 
     print(f"Starting server at http://127.0.0.1:{port} (app_dir: {BASE_DIR})")
     uvicorn.run(

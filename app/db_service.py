@@ -165,8 +165,13 @@ CREATE TABLE IF NOT EXISTS document_tags (
 
 -- 高速化インデックス
 CREATE INDEX IF NOT EXISTS idx_content_blocks_doc ON content_blocks(document_id);
+CREATE INDEX IF NOT EXISTS idx_content_blocks_section ON content_blocks(section_id);
 CREATE INDEX IF NOT EXISTS idx_document_figures_doc ON document_figures(document_id);
+CREATE INDEX IF NOT EXISTS idx_document_figures_section ON document_figures(section_id);
 CREATE INDEX IF NOT EXISTS idx_document_tables_doc ON document_tables(document_id);
+CREATE INDEX IF NOT EXISTS idx_document_tables_section ON document_tables(section_id);
+CREATE INDEX IF NOT EXISTS idx_annotations_block ON annotations(block_id);
+CREATE INDEX IF NOT EXISTS idx_sections_parent ON sections(parent_id);
 CREATE INDEX IF NOT EXISTS idx_document_tags_doc ON document_tags(document_id);
 CREATE INDEX IF NOT EXISTS idx_document_tags_tag ON document_tags(tag_id);
 CREATE INDEX IF NOT EXISTS idx_tags_group ON tags(group_id);
@@ -186,7 +191,6 @@ class DBService:
     def get_connection(self) -> sqlite3.Connection:
         conn = sqlite3.connect(str(self.db_path), timeout=60.0)
         conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA journal_mode = WAL;")
         conn.execute("PRAGMA busy_timeout = 60000;")
         conn.execute("PRAGMA foreign_keys = ON;")
         return conn
@@ -195,6 +199,11 @@ class DBService:
         conn = self.get_connection()
         cur = conn.cursor()
         try:
+            # journal_mode の切替は必要な場合だけ初期化時に行う。
+            # 既にWALなら再設定せず、別接続とのロック競合を避ける。
+            current_journal_mode = conn.execute("PRAGMA journal_mode;").fetchone()[0]
+            if str(current_journal_mode).lower() != "wal":
+                conn.execute("PRAGMA journal_mode = WAL;")
             conn.executescript(NOTEBOOK_SCHEMA_SQL)
 
             # 既存テーブルへの group_id カラム追加マイグレーション
@@ -813,7 +822,7 @@ class DBService:
         conn = self.get_connection()
         cur = conn.cursor()
         try:
-            cur.execute("BEGIN TRANSACTION;")
+            cur.execute("BEGIN IMMEDIATE;")
 
             cur.execute(
                 """
@@ -833,7 +842,17 @@ class DBService:
             cur.execute("DELETE FROM annotations WHERE document_id = ?", (doc_id,))
             cur.execute("DELETE FROM document_tables WHERE document_id = ?", (doc_id,))
             cur.execute("DELETE FROM document_figures WHERE document_id = ?", (doc_id,))
+            # block_id is UNINDEXED in FTS5. Its row-delete trigger scans the full
+            # FTS table once per block, so bulk-delete this document's FTS rows once.
+            cur.execute("DROP TRIGGER IF EXISTS trg_notebook_blocks_ad;")
+            cur.execute("DELETE FROM fts_blocks WHERE document_id = ?", (doc_id,))
             cur.execute("DELETE FROM content_blocks WHERE document_id = ?", (doc_id,))
+            cur.execute("""
+                CREATE TRIGGER trg_notebook_blocks_ad AFTER DELETE ON content_blocks
+                BEGIN
+                    DELETE FROM fts_blocks WHERE block_id = old.id;
+                END;
+            """)
             cur.execute("DELETE FROM sections WHERE document_id = ?", (doc_id,))
 
             sections = bundle.get("sections", [])

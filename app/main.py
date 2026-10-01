@@ -809,6 +809,12 @@ def save_ocr_page_to_disk(filename: str, page_number: int, data: Dict[str, Any])
             save_dict["figures"] = updated_figs
 
         body_text = data.get("body_text", "")
+        body_regions = [r for r in regions if r.get("type") in ["body", "paragraph", None]]
+        figure_only_page = any(r.get("type") == "image" for r in regions) and not body_regions and not any(r.get("type") in ["heading", "footnote", "table"] for r in regions)
+        if figure_only_page:
+            # OCR fragments from map labels/captions must not be imported as article body text.
+            body_text = ""
+            save_dict["body_text"] = ""
         # 本文系 regions に最新の body_text を同期し、古いテキストの残存を根絶
         if body_text and regions:
             body_regs = [r for r in regions if r.get("type") in ["body", "paragraph", None]]
@@ -825,7 +831,7 @@ def save_ocr_page_to_disk(filename: str, page_number: int, data: Dict[str, Any])
         with open(json_path, "w", encoding="utf-8") as f:
             json.dump(save_dict, f, ensure_ascii=False, indent=2)
 
-        if body_text:
+        if body_text or figure_only_page:
             with open(page_dir / "body_reading_order.txt", "w", encoding="utf-8") as f:
                 f.write(body_text)
 
@@ -859,8 +865,7 @@ def get_pdf_bytes_sync(filename: str) -> Optional[bytes]:
     candidates = [
         BASE_DIR / "data" / "ocr_results" / clean_stem / f"{clean_stem}.pdf",
         BASE_DIR / "data" / "raw_pdfs" / filename,
-        Path(r"C:\Users\natur\Downloads") / filename,
-        Path(r"C:\Users\natur\Downloads") / f"{clean_stem}.pdf"
+        BASE_DIR / "data" / "raw_pdfs" / f"{clean_stem}.pdf"
     ]
     for c in candidates:
         if c.exists():
@@ -1122,7 +1127,7 @@ def recognize_single_region_endpoint(req: RecognizeSingleRegionRequest):
     if img_bgr is None:
         # PDF原本からのレンダリング取得
         candidate_dirs = [
-            Path(r"C:\Users\natur\Downloads"),
+            BASE_DIR / "data" / "raw_pdfs",
             BASE_DIR / "data",
             BASE_DIR / "data" / "ocr_results" / pdf_stem
         ]
@@ -1225,6 +1230,24 @@ def load_all_pages_api(filename: str):
                 try:
                     with open(json_file, "r", encoding="utf-8") as f:
                         p_data = json.load(f)
+                        # Recover figure image references from page-local PNGs when
+                        # older saves kept the crop but lost its metadata.
+                        page_figures = p_data.get("figures", [])
+                        if isinstance(page_figures, list):
+                            for fig_idx, fig in enumerate(page_figures):
+                                if not isinstance(fig, dict) or fig.get("image_base64"):
+                                    continue
+                                file_name = fig.get("file_name") or f"figure_{fig_idx:02d}.png"
+                                fig_path = p_dir / file_name
+                                if not fig_path.exists() and not fig.get("file_name"):
+                                    jpg_path = p_dir / f"figure_{fig_idx:02d}.jpg"
+                                    if jpg_path.exists():
+                                        fig_path = jpg_path
+                                        file_name = jpg_path.name
+                                if fig_path.exists():
+                                    mime = "image/jpeg" if fig_path.suffix.lower() in (".jpg", ".jpeg") else "image/png"
+                                    fig["image_base64"] = f"data:{mime};base64,{base64.b64encode(fig_path.read_bytes()).decode('ascii')}"
+                                    fig["file_name"] = file_name
                         p_num = p_data.get("page_number") or p_data.get("current_page")
                         if not p_num:
                             m = re.search(r"page_(\d+)", p_dir.name)
@@ -1264,14 +1287,6 @@ async def delete_disk_data_api(
             print(f"Error deleting doc_dir {doc_dir}: {e}")
             raise HTTPException(status_code=500, detail=str(e))
             
-    # デスクトップ版OCR結果ディレクトリも存在すれば削除
-    desk_doc_dir = Path(r"C:\Users\natur\source\repos\OCR_Translator\ocr_engine\ocr_results") / pdf_name
-    if desk_doc_dir.exists() and desk_doc_dir.is_dir():
-        try:
-            shutil.rmtree(desk_doc_dir)
-        except Exception:
-            pass
-
     return {
         "status": "success",
         "deleted": deleted,
@@ -1660,12 +1675,10 @@ def apply_batch_proofread(req: ProofreadApplyRequest):
 # ユーザー補正辞書 & 縦中横（10〜99）REST API
 # ==========================================
 USER_DICT_PATHS = [
-    BASE_DIR / "data" / "user_dictionary.json",
-    Path(r"C:\Users\natur\source\repos\OCR_Translator\ocr_engine\config\user_dictionary.json")
+    BASE_DIR / "data" / "user_dictionary.json"
 ]
 TCY_REGISTRY_PATHS = [
-    BASE_DIR / "data" / "tcy_registry.json",
-    Path(r"C:\Users\natur\source\repos\OCR_Translator\ocr_engine\config\tcy_registry.json")
+    BASE_DIR / "data" / "tcy_registry.json"
 ]
 
 @app.get("/api/user-dict")

@@ -88,8 +88,7 @@ class TcyDigitRefiner:
 
     def _load_disk_templates(self):
         candidate_dirs = [
-            Path(r"C:\Users\natur\source\repos\OCR_Translator\ocr_engine\config\tcy_templates"),
-            Path(r"C:\Users\natur\.gemini\antigravity\scratch\knowledge_base_system\data\tcy_templates"),
+            Path(__file__).resolve().parents[2] / "data" / "tcy_templates",
         ]
         for tdir in candidate_dirs:
             if not tdir.exists():
@@ -798,6 +797,13 @@ class TcyDigitRefiner:
         # 配置プランのリスト: (開始インデックス, 終了インデックス, 置換・挿入文字列)
         placements = []
 
+        def has_numeric_context(start: int, end: int) -> bool:
+            context = text[max(0, start - 4):start] + text[end:min(text_len, end + 5)]
+            return bool(re.search(
+                r'[0-9０-９年月日時分秒世紀章節項号番階回歳才人個本枚円ドル%％]',
+                context,
+            ))
+
         # 上から下への物理配置を保つため、Y座標順にソート
         sorted_locked = sorted(locked_items, key=lambda it: it["y1"])
 
@@ -833,9 +839,10 @@ class TcyDigitRefiner:
                 local_pos = window_str.find(noise_token)
                 if local_pos != -1:
                     target_pos = window_start + local_pos
-                    placements.append((target_pos, target_pos + 1, num_str))
-                    snapped = True
-                    break
+                    if has_numeric_context(target_pos, target_pos + len(noise_token)):
+                        placements.append((target_pos, target_pos + len(noise_token), num_str))
+                        snapped = True
+                        break
 
             # スナップ優先度②: 丸括弧スロット （ ） や ( ) への充填
             if not snapped:
@@ -843,8 +850,9 @@ class TcyDigitRefiner:
                 if paren_match:
                     p_start = window_start + paren_match.start(2)
                     p_end = window_start + paren_match.end(2)
-                    placements.append((p_start, p_end, num_str))
-                    snapped = True
+                    if has_numeric_context(p_start, p_end) or re.search(r'[0-9０-９]', paren_match.group(2)):
+                        placements.append((p_start, p_end, num_str))
+                        snapped = True
 
             # スナップ優先度②.5: 一般的な型番・英数字複合トークンの末尾への付加
             # パターン: 数字で始まり英字で終わるトークン (例: "9M", "AN26" 等) の直後に確定数字を安全に配置
@@ -857,46 +865,18 @@ class TcyDigitRefiner:
                         placements.append((m_end, m_end, num_str))
                         snapped = True
 
-            # スナップ優先度③: 基準位置周辺にOCR誤読された1〜2桁数字がある場合はその位置を置換
-            # ※【安全策】ラテン英字（A-Za-z）のみを対象とし、カタカナ・漢字を誤認しないよう厳密化
+            # スナップ優先度③: 既存の数字を置換する場合も、数値表現の中に限定する。
             if not snapped:
                 for m in re.finditer(r'[0-9０-９]{1,2}', window_str):
                     d_s = window_start + m.start()
                     d_e = window_start + m.end()
                     has_left_alpha = (d_s > 0 and bool(re.match(r'[A-Za-z]', text[d_s - 1])))
                     has_right_alpha = (d_e < text_len and bool(re.match(r'[A-Za-z]', text[d_e])))
-                    if not has_left_alpha and not has_right_alpha:
+                    if not has_left_alpha and not has_right_alpha and has_numeric_context(d_s, d_e):
                         placements.append((d_s, d_e, num_str))
                         snapped = True
                         break
-
-            # スナップ優先度③.5: ガードA（kベースのトークン範囲包含）によるカタカナ型番誤読置換
-            # （既存優先度①〜③がすべて不発だった場合の、フォールバック直前の最終手段）
-            # ※一律比率換算（char_pitch）による物理座標判定は撤廃し、物理ブロック順位 k 値ベースに一本化
-            if not snapped:
-                for m in re.finditer(r'([ァ-ヴー]{2,})([ァ-ヴー])([がをにはとのへとで、。])', window_str):
-                    m_start = window_start + m.start()
-                    m_end = window_start + m.end()
-                    local_target = m.start(2)
-                    target_idx = window_start + local_target
-
-                    # ガードA: 確定数字の物理ブロック順位 k (base_idx) がマッチした単語の区間内にあること
-                    if m_start - 1 <= base_idx <= m_end:
-                        placements.append((target_idx, target_idx + 1, num_str))
-                        snapped = True
-                        break
-
-            # スナップ優先度④: 【無条件フォールバック（直接割り込み挿入）】
-            # 画像照合スコアで確定した数字を、ブロック順位 k の基準位置に挿入
-            # ※長音符「ー」の保護: 基準位置周辺にすでに「ー」が存在している場合は「1」の割り込み挿入を行わない
-            if not snapped:
-                is_chouon_conflict = (num_str == "1" and (
-                    'ー' in window_str or
-                    (base_idx < text_len and text[base_idx] == 'ー') or
-                    (base_idx > 0 and text[base_idx - 1] == 'ー')
-                ))
-                if not is_chouon_conflict:
-                    placements.append((base_idx, base_idx, num_str))
+            # 対応する文字または数値表現が見つからない場合は推測で挿入しない。
 
         if not placements:
             return text
@@ -981,9 +961,12 @@ class TcyDigitRefiner:
                 cv2.imwrite(str(in_dir / "01_head.png"), h_img)
                 cv2.imwrite(str(in_dir / "02_tail.png"), t_img)
 
-                cmd = [
-                    r"C:\Users\natur\source\repos\OCR_Translator\ocr_engine\venv\Scripts\python.exe",
-                    "-m", "ocr",
+                from app.ocr_pipeline.engine_paths import get_ndlocr_command, get_project_root
+
+                ndlocr_base_cmd = get_ndlocr_command()
+                if not ndlocr_base_cmd:
+                    return text
+                cmd = ndlocr_base_cmd + [
                     "--sourcedir", str(in_dir),
                     "--output", str(out_dir),
                     "--json-only",
@@ -993,7 +976,7 @@ class TcyDigitRefiner:
                 ]
                 subprocess.run(
                     cmd,
-                    cwd=r"C:\Users\natur\source\repos\OCR_Translator\ocr_engine",
+                    cwd=get_project_root(),
                     capture_output=True,
                     text=True,
                     timeout=60

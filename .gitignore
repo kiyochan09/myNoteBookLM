@@ -19,6 +19,9 @@ scratch/
 *.log
 data/test_out/
 data/temp_uploads/
+data/ocr_results/
+data/pdf_cache/
+data/.app_token
 data/*_bak/
 data/ocr_results/*_bak/
 

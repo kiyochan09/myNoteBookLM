@@ -2,7 +2,6 @@ import os
 import sys
 import json
 import time
-import shutil
 import tempfile
 import subprocess
 from pathlib import Path
@@ -13,41 +12,7 @@ import numpy as np
 from app.ocr_pipeline.win_ocr import run_ocr_on_image as run_win_ocr
 from app.ocr_pipeline.ndlocr_core.ocr_utils import clean_runaway_repetition
 from app.ocr_pipeline.katakana_corrector import correct_ocr_lines, correct_japanese_text
-
-def get_ndlocr_command() -> Optional[List[str]]:
-    # 1. Prefer python executable directly with -m ocr to avoid stub-launcher wrapper overhead and memory limits
-    py_candidates = [
-        Path(r"C:\Users\natur\source\repos\OCR_Translator\ocr_engine\venv\Scripts\python.exe"),
-        Path(r"C:\Users\natur\.gemini\antigravity\scratch\OCR-REPOS\ocr_engine\venv\Scripts\python.exe"),
-    ]
-    for py in py_candidates:
-        if py.exists():
-            return [str(py), "-m", "ocr"]
-    # 2. Executable candidates
-    exe_candidates = [
-        Path(r"C:\Users\natur\source\repos\OCR_Translator\ocr_engine\venv\Scripts\ndlocr-lite.exe"),
-        Path(r"C:\Users\natur\.gemini\antigravity\scratch\OCR-REPOS\ocr_engine\venv\Scripts\ndlocr-lite.exe"),
-    ]
-    for exe in exe_candidates:
-        if exe.exists():
-            return [str(exe)]
-    which_p = shutil.which("ndlocr-lite.exe") or shutil.which("ndlocr-lite")
-    if which_p:
-        return [which_p]
-    return None
-
-def get_ndlocr_executable() -> Optional[Path]:
-    candidates = [
-        Path(r"C:\Users\natur\source\repos\OCR_Translator\ocr_engine\venv\Scripts\ndlocr-lite.exe"),
-        Path(r"C:\Users\natur\.gemini\antigravity\scratch\OCR-REPOS\ocr_engine\venv\Scripts\ndlocr-lite.exe"),
-    ]
-    for p in candidates:
-        if p.exists():
-            return p
-    which_p = shutil.which("ndlocr-lite.exe") or shutil.which("ndlocr-lite")
-    if which_p:
-        return Path(which_p)
-    return None
+from app.ocr_pipeline.engine_paths import get_ndlocr_command, get_project_root
 
 import re
 
@@ -299,7 +264,7 @@ def run_ndlocr_on_image(
 
         # --enable-tcy は縦書きカタカナや記号を破壊するため完全撤廃
         t0 = time.time()
-        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=timeout)
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=timeout, cwd=get_project_root())
         elapsed = time.time() - t0
 
         if res.returncode != 0:
@@ -314,7 +279,7 @@ def run_ndlocr_on_image(
             elif "--enable-tcy" in cmd:
                 print("[NDLOCR Engine] JSON not found, retrying NDLOCR without --enable-tcy...", file=sys.stderr)
                 cmd_retry = [arg for arg in cmd if arg != "--enable-tcy"]
-                res = subprocess.run(cmd_retry, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=timeout)
+                res = subprocess.run(cmd_retry, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=timeout, cwd=get_project_root())
                 candidates = list(out_dir.glob("*.json"))
                 if candidates:
                     json_file = candidates[0]
@@ -337,8 +302,10 @@ def run_ndlocr_on_image(
                 if not isinstance(item, dict):
                     continue
                 score = float(item.get("score", item.get("confidence", 0.0)))
-                # 信頼度 0.0 や 0.3 未満の幽霊矩形・暴走ゴミを完全に排除
-                if score < 0.3 or score == 0.0:
+                # NDLOCR自体の検出閾値 (0.15) と揃える。
+                # 小さな注釈などは本文より信頼度が下がるため、0.3で一律に
+                # 捨てると、ページ全体OCRで検出された文字まで領域振り分け前に欠落する。
+                if score < 0.15 or score == 0.0:
                     continue
                 # 明示的なルビクラス（block_rubi / ルビ）を排除
                 c_idx = item.get("class_index")
@@ -366,6 +333,10 @@ def run_ndlocr_on_image(
                 is_vertical = True if (is_vert is True or is_vert == "true") else False
                 cleaned_text = clean_runaway_repetition(str(text))
                 if not cleaned_text:
+                    continue
+                # 低信頼度でも文字列として十分な長さがある行は保持する。
+                # 単文字の小さなゴミは従来どおり除外する。
+                if score < 0.3 and len(cleaned_text.strip()) < 2:
                     continue
                 raw_candidates.append({
                     "x": int(round(min_x)),
