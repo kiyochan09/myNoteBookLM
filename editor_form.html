@@ -80,8 +80,17 @@
     .btn-danger:hover { background: var(--danger-hover); }
     .btn-dark { background: #334155; color: #ffffff; }
     .btn-dark:hover { background: #475569; }
-    .btn-outline { background: transparent; border-color: #475569; color: #cbd5e1; text-decoration: none; }
-    .btn-outline:hover { background: #1e293b; color: #ffffff; }
+    .btn-outline { background: #ffffff; border-color: #93c5fd; color: #1d4ed8; text-decoration: none; }
+    .btn-outline:hover:not(:disabled) { background: #dbeafe; border-color: #2563eb; color: #1e40af; }
+    header .btn-outline { background: transparent; border-color: #475569; color: #e2e8f0; }
+    header .btn-outline:hover:not(:disabled) { background: #1e293b; color: #ffffff; }
+    .btn:disabled, .tb-btn:disabled {
+        color: #94a3b8 !important; background: #f1f5f9 !important;
+        border-color: #e2e8f0 !important; opacity: 0.6 !important; cursor: not-allowed;
+    }
+    .btn:focus-visible, .tb-btn:focus-visible, .nav-doc-action-btn:focus-visible {
+        outline: 2px solid #2563eb; outline-offset: 2px;
+    }
 
     .toolbar {
         background: #f8fafc;
@@ -447,7 +456,7 @@
         gap: 2px;
         z-index: 10;
     }
-    .style-card:hover .style-card-actions {
+    .style-card:hover .style-card-actions, .style-card:focus-within .style-card-actions {
         display: flex;
     }
     .style-card-action-btn {
@@ -741,7 +750,7 @@
 
     .pane-editor {
         flex: 1;
-        background: #f8fafc;
+        background: var(--editor-bg-paper, #ffffff);
         overflow-y: auto;
         padding: 30px 40px;
         display: flex;
@@ -750,20 +759,20 @@
     .doc-page {
         width: 100%;
         max-width: var(--editor-max-width, 860px);
-        background: var(--editor-bg-paper, #ffffff);
+        background: transparent;
         color: var(--editor-text-color, #1e293b);
-        border: 1px solid var(--border-color);
-        border-radius: 12px;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.03);
+        border: none;
+        border-radius: 0;
+        box-shadow: none;
         padding: 50px 60px;
-        min-height: calc(100vh - 180px);
+        min-height: 0;
         cursor: text;
         display: flex;
         flex-direction: column;
         zoom: var(--editor-zoom, 1);
         transition: max-width 0.15s ease, background-color 0.15s ease;
-        word-break: break-all;
-        overflow-wrap: break-word;
+        word-break: normal;
+        overflow-wrap: normal;
     }
     .doc-title-input {
         width: 100%;
@@ -774,8 +783,9 @@
         color: inherit;
         background: transparent;
         margin-bottom: 24px;
-        padding-bottom: 12px;
-        border-bottom: 2px solid #e2e8f0;
+        padding: 12px 16px;
+        border-left: 4px solid var(--primary);
+        border-bottom: 1px solid var(--border-color);
         cursor: text;
         transition: background-color 0.15s ease;
     }
@@ -809,7 +819,7 @@
     .editor-body h4 { font-size: 1.1rem; }
     .editor-body h5 { font-size: 1.05rem; }
     .editor-body h6 { font-size: 1.05rem; font-weight: normal; margin: var(--editor-para-spacing, 12px) 0; }
-    .editor-body p { margin: var(--editor-para-spacing, 12px) 0; word-break: break-all; overflow-wrap: break-word; }
+    .editor-body p { margin: var(--editor-para-spacing, 12px) 0; word-break: normal; overflow-wrap: normal; }
     .editor-body a {
         color: var(--primary);
         text-decoration: underline;
@@ -991,6 +1001,10 @@
         flex-direction: column;
         flex-shrink: 0;
     }
+    #inspectorAnnotations { max-height: 45vh; overflow-y: auto; overscroll-behavior: contain; }
+    #inspectorAnnotations .ann-item { padding: 10px 0; border-bottom: 1px solid var(--border-color); }
+    #inspectorAnnotations .ann-item:last-child { border-bottom: none; }
+    #inspectorAnnotations .ann-text { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.7; }
     .inspector-content {
         flex: 1;
         overflow-y: auto;
@@ -1246,14 +1260,14 @@
     .nav-doc-action-btn {
         background: transparent;
         border: none;
-        color: #94a3b8;
+        color: var(--primary);
         padding: 3px 5px;
         border-radius: 4px;
         cursor: pointer;
         font-size: 0.78rem;
         line-height: 1;
         transition: all 0.15s ease;
-        opacity: 0.6;
+        opacity: 1;
         display: inline-flex;
         align-items: center;
         justify-content: center;
@@ -1266,7 +1280,7 @@
         background: #e2e8f0;
     }
     .nav-doc-item.active .nav-doc-action-btn {
-        color: #64748b;
+        color: var(--primary);
     }
     .nav-doc-item.active .nav-doc-action-btn:hover {
         color: var(--primary);
@@ -1681,18 +1695,84 @@
         font-weight: 700;
     }
 
+
+    header { position:relative; z-index:100; }
+    .header-left { min-width:0; flex:1; }
+    .doc-select-wrap { min-width:0; }
+    #docSelect[hidden], [hidden] { display:none !important; }
+    .document-picker { position:relative; min-width:0; }
+    #documentPickerButton { max-width:360px; text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:pointer; padding-right:26px; }
+    #documentPickerButton::after { content:' ▾'; }
+    #documentPickerList { position:absolute; top:100%; left:0; width:min(560px,80vw); max-height:60vh; overflow-y:auto; background:white; color:#0f172a; border:1px solid #cbd5e1; border-radius:6px; box-shadow:0 8px 24px #0003; z-index:1000; padding:4px; }
+    .document-picker-item { display:block; width:100%; border:0; background:transparent; text-align:left; padding:9px 12px; cursor:pointer; color:#0f172a; }
+    .document-picker-item:hover, .document-picker-item[aria-selected="true"] { background:#dbeafe; }
+    .document-picker-empty { padding:12px; color:#64748b; }
+    .toolbar-document-actions { display:flex; flex-wrap:wrap; align-items:center; gap:6px; padding:3px 0; }
+    .toolbar-document-actions .btn { height:30px; padding:4px 10px; font-size:0.8rem; white-space:nowrap; }
+    .document-tabs { display:flex; gap:3px; flex-shrink:0; overflow-x:auto; background:#e2e8f0; padding:5px 8px 0; min-height:38px; }
+    .document-tabs:empty { display:none; }
+    .document-tab { max-width:240px; flex-shrink:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding:8px 14px; border:1px solid #cbd5e1; border-bottom:0; border-radius:6px 6px 0 0; background:#f1f5f9; color:#475569; cursor:pointer; }
+    .document-tab[aria-selected="true"] { background:white; color:#1d4ed8; border-top:3px solid #2563eb; padding-top:6px; }
+    .document-tab.dragging { opacity:0.45; }
+    .document-tab[data-drop-side="before"] { box-shadow:-3px 0 0 #2563eb; }
+    .document-tab[data-drop-side="after"] { box-shadow:3px 0 0 #2563eb; }
+    .document-tab-menu { position:fixed; z-index:2000; background:white; border:1px solid #cbd5e1; border-radius:6px; box-shadow:0 8px 24px #0003; padding:4px; }
+    .document-tab-menu button { display:block; width:100%; padding:9px 12px; border:0; background:white; text-align:left; cursor:pointer; }
+    .document-tab-menu button:hover { background:#eff6ff; }
+    .document-tab-menu button:disabled { color:#94a3b8; cursor:default; }
+
+
+    #editorToolbarTop { height:40px; min-height:40px; overflow-x:auto; scrollbar-width:thin; align-items:center; }
+    #editorToolbarTop > .tb-group, #editorToolbarTop > .tb-divider { flex-shrink:0; }
+    #toolbarDocumentActions { flex:0 0 auto; flex-wrap:nowrap; padding:0; }
+    .header-screen-actions { display:flex; align-items:center; gap:6px; flex-shrink:0; }
+    .header-screen-actions .btn { height:30px; padding:4px 10px; font-size:0.8rem; white-space:nowrap; }
+    .app-title { flex-shrink:0; white-space:nowrap; }
+    #tbCurrentDocTagsGroup { margin-left:auto; position:sticky; right:0; background:#f8fafc; z-index:35; padding-left:10px; border-left:1px solid #e2e8f0; flex:0 0 auto; max-width:320px; }
+    #tbCurrentDocTagsContainer { max-width:180px; }
+    #editorToolbarTop .tb-dropdown-menu, #editorToolbarTop .style-gallery-popover { position:fixed; top:auto; margin-top:34px; }
+
+    #exportMenu { position:fixed !important; top:auto !important; right:auto !important; margin-top:6px; }
+
+    /* Preserve English words and retain normal Japanese line breaking. */
+    .editor-body, .editor-body p, .editor-body li, .editor-body td, .editor-body th,
+    .editor-body h1, .editor-body h2, .editor-body h3, .editor-body h4,
+    .editor-body h5, .editor-body h6 { word-break:normal; overflow-wrap:normal; hyphens:none; }
+
+    .nav-multi-tag-controls { display:flex; align-items:center; justify-content:space-between; gap:4px; margin-top:8px; font-size:0.72rem; font-weight:600; }
+    .nav-multi-tag-controls select { min-width:0; max-width:108px; padding:3px; border:1px solid #cbd5e1; border-radius:4px; background:white; font-size:0.7rem; }
+    .nav-multi-tag-choices { display:flex; flex-wrap:wrap; gap:4px; max-height:112px; overflow-y:auto; margin-top:5px; padding:2px; }
+    .nav-multi-tag-choice { border:1px solid #cbd5e1; border-radius:12px; background:white; color:#475569; padding:3px 7px; font-size:0.7rem; cursor:pointer; }
+    .nav-multi-tag-choice[aria-pressed="true"] { box-shadow:0 0 0 1px #1e293b; font-weight:700; }
 </style>
 </head>
 <body>
+<div id="documentTabMenu" class="document-tab-menu" role="menu" hidden>
+    <button role="menuitem" onclick="closeDocumentTabs('current')">タブを閉じる（非表示）</button>
+    <button role="menuitem" id="closeOtherDocumentTabs" onclick="closeDocumentTabs('others')">他のタブをすべて閉じる</button>
+    <button role="menuitem" id="closeRightDocumentTabs" onclick="closeDocumentTabs('right')">右側のすべてのタブを閉じる</button>
+</div>
 <header>
     <div class="header-left">
         <div class="app-title">
             <i class="fa-solid fa-book-bookmark"></i> MyNotebookLM
         </div>
+        <nav class="header-screen-actions" aria-label="画面切り替え">
+        <a href="ocr_form1_designer.html" class="btn btn-outline" id="btnJumpToOcr" title="OCR画面へ移動" style="color:#1d4ed8; border-color:#93c5fd; background:#eff6ff; font-weight:600; text-decoration:none; display:inline-flex; align-items:center; gap:6px;">
+            <i class="fa-solid fa-arrow-up-right-from-square"></i> <i class="fa-solid fa-file-lines"></i> OCR画面へ
+        </a>
+        <a href="/research_form.html" class="btn btn-outline" id="btnJumpToResearch" title="リサーチ画面へ移動" style="color:#246b5d; border-color:#b5d1c4; background:#eef6f1; font-weight:600; text-decoration:none; display:inline-flex; align-items:center; gap:6px;">
+            <i class="fa-solid fa-magnifying-glass"></i> リサーチ
+        </a>
+        </nav>
         <div class="doc-select-wrap">
-            <select id="docSelect" class="doc-select" onchange="loadSelectedDocument()">
+            <select id="docSelect" class="doc-select" hidden onchange="loadSelectedDocument()">
                 <option value="">文書を選択してください...</option>
             </select>
+            <div id="documentPicker" class="document-picker">
+                <button id="documentPickerButton" class="doc-select" type="button" aria-haspopup="listbox" aria-expanded="false" onclick="toggleDocumentPicker()" title="文書を選択（一覧の右クリックで隣に開く）">文書を選択してください…</button>
+                <div id="documentPickerList" role="listbox" aria-label="文書を選択" hidden></div>
+            </div>
             <button class="btn btn-outline" id="btnFilterDocSelect" onclick="openDocFilterModal()" title="タグで文書一覧を絞り込み">
                 <i class="fa-solid fa-filter"></i> 絞り込み <span id="headerFilterBadge" style="display:none;"></span>
             </button>
@@ -1700,24 +1780,7 @@
             <button class="btn btn-outline" onclick="deleteCurrentDocument()"><i class="fa-solid fa-trash"></i></button>
         </div>
     </div>
-    <div class="header-right">
-        <a href="ocr_form1_designer.html" class="btn btn-outline" id="btnJumpToOcr" title="OCR画面へ移動" style="color:#1d4ed8; border-color:#93c5fd; background:#eff6ff; font-weight:600; text-decoration:none; display:inline-flex; align-items:center; gap:6px;">
-            <i class="fa-solid fa-arrow-up-right-from-square"></i> <i class="fa-solid fa-file-lines"></i> OCR画面へ
-        </a>
-        <button class="btn btn-outline" onclick="openEditorOptionsModal()" title="エディタ設定（1行文字数、基本フォント、サイズ、行間など）"><i class="fa-solid fa-gear"></i> オプション</button>
-        <button class="btn btn-outline" onclick="openTagManagerModal()"><i class="fa-solid fa-tags"></i> タグ管理</button>
-        <button class="btn btn-primary" onclick="openImportModal()"><i class="fa-solid fa-file-import"></i> インポート ▾</button>
-        <button class="btn btn-success" onclick="saveDocument()"><i class="fa-solid fa-floppy-disk"></i> DB保存</button>
-        <div style="position: relative; display: inline-block;">
-            <button class="btn btn-dark" onclick="toggleExportMenu()"><i class="fa-solid fa-file-export"></i> 出力 ▾</button>
-            <div id="exportMenu" style="display:none; position:absolute; right:0; top:36px; background:#ffffff; border:1px solid var(--border-color); border-radius:6px; box-shadow:var(--shadow-md); z-index:50; width:160px; overflow:hidden;">
-                <a href="javascript:void(0)" onclick="exportDoc('md')" style="display:block; padding:8px 12px; color:var(--text-main); text-decoration:none; font-size:0.85rem;"><i class="fa-brands fa-markdown"></i> Markdown (.md)</a>
-                <a href="javascript:void(0)" onclick="exportDoc('html')" style="display:block; padding:8px 12px; color:var(--text-main); text-decoration:none; font-size:0.85rem;"><i class="fa-solid fa-code"></i> HTML (.html)</a>
-                <a href="javascript:void(0)" onclick="exportDoc('docx')" style="display:block; padding:8px 12px; color:var(--text-main); text-decoration:none; font-size:0.85rem;"><i class="fa-solid fa-file-word"></i> Word (.docx)</a>
-                <a href="javascript:void(0)" onclick="exportDoc('odt')" style="display:block; padding:8px 12px; color:var(--text-main); text-decoration:none; font-size:0.85rem;"><i class="fa-solid fa-file-lines"></i> ODT (.odt)</a>
-            </div>
-        </div>
-    </div>
+
 </header>
 
 <div class="main-container">
@@ -1767,7 +1830,8 @@
 
     <!-- エディタワークスペース (ナビゲートウィンドウの右側に配置) -->
     <div class="editor-workspace" id="editorWorkspace">
-        <!-- 2段ツールバー -->
+        <div id="documentTabs" class="document-tabs" role="tablist" aria-label="開いている文書" data-tab-version="20261007-tab-move"></div>
+        <!-- ツールバー -->
         <div class="toolbar" id="editorToolbar">
     <!-- 上段 (Row 1) -->
     <div class="tb-row tb-row-top" id="editorToolbarTop">
@@ -1893,6 +1957,29 @@
             </button>
         </div>
 
+        <!-- 7. 吹き出し / コメント -->
+        <div class="tb-group">
+            <button class="tb-btn tb-btn-text" id="tbBtnComment" onclick="insertCalloutComment()" title="吹き出し / コメント挿入 - 選択テキストに注記用コールアウト・吹き出し枠を挿入します">
+                <i class="fa-regular fa-comment-dots" style="color:#d97706;"></i> 吹き出し
+            </button>
+        </div>
+
+        <!-- 8. 画像 -->
+        <div class="tb-group">
+            <button class="tb-btn tb-btn-text" onclick="triggerInsertImage()" title="画像挿入 - ローカル画像ファイルを選択して文書内に挿入します">
+                <i class="fa-regular fa-image" style="color:#059669;"></i> 画像
+            </button>
+            <input type="file" id="figureReplaceInput" style="display:none;" accept="image/*" onchange="handleFigureReplacement(this.files)">
+            <input type="file" id="imageInsertInput" style="display:none;" accept="image/*" onchange="handleImageFileInserted(this.files)">
+        </div>
+
+        <!-- 9. ハイパーリンク -->
+        <div class="tb-group">
+            <button class="tb-btn" onclick="insertHyperlinkDialog()" title="ハイパーリンク (Ctrl+K) - リンク先URLを挿入または編集します">
+                <i class="fa-solid fa-link" style="color:#2563eb;"></i>
+            </button>
+        </div>
+
         <!-- 6. 文章BM (ブックマーク) -->
         <div class="tb-group tb-dropdown-wrap">
             <button class="tb-btn tb-btn-text tb-btn-badge" id="tbBtnBookmark" onclick="toggleBookmarkMenu(event)" title="文章ブックマーク - カーソル位置をブックマーク登録・一覧からジャンプ">
@@ -1907,32 +1994,17 @@
             </div>
         </div>
 
-        <!-- 7. 吹き出し / コメント -->
+        <!-- 表の挿入 -->
         <div class="tb-group">
-            <button class="tb-btn tb-btn-text" id="tbBtnComment" onclick="insertCalloutComment()" title="吹き出し / コメント挿入 - 選択テキストに注記用コールアウト・吹き出し枠を挿入します">
-                <i class="fa-regular fa-comment-dots" style="color:#d97706;"></i> 吹き出し
-            </button>
-        </div>
-
-        <!-- 8. 画像 -->
-        <div class="tb-group">
-            <button class="tb-btn tb-btn-text" onclick="triggerInsertImage()" title="画像挿入 - ローカル画像ファイルを選択して文書内に挿入します">
-                <i class="fa-regular fa-image" style="color:#059669;"></i> 画像
-            </button>
-            <input type="file" id="imageInsertInput" style="display:none;" accept="image/*" onchange="handleImageFileInserted(this.files)">
-        </div>
-
-        <!-- 9. ハイパーリンク -->
-        <div class="tb-group">
-            <button class="tb-btn" onclick="insertHyperlinkDialog()" title="ハイパーリンク (Ctrl+K) - リンク先URLを挿入または編集します">
-                <i class="fa-solid fa-link" style="color:#2563eb;"></i>
+            <button class="tb-btn tb-btn-text" id="tbBtnInsertTable" onclick="insertTableDialog()" title="表の挿入">
+                <i class="fa-solid fa-table"></i> 表の挿入
             </button>
         </div>
 
         <!-- 10. テキストボックス挿入 -->
         <div class="tb-group">
             <div class="tb-dropdown-wrap">
-                <button class="tb-btn" onclick="toggleDropdownMenu(event, 'menuTextBox')" title="テキストボックス・枠線ブロック・表の挿入">
+                <button class="tb-btn" onclick="toggleDropdownMenu(event, 'menuTextBox')" title="テキストボックス・枠線ブロックの挿入">
                     <i class="fa-solid fa-pen-to-square"></i> <i class="fa-solid fa-caret-down" style="font-size:0.65rem;"></i>
                 </button>
                 <div class="tb-dropdown-menu" id="menuTextBox">
@@ -1940,14 +2012,11 @@
                     <div class="tb-dropdown-item" onclick="insertTextBox('info')"><i class="fa-solid fa-circle-info" style="color:#0284c7;"></i> 情報ボックス (青)</div>
                     <div class="tb-dropdown-item" onclick="insertTextBox('warning')"><i class="fa-solid fa-triangle-exclamation" style="color:#d97706;"></i> 注意ボックス (黄)</div>
                     <div class="tb-dropdown-item" onclick="insertTextBox('success')"><i class="fa-solid fa-circle-check" style="color:#16a34a;"></i> 完了ボックス (緑)</div>
-                    <div class="tb-dropdown-divider"></div>
-                    <div class="tb-dropdown-item" onclick="insertTableDialog()"><i class="fa-solid fa-table"></i> 表 (テーブル) を挿入...</div>
                 </div>
             </div>
         </div>
         <div class="tb-divider"></div>
 
-        <!-- 11. 表示中ドキュメントのタグ一覧表示 & クイック設定 -->
         <div class="tb-group tb-current-doc-tags-wrap" id="tbCurrentDocTagsGroup">
             <span class="tb-tags-label" title="表示中のドキュメントに付与されているタグ">
                 <i class="fa-solid fa-tags" style="color:#2563eb;"></i> タグ:
@@ -1959,17 +2028,7 @@
                 <i class="fa-solid fa-plus"></i> タグ設定
             </button>
         </div>
-
-        <div class="tb-divider"></div>
-
-        <!-- 12. オプション設定 -->
-        <div class="tb-group">
-            <button class="tb-btn tb-btn-text" id="tbBtnOptions" onclick="openEditorOptionsModal()" title="エディタ設定（1行文字数、基本フォント、サイズ、行間など）">
-                <i class="fa-solid fa-gear" style="color:#475569;"></i> オプション
-            </button>
-        </div>
     </div>
-
 
     <!-- 下段 (Row 2) -->
     <div class="tb-row tb-row-bottom" id="editorToolbarBottom">
@@ -2151,6 +2210,27 @@
                 100%
             </button>
         </div>
+        <div class="tb-divider"></div>
+    <div class="toolbar-document-actions" id="toolbarDocumentActions">
+        <button class="btn btn-primary" onclick="openImportModal()"><i class="fa-solid fa-file-import"></i> インポート ▾</button>
+        <button class="btn btn-success" onclick="saveDocument()"><i class="fa-solid fa-floppy-disk"></i> DB保存</button>
+        <div style="position: relative; display: inline-block;">
+            <button class="btn btn-dark" onclick="toggleExportMenu()"><i class="fa-solid fa-file-export"></i> 出力 ▾</button>
+            <div id="exportMenu" style="display:none; position:absolute; right:0; top:36px; background:#ffffff; border:1px solid var(--border-color); border-radius:6px; box-shadow:var(--shadow-md); z-index:50; width:160px; overflow:hidden;">
+                <a href="javascript:void(0)" onclick="exportDoc('md')" style="display:block; padding:8px 12px; color:var(--text-main); text-decoration:none; font-size:0.85rem;"><i class="fa-brands fa-markdown"></i> Markdown (.md)</a>
+                <a href="javascript:void(0)" onclick="exportDoc('html')" style="display:block; padding:8px 12px; color:var(--text-main); text-decoration:none; font-size:0.85rem;"><i class="fa-solid fa-code"></i> HTML (.html)</a>
+                <a href="javascript:void(0)" onclick="exportDoc('docx')" style="display:block; padding:8px 12px; color:var(--text-main); text-decoration:none; font-size:0.85rem;"><i class="fa-solid fa-file-word"></i> Word (.docx)</a>
+                <a href="javascript:void(0)" onclick="exportDoc('odt')" style="display:block; padding:8px 12px; color:var(--text-main); text-decoration:none; font-size:0.85rem;"><i class="fa-solid fa-file-lines"></i> ODT (.odt)</a>
+            </div>
+        </div>
+    </div>
+        <!-- 12. オプション設定 -->
+        <div class="tb-group">
+            <button class="tb-btn tb-btn-text" id="tbBtnOptions" onclick="openEditorOptionsModal()" title="エディタ設定（1行文字数、基本フォント、サイズ、行間など）">
+                <i class="fa-solid fa-gear" style="color:#475569;"></i> オプション
+            </button>
+        </div>
+
     </div>
 </div>
 
@@ -2187,6 +2267,12 @@
             <span><i class="fa-solid fa-sliders"></i> インスペクタ & 図版</span>
         </div>
         <div class="inspector-content">
+            <div class="inspector-card" id="annotationSidebarCard">
+                <div class="inspector-title">🔖 注釈 <span id="annotationSidebarCount"></span></div>
+                <div id="inspectorAnnotations">
+                    <div style="font-size: 0.82rem; color: var(--text-muted);">注釈はありません</div>
+                </div>
+            </div>
             <div class="inspector-card">
                 <div class="inspector-title">📄 文書情報</div>
                 <div style="font-size: 0.85rem; color: #475569;" id="docMetaInfo">
@@ -2202,10 +2288,10 @@
                         <span>🖼️ 挿入図版 (<span id="figCountBadge">0</span>)</span>
                     </div>
                     <div style="display:flex; align-items:center; gap:4px;">
-                        <button class="tb-btn" id="moveSelectedFigsBtn" style="color:var(--primary); opacity:0.5;" onclick="openMoveSelectedFiguresModal()" title="チェックした図版を一括移動 (図版を選択してください)">
+                        <button class="tb-btn" id="moveSelectedFigsBtn" disabled style="color:var(--primary); opacity:0.5;" onclick="openMoveSelectedFiguresModal()" title="チェックした図版を一括移動 (図版を選択してください)">
                             <i class="fa-solid fa-arrows-up-down-left-right"></i>
                         </button>
-                        <button class="tb-btn" id="deleteSelectedFigsBtn" style="color:var(--danger); opacity:0.5;" onclick="deleteSelectedFigures()" title="チェックした図版を一括削除 (図版を選択してください)">
+                        <button class="tb-btn" id="deleteSelectedFigsBtn" disabled style="color:var(--danger); opacity:0.5;" onclick="deleteSelectedFigures()" title="チェックした図版を一括削除 (図版を選択してください)">
                             <i class="fa-solid fa-trash-can"></i>
                         </button>
                         <button class="tb-btn" onclick="triggerInsertImage()" title="画像を追加">
@@ -2239,12 +2325,7 @@
                     <div style="font-size: 0.82rem; color: var(--text-muted);">図版はありません</div>
                 </div>
             </div>
-            <div class="inspector-card">
-                <div class="inspector-title">🔖 脚注・注釈一覧</div>
-                <div id="inspectorAnnotations">
-                    <div style="font-size: 0.82rem; color: var(--text-muted);">注釈はありません</div>
-                </div>
-            </div>
+
         </div>
     </div>
         </div>
@@ -2487,11 +2568,11 @@
         </div>
         <div class="modal-body" style="padding: 16px; display: flex; flex-direction: column; gap: 12px; flex: 1; overflow: hidden;">
             <!-- 1. タグ & グループ管理バー (グループタブ & 新規作成) -->
-            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 10px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 10px; max-height: 240px; overflow: hidden; flex-shrink: 0;">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; flex-shrink: 0;">
                     <div style="font-size: 0.88rem; font-weight: 700; color: #1e293b; display: flex; align-items: center; gap: 6px;">
                         <span>🏷️ 登録タグ & グループ一覧</span>
-                        <span style="font-size: 0.75rem; color: #64748b; font-weight: normal;">(クリックで選択中ファイルに付与 / グループ変更・削除可能)</span>
+                        <span style="font-size: 0.75rem; color: #64748b; font-weight: normal;">(ファイルを選択 → タグを複数選択 → 実行で確定)</span>
                     </div>
                     <div style="display: flex; gap: 6px;">
                         <button class="btn btn-outline" style="padding: 3px 8px; font-size: 0.78rem; height: auto;" onclick="promptCreateTagGroup()">
@@ -2504,12 +2585,12 @@
                 </div>
 
                 <!-- グループ切り替えタブバー -->
-                <div id="modalTagGroupTabs" style="display: flex; gap: 4px; overflow-x: auto; padding-bottom: 2px; border-bottom: 1px solid var(--border-color);">
+                <div id="modalTagGroupTabs" style="display: flex; flex-shrink: 0; min-height: 34px; gap: 4px; overflow-x: auto; padding-bottom: 2px; border-bottom: 1px solid var(--border-color);">
                     <!-- 動的にグループタブを生成: すべて, 未所属, [グループ1], [グループ2]... -->
                 </div>
 
                 <!-- 選択中グループのタグ一覧 -->
-                <div id="modalTagList" style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center; min-height: 36px; padding: 4px 0;">
+                <div id="modalTagList" style="display: flex; flex-wrap: wrap; flex: 1 1 auto; gap: 8px; align-items: center; align-content: flex-start; min-height: 36px; max-height: 130px; overflow-y: auto; padding: 4px 0;">
                     <!-- 動的にタグチップ（グループ変更セレクタ付き）を生成 -->
                 </div>
             </div>
@@ -2557,7 +2638,7 @@
             </div>
 
             <!-- 3. ファイル一覧テーブル (マウスドラッグ一括選択対応) -->
-            <div style="flex: 1; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 8px; background: #ffffff;">
+            <div style="flex: 1; min-height: 120px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 8px; background: #ffffff;">
                 <table class="tag-manage-table" id="modalDocTable">
                     <thead>
                         <tr>
@@ -2580,8 +2661,12 @@
                 <span>💡 ヒント: テーブル行を<strong>マウスドラッグ</strong>または <strong>Shift+クリック</strong> することで連続した複数行を一括選択できます。</span>
             </div>
         </div>
-        <div class="modal-footer">
-            <button class="btn btn-dark" onclick="closeTagManagerModal()">閉じる</button>
+        <div class="modal-footer" style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+            <span id="pendingTagBatchSummary" style="font-size:0.82rem;">ファイルとタグを選択してください</span>
+            <div style="display:flex;gap:8px;">
+                <button class="btn btn-dark" onclick="closeTagManagerModal()">閉じる</button>
+                <button type="button" class="btn btn-primary" id="btnExecuteTagBatch" onclick="executePendingTagBatch()" disabled>実行</button>
+            </div>
         </div>
     </div>
 </div>
@@ -2637,6 +2722,25 @@
         </div>
         <div class="modal-body" style="padding: 18px 22px; display: flex; flex-direction: column; gap: 16px; overflow-y: auto;">
             
+            <section data-storage-folder-menu style="border:1px solid #cbd5e1;border-radius:6px;padding:12px;background:#f8fafc;font-size:13px;">
+    <div style="font-weight:bold;margin-bottom:10px;color:#1e293b;">📁 保存フォルダ</div>
+    <button type="button" onclick="openAppStorageFolder('archives', this)" style="width:100%;text-align:left;padding:8px 10px;border:1px solid #93c5fd;border-radius:4px;background:#eff6ff;color:#1d4ed8;font:inherit;cursor:pointer;">透明テキスト付きPDFの保存フォルダを開く</button>
+    <div data-storage-path="archives" style="margin:5px 0 12px;color:#64748b;font-size:12px;overflow-wrap:anywhere;">保存先を確認しています…</div>
+    <button type="button" onclick="openAppStorageFolder('raw', this)" style="width:100%;text-align:left;padding:8px 10px;border:1px solid #93c5fd;border-radius:4px;background:#eff6ff;color:#1d4ed8;font:inherit;cursor:pointer;">OCR生データの保存フォルダを開く</button>
+    <div data-storage-path="raw" style="margin-top:5px;color:#64748b;font-size:12px;overflow-wrap:anywhere;">保存先を確認しています…</div>
+    <div data-storage-status role="status" aria-live="polite" style="margin-top:6px;color:#475569;min-height:1em;"></div>
+</section>
+<section style="border:1px solid #cbd5e1;border-radius:6px;padding:12px;background:#f8fafc;font-size:13px;margin:12px 0;">
+  <div style="font-weight:bold;margin-bottom:8px;">バックアップ・復元</div>
+  <p style="line-height:1.7;margin:8px 0;">文書・タグ・リサーチ履歴のDB、透明テキスト付きPDF、文書の図版と補正辞書をまとめて保存します。</p>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;">
+    <button type="button" onclick="openDataBackup('backup')" style="padding:8px 12px;cursor:pointer;">バックアップを作成</button>
+    <button type="button" onclick="openDataBackup('restore')" style="padding:8px 12px;cursor:pointer;">バックアップから復元</button>
+  </div>
+  <div data-backup-menu-status role="status" style="margin-top:8px;line-height:1.7;color:#475569;"></div>
+</section>
+
+
             <!-- 1. 1行あたりの文字数設定 -->
             <div class="opt-section-card">
                 <div class="opt-section-title">
@@ -2787,7 +2891,7 @@
                     </div>
                     <span id="optPreviewCharCountInfo" style="font-size:0.75rem; color:#64748b;">40文字/行 目安</span>
                 </div>
-                <div id="optLivePreviewBox" style="background:#ffffff; border:1px solid #cbd5e1; border-radius:6px; padding:14px 18px; max-height:160px; overflow-y:auto; word-break:break-all; transition:all 0.15s ease;">
+                <div id="optLivePreviewBox" style="background:#ffffff; border:1px solid #cbd5e1; border-radius:6px; padding:14px 18px; max-height:160px; overflow-y:auto; word-break:normal; overflow-wrap:normal; hyphens:none; transition:all 0.15s ease;">
                     <p style="margin-bottom:8px;">吾輩は猫である。名前はまだ無い。どこで生れたかとんと見当がつかぬ。何でも薄暗いじめじめした所でニャーニャー泣いていた事だけは記憶している。</p>
                     <p>吾輩はここで始めて人間というものを見た。しかもあとで聞くとそれは書生という人間中で一番獰悪な種族であったそうだ。</p>
                 </div>
@@ -2820,6 +2924,11 @@
         </div>
         <div class="modal-body" style="padding: 16px 20px; display: flex; flex-direction: column; gap: 14px; overflow-y: auto;">
             
+            <div id="styleApplyScopeRow" style="padding:10px;background:#f1f5f9;border-radius:5px;">
+                <label for="styleApplyScope" style="font-weight:600">適用範囲:</label>
+                <select id="styleApplyScope"><option value="database" selected>DB全体</option><option value="document">アクティブな文書だけ</option></select>
+                <div style="font-size:12px;color:#64748b;margin-top:5px">変更した段落スタイルを使用している箇所へ反映します。</div>
+            </div>
             <!-- 1. 基本情報 -->
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
                 <div>
@@ -3007,8 +3116,8 @@
                     <div>
                         <label style="font-size:0.76rem; color:#475569; display:block; margin-bottom:2px;">字下げ (インデント):</label>
                         <label style="display:flex; align-items:center; gap:6px; height:30px; font-size:0.78rem; cursor:pointer;">
-                            <input type="checkbox" id="styleInputIndent" onchange="updateStyleEditModalPreview()">
-                            <span>段落先頭を1文字分字下げ (1.2em)</span>
+                            <select id="styleInputIndent" onchange="updateStyleEditModalPreview()"><option value="none">なし</option><option value="first">字下げ（先頭行）</option><option value="hanging">ぶら下げ（2行目以降）</option></select>
+                            <input id="styleInputIndentAmount" type="number" min="0" max="20" step="0.1" value="1" style="width:60px" oninput="updateStyleEditModalPreview()"><span>文字</span>
                         </label>
                     </div>
                 </div>
@@ -3025,6 +3134,7 @@
             </div>
 
         </div>
+        <p id="styleSaveError" role="alert" hidden style="margin:0;padding:10px 18px;color:#b91c1c;background:#fef2f2;white-space:pre-wrap;"></p>
         <div class="modal-footer" style="display:flex; justify-content:space-between; align-items:center; background:#f8fafc; border-top:1px solid #cbd5e1; padding:10px 18px;">
             <div>
                 <button type="button" class="btn btn-outline" id="btnDeleteStyleFromModal" style="color:#ef4444; border-color:#fca5a5; display:none;" onclick="onDeleteCurrentEditingStyle()">
@@ -3033,6 +3143,7 @@
             </div>
             <div style="display:flex; gap:8px;">
                 <button type="button" class="btn btn-outline" onclick="closeStyleEditModal()">キャンセル</button>
+
                 <button type="button" class="btn btn-primary" onclick="saveCustomStyleFromModal()">
                     <i class="fa-solid fa-check"></i> 登録 / 保存
                 </button>
@@ -3077,6 +3188,190 @@
 
 let currentDocId = null;
 let currentBundle = null;
+let openDocumentTabs = [];
+let documentTabBusy = false;
+let tabMenuDocumentId = null;
+const documentTabScroll = new Map();
+let draggedDocumentTabId = null;
+let documentTabDragUntil = 0;
+
+function renderDocumentTabs() {
+    const host = document.getElementById('documentTabs');
+    host.replaceChildren();
+    openDocumentTabs.forEach(tab => {
+        const button = document.createElement('button');
+        button.type = 'button'; button.className = 'document-tab';
+        button.setAttribute('role', 'tab');
+        button.setAttribute('aria-selected', String(tab.id === currentDocId));
+        button.textContent = tab.title || '無題';
+        button.title = `${tab.title || '無題'}（ドラッグでタブを移動／右クリックでメニュー）`;
+        button.dataset.documentId = tab.id;
+        button.onclick = () => {
+            if (performance.now() < documentTabDragUntil) return;
+            loadSelectedDocument(tab.id, 'activate');
+        };
+        enableDocumentTabDrag(button, tab.id);
+        button.oncontextmenu = event => {
+            event.preventDefault(); tabMenuDocumentId = tab.id;
+            const menu = document.getElementById('documentTabMenu');
+            menu.hidden = false;
+            menu.style.left = Math.min(event.clientX, window.innerWidth - 240) + 'px';
+            menu.style.top = Math.min(event.clientY, window.innerHeight - 140) + 'px';
+            document.getElementById('closeRightDocumentTabs').disabled = openDocumentTabs.at(-1)?.id === tab.id;
+            document.getElementById('closeOtherDocumentTabs').disabled = openDocumentTabs.length < 2;
+        };
+        host.appendChild(button);
+    });
+    host.ondragover = event => {
+        if (!draggedDocumentTabId) return;
+        event.preventDefault(); event.dataTransfer.dropEffect = 'move';
+        if (event.target === host) clearDocumentTabDropMarkers();
+        const rect = host.getBoundingClientRect();
+        if (event.clientX < rect.left + 36) host.scrollLeft -= 24;
+        else if (event.clientX > rect.right - 36) host.scrollLeft += 24;
+    };
+    host.ondrop = event => {
+        if (!draggedDocumentTabId) return;
+        event.preventDefault();
+        moveDocumentTab(draggedDocumentTabId, null, true);
+    };
+    renderDocumentPicker();
+}
+
+function clearDocumentTabDropMarkers() {
+    document.querySelectorAll('#documentTabs [data-drop-side]').forEach(button => delete button.dataset.dropSide);
+}
+
+function moveDocumentTab(sourceId, targetId, after = false) {
+    if (documentTabBusy || sourceId === targetId) return;
+    const source = openDocumentTabs.find(tab => tab.id === sourceId);
+    if (!source || (targetId && !openDocumentTabs.some(tab => tab.id === targetId))) return;
+    const next = openDocumentTabs.filter(tab => tab.id !== sourceId);
+    const index = targetId ? next.findIndex(tab => tab.id === targetId) + (after ? 1 : 0) : next.length;
+    next.splice(index, 0, source);
+    openDocumentTabs = next;
+    document.getElementById('documentTabMenu').hidden = true;
+    renderDocumentTabs();
+}
+
+function enableDocumentTabDrag(button, docId) {
+    button.draggable = true;
+    button.ondragstart = event => {
+        if (documentTabBusy) { event.preventDefault(); return; }
+        draggedDocumentTabId = docId;
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', docId);
+        button.classList.add('dragging');
+        document.getElementById('documentTabMenu').hidden = true;
+    };
+    button.ondragover = event => {
+        if (!draggedDocumentTabId) return;
+        event.preventDefault();
+        clearDocumentTabDropMarkers();
+        if (docId !== draggedDocumentTabId) {
+            const rect = button.getBoundingClientRect();
+            button.dataset.dropSide = event.clientX > rect.left + rect.width / 2 ? 'after' : 'before';
+        }
+    };
+    button.ondrop = event => {
+        if (!draggedDocumentTabId) return;
+        event.preventDefault(); event.stopPropagation();
+        const rect = button.getBoundingClientRect();
+        moveDocumentTab(draggedDocumentTabId, docId, event.clientX > rect.left + rect.width / 2);
+    };
+    button.ondragend = () => {
+        draggedDocumentTabId = null;
+        documentTabDragUntil = performance.now() + 250;
+        button.classList.remove('dragging');
+        clearDocumentTabDropMarkers();
+    };
+}
+
+function renderDocumentPicker() {
+    const list = document.getElementById('documentPickerList');
+    const button = document.getElementById('documentPickerButton');
+    if (!list || !button) return;
+    button.textContent = currentBundle?.document?.title || '文書を選択してください…';
+    list.replaceChildren();
+    const docs = getFilteredDocs();
+    if (!docs.length) {
+        const empty = document.createElement('div');
+        empty.className = 'document-picker-empty';
+        empty.textContent = 'タグを選択して文書一覧を表示してください';
+        list.appendChild(empty);
+    }
+    docs.forEach(doc => {
+        const item = document.createElement('button'); item.type = 'button';
+        item.className = 'document-picker-item'; item.setAttribute('role', 'option');
+        item.setAttribute('aria-selected', String(doc.id === currentDocId));
+        item.textContent = `${doc.title} (${(doc.source_type || 'DOC').toUpperCase()})`;
+        item.title = 'クリックで切り替え／右クリックで隣のタブに開く';
+        item.onclick = event => {
+            if (event.button !== 0) return;
+            closeDocumentPicker(); loadSelectedDocument(doc.id, 'replace');
+        };
+        item.onpointerdown = event => handleDocumentRightButton(event, doc.id);
+        item.oncontextmenu = event => handleDocumentRightButton(event, doc.id);
+        list.appendChild(item);
+    });
+}
+
+function closeDocumentPicker() {
+    document.getElementById('documentPickerList').hidden = true;
+    document.getElementById('documentPickerButton').setAttribute('aria-expanded', 'false');
+}
+function toggleDocumentPicker() {
+    const list = document.getElementById('documentPickerList');
+    list.hidden = !list.hidden;
+    document.getElementById('documentPickerButton').setAttribute('aria-expanded', String(!list.hidden));
+}
+
+async function saveBeforeDocumentSwitch() {
+    if (autoSaveTimer) { clearTimeout(autoSaveTimer); autoSaveTimer = null; }
+    if (autoSaveRetryTimer) { clearTimeout(autoSaveRetryTimer); autoSaveRetryTimer = null; }
+    const deadline = Date.now() + 60000;
+    while (editorSaveInProgress) {
+        if (Date.now() > deadline) throw new Error('保存が完了するまでお待ちください');
+        await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    if (isDirty && currentDocId) await saveDocument(true, true);
+    if (isDirty && currentDocId) throw new Error('未保存の変更があるため切り替えを中止しました');
+    const pane = document.querySelector('.pane-editor');
+    if (pane && currentDocId) documentTabScroll.set(currentDocId, pane.scrollTop);
+}
+
+async function closeDocumentTabs(scope = 'current') {
+    const index = openDocumentTabs.findIndex(t => t.id === tabMenuDocumentId);
+    document.getElementById('documentTabMenu').hidden = true;
+    if (index < 0 || documentTabBusy) return;
+    const remove = scope === 'others' ? openDocumentTabs.filter((tab, i) => i !== index)
+        : scope === 'right' ? openDocumentTabs.slice(index + 1) : [openDocumentTabs[index]];
+    if (!remove.length) return;
+    const remaining = openDocumentTabs.filter(t => !remove.includes(t));
+    if (remove.some(t => t.id === currentDocId)) {
+        const next = scope === 'right' || scope === 'others' ? openDocumentTabs[index] : remaining[Math.min(index, remaining.length - 1)];
+        if (next) {
+            if (!await loadSelectedDocument(next.id, 'activate')) return;
+        } else {
+            documentTabBusy = true;
+            try { await saveBeforeDocumentSwitch(); resetEditorToEmpty(); renderAnnotations([]); }
+            catch (error) { showToast(error.message); return; }
+            finally { documentTabBusy = false; }
+        }
+    }
+    openDocumentTabs = remaining;
+    remove.forEach(t => documentTabScroll.delete(t.id));
+    renderDocumentTabs();
+}
+
+document.addEventListener('click', event => {
+    if (!event.target.closest('#documentPicker')) closeDocumentPicker();
+    if (!event.target.closest('#documentTabMenu')) document.getElementById('documentTabMenu').hidden = true;
+});
+document.addEventListener('keydown', event => {
+    if (event.key === 'Escape') { closeDocumentPicker(); document.getElementById('documentTabMenu').hidden = true; }
+});
+
 let isDirty = false;
 let editorEditRevision = 0;
 let editorSaveInProgress = false;
@@ -3119,6 +3414,9 @@ let tempFilterTagIds = new Set();
 let currentNavTab = 'docs';
 let modalSortBy = 'created_at_desc';
 let selectedDocIdsInModal = new Set();
+let pendingTagIdsInModal = new Set();
+let modalResultTagIds = [];
+let tagBatchExecuting = false;
 let lastClickedDocId = null;
 
 let savedSelectionRange = null;
@@ -3128,6 +3426,11 @@ window.addEventListener('DOMContentLoaded', async () => {
     initEditorDisplayOptions();
     await loadTags();
     await loadDocumentList();
+    const researchParams=new URLSearchParams(location.search);
+    if(researchParams.has("researchCitation")) {
+        try {await openResearchSource({threadId:researchParams.get("researchThread"),runId:researchParams.get("researchRun"),citationId:researchParams.get("researchCitation")});}
+        catch(error) {showToast(error.message);}
+    }
     setupDropZone();
     setupShortcuts();
     setupPasteHandler();
@@ -3259,6 +3562,12 @@ function toggleDropdownMenu(e, menuId) {
     const wasOpen = targetMenu && targetMenu.classList.contains('show');
     closeAllDropdownMenus();
     if (targetMenu && !wasOpen) {
+        if (menuId === 'menuBookmarkList') {
+            const trigger = document.getElementById('tbBtnBookmark');
+            const rect = trigger.getBoundingClientRect();
+            document.body.appendChild(targetMenu);
+            targetMenu.style.cssText = `position:fixed;left:${Math.max(8,Math.min(rect.left,window.innerWidth-330))}px;top:${Math.min(rect.bottom+4,window.innerHeight-240)}px;min-width:280px;max-width:calc(100vw - 16px);z-index:2500;`;
+        }
         targetMenu.classList.add('show');
     }
 }
@@ -3271,7 +3580,7 @@ function closeAllDropdownMenus() {
 }
 
 document.addEventListener('click', (e) => {
-    if (!e.target.closest('.tb-dropdown-wrap') && !e.target.closest('.tb-split-btn-wrap') && !e.target.closest('#editorFindReplaceBar') && !e.target.closest('#styleGalleryPopover')) {
+    if (!e.target.closest('.tb-dropdown-menu') && !e.target.closest('.tb-dropdown-wrap') && !e.target.closest('.tb-split-btn-wrap') && !e.target.closest('#editorFindReplaceBar') && !e.target.closest('#styleGalleryPopover')) {
         closeAllDropdownMenus();
     }
 });
@@ -3773,6 +4082,10 @@ function convertZenHan(type) {
 }
 
 // 段落書式（見出し構造を破壊しない）
+function paragraphIndentStyles(mode, amount = 1) {
+    const size=Math.min(20,Math.max(0,Number(amount)||0));
+    return {textIndent:mode==='first'?`${size}em`:mode==='hanging'?`-${size}em`:'0',paddingInlineStart:mode==='hanging'?`${size}em`:'0'};
+}
 function applyParagraphBlock(tag) {
     closeAllDropdownMenus();
     formatHeading(tag);
@@ -3891,7 +4204,7 @@ function addBookmarkAtCursor() {
 function updateBookmarkCount() {
     const editor = document.getElementById('editorContent');
     if (!editor) return;
-    const anchors = editor.querySelectorAll('.bm-anchor');
+    const anchors = editor.querySelectorAll('.bm-anchor[id], .doc-bookmark[id]');
     const badge = document.getElementById('tbBookmarkCount');
     if (badge) badge.textContent = anchors.length;
 }
@@ -3901,7 +4214,7 @@ function renderBookmarks() {
     const listEl = document.getElementById('bookmarkItemsList');
     if (!editor || !listEl) return;
 
-    const anchors = Array.from(editor.querySelectorAll('.bm-anchor'));
+    const anchors = Array.from(editor.querySelectorAll('.bm-anchor[id], .doc-bookmark[id]'));
     updateBookmarkCount();
 
     if (anchors.length === 0) {
@@ -3909,20 +4222,23 @@ function renderBookmarks() {
         return;
     }
 
-    listEl.innerHTML = anchors.map((a, i) => {
-        const title = a.getAttribute('title') || `ブックマーク ${i+1}`;
-        return `
-            <div class="tb-dropdown-item" onclick="jumpToBookmark('${a.id}')" style="justify-content:space-between;">
-                <span>🔖 ${escapeHtml(title)}</span>
-                <span style="font-size:0.75rem; color:#94a3b8;">ジャンプ</span>
-            </div>
-        `;
-    }).join('');
+    listEl.replaceChildren();
+    anchors.forEach((anchor, i) => {
+        const item = document.createElement('button'); item.type = 'button';
+        item.className = 'tb-dropdown-item';
+        item.style.cssText = 'display:flex;justify-content:space-between;width:100%;border:0;background:transparent;text-align:left;';
+        const label = document.createElement('span');
+        label.textContent = '🔖 ' + (anchor.getAttribute('title') || anchor.id || `ブックマーク ${i+1}`).replace(/^(?:Bookmark:|ブックマーク:)\s*/, '');
+        const action = document.createElement('span'); action.textContent = 'ジャンプ';
+        action.style.cssText = 'font-size:0.75rem;color:#64748b;';
+        item.append(label, action); item.onclick = () => jumpToBookmark(anchor.id);
+        listEl.appendChild(item);
+    });
 }
 
 function jumpToBookmark(id) {
     closeAllDropdownMenus();
-    const el = document.getElementById(id);
+    const el = Array.from(document.querySelectorAll('#editorContent .bm-anchor[id], #editorContent .doc-bookmark[id]')).find(anchor => anchor.id === id);
     if (el) {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
         el.style.animation = 'pulse-paste 0.6s ease';
@@ -4158,7 +4474,7 @@ function openGlobalSearchModal() {
     const sel = document.getElementById('globalSearchGroupSelect');
     if (sel && tagGroups) {
         sel.innerHTML = '<option value="all">全グループ / 全文書</option>' + 
-            tagGroups.map(g => `<option value="${g.name}">グループ: ${escapeHtml(g.name)}</option>`).join('');
+            tagGroups.map(g => `<option value="${escapeHtml(g.name)}">グループ: ${escapeHtml(g.name)}</option>`).join('');
     }
     
     const input = document.getElementById('globalSearchInput');
@@ -4173,7 +4489,9 @@ function closeGlobalSearchModal() {
     if (modal) modal.classList.remove('show');
 }
 
+let globalSearchRequestId = 0;
 async function executeGlobalSearch() {
+    const requestId = ++globalSearchRequestId;
     const term = document.getElementById('globalSearchInput')?.value.trim() || '';
     const group = document.getElementById('globalSearchGroupSelect')?.value || 'all';
     const listEl = document.getElementById('globalSearchResultsList');
@@ -4188,6 +4506,8 @@ async function executeGlobalSearch() {
 
     try {
         const res = await safeFetchJson(`/api/search?q=${encodeURIComponent(term)}&group=${encodeURIComponent(group)}`);
+        if (requestId !== globalSearchRequestId) return;
+        if (res.status !== 'success') throw new Error(res.detail || '検索に失敗しました');
         if (res.status === 'success' && res.results && res.results.length > 0) {
             listEl.innerHTML = '';
             res.results.forEach(r => {
@@ -4205,34 +4525,20 @@ async function executeGlobalSearch() {
                 listEl.appendChild(item);
             });
         } else {
-            // ローカル文書リストからクライアント側フォールバック検索
-            const localMatches = allDocs.filter(d => (d.title && d.title.includes(term)) || (d.id === currentDocId && document.getElementById('editorContent').innerText.includes(term)));
-            if (localMatches.length > 0) {
-                listEl.innerHTML = '';
-                localMatches.forEach(d => {
-                    const item = document.createElement('div');
-                    item.style.cssText = "background:#ffffff; border:1px solid #cbd5e1; border-radius:6px; padding:10px; margin-bottom:8px; cursor:pointer;";
-                    item.innerHTML = `
-                        <strong style="color:#1d4ed8; font-size:0.9rem;">📄 ${escapeHtml(d.title || '無題の文書')}</strong>
-                        <div style="font-size:0.82rem; color:#64748b; margin-top:2px;">ファイル名に一致しました</div>
-                    `;
-                    item.onclick = () => jumpToGlobalSearchResult(d.id, term);
-                    listEl.appendChild(item);
-                });
-            } else {
-                listEl.innerHTML = '<div style="text-align:center; color:#94a3b8; padding:30px;">一致する文書は見つかりませんでした</div>';
-            }
+            listEl.innerHTML = '<div style="text-align:center; color:#94a3b8; padding:30px;">一致する文書は見つかりませんでした</div>';
         }
     } catch(e) {
+        if (requestId !== globalSearchRequestId) return;
         listEl.innerHTML = '<div style="text-align:center; color:#dc2626; padding:20px;">検索中にエラーが発生しました</div>';
     }
 }
 
 async function jumpToGlobalSearchResult(docId, term) {
-    closeGlobalSearchModal();
     if (docId !== currentDocId) {
-        await loadDocumentById(docId);
+        const loaded = await loadSelectedDocument(docId);
+        if (!loaded || currentDocId !== docId) return;
     }
+    closeGlobalSearchModal();
     if (term) {
         openFindReplaceDialog(false);
         const input = document.getElementById('findInput');
@@ -4342,6 +4648,7 @@ function triggerDebouncedAutoSave() {
 }
 
 function onEditorInput() {
+    renderAnnotations(currentBundle?.annotations || []);
     markDirty();
     updateCharCount();
     refreshHeadingTree();
@@ -4474,11 +4781,15 @@ async function loadTags() {
     }
 }
 
+const documentTitleCollator = new Intl.Collator('ja', {numeric:true, sensitivity:'base'});
 function getFilteredDocs() {
-    return allDocs;
+    return [...allDocs].sort((a, b) =>
+        documentTitleCollator.compare(a.title || '', b.title || '') ||
+        documentTitleCollator.compare(a.id || '', b.id || ''));
 }
 
 function renderHeaderDocSelect() {
+    renderDocumentPicker();
     const select = document.getElementById('docSelect');
     const filterBtn = document.getElementById('btnFilterDocSelect');
     if (!select) return;
@@ -4522,6 +4833,45 @@ function renderHeaderDocSelect() {
 }
 
 function renderNavTagFilters() {
+    renderNavTagFiltersBase();
+    const container = document.getElementById('navTagFilters');
+    if (!container) return;
+    const controls = document.createElement('div'); controls.className = 'nav-multi-tag-controls';
+    const label = document.createElement('span'); label.textContent = 'タグ（複数選択）';
+    const mode = document.createElement('select'); mode.setAttribute('aria-label', 'タグの組み合わせ');
+    mode.innerHTML = '<option value="or">いずれか一致</option><option value="and">すべて一致</option>';
+    mode.value = headerFilterTagOp || 'or';
+    mode.onchange = async () => {
+        headerFilterTagOp = mode.value; tempFilterTagOp = mode.value;
+        renderNavTagFilters();
+        if (headerFilterTagIds.size) await loadDocumentList();
+    };
+    controls.append(label, mode); container.appendChild(controls);
+    const choices = document.createElement('div'); choices.className = 'nav-multi-tag-choices';
+    allTags.forEach(tag => {
+        const button = document.createElement('button'); button.type = 'button';
+        button.className = 'nav-multi-tag-choice'; button.textContent = tag.name;
+        const active = headerFilterTagIds.has(tag.id);
+        button.setAttribute('aria-pressed', String(active));
+        button.title = active ? 'クリックでこのタグだけ解除' : 'クリックで絞り込みタグに追加';
+        if (active) {button.style.background = tag.color || '#2563eb'; button.style.color = '#fff';}
+        button.onclick = () => toggleActiveDocumentTag(tag.id);
+        choices.appendChild(button);
+    });
+    container.appendChild(choices);
+}
+
+async function toggleActiveDocumentTag(tagId) {
+    if (activeTagFilter && !['all','unclassified'].includes(activeTagFilter)) headerFilterTagIds.add(activeTagFilter);
+    if (headerFilterTagIds.has(tagId)) headerFilterTagIds.delete(tagId);
+    else headerFilterTagIds.add(tagId);
+    activeTagFilter = headerFilterTagIds.size ? null : 'all';
+    tempFilterTagIds = new Set(headerFilterTagIds);
+    renderNavTagFilters(); renderHeaderDocSelect();
+    await loadDocumentList();
+}
+
+function renderNavTagFiltersBase() {
     const container = document.getElementById('navTagFilters');
     if (!container) return;
 
@@ -4581,6 +4931,7 @@ function renderNavTagFilters() {
 }
 
 async function filterDocsByTag(tagId, pillEl = null) {
+    if (!['all', 'unclassified'].includes(tagId)) { await toggleActiveDocumentTag(tagId); return; }
     headerFilterTagIds.clear();
     activeTagFilter = tagId;
     document.querySelectorAll('.tag-filter-pill').forEach(p => p.classList.remove('active'));
@@ -4613,7 +4964,7 @@ function renderNavDocList() {
         return;
     }
 
-    const filtered = allDocs;
+    const filtered = getFilteredDocs();
 
     if (filtered.length === 0) {
         const isFiltered = (headerFilterTagIds.size > 0 || (activeTagFilter && activeTagFilter !== 'all'));
@@ -4643,7 +4994,7 @@ function renderNavDocList() {
         }
 
         html += `
-            <div class="nav-doc-item ${isCurrent ? 'active' : ''}" onclick="selectDocumentById('${d.id}')">
+            <div class="nav-doc-item ${isCurrent ? 'active' : ''}" onclick="if(event.button === 0) selectDocumentById('${d.id}')" onpointerdown="handleDocumentRightButton(event, '${d.id}')" oncontextmenu="handleDocumentRightButton(event, '${d.id}')" title="クリックで入れ替え／右クリックで右隣に開く">
                 <div class="nav-doc-item-header">
                     <div class="nav-doc-item-title" title="${escapeHtml(d.title)}">
                         <i class="fa-solid ${iconClass}" style="color:${isCurrent ? 'var(--primary)' : '#64748b'};"></i>
@@ -4730,7 +5081,9 @@ async function promptRenameDocument(docId) {
     }
 }
 
+let documentListRequestSequence = 0;
 async function loadDocumentList(forcedFilter = null) {
+    const requestSequence = ++documentListRequestSequence;
     if (forcedFilter !== null) {
         activeTagFilter = forcedFilter;
     }
@@ -4769,6 +5122,7 @@ async function loadDocumentList(forcedFilter = null) {
         }
 
         const data = await safeFetchJson(url);
+        if (requestSequence !== documentListRequestSequence) return;
         allDocs = data.documents || [];
 
         renderHeaderDocSelect();
@@ -4784,43 +5138,102 @@ async function loadDocumentList(forcedFilter = null) {
     }
 }
 
-function selectDocumentById(docId) {
-    if (docId === currentDocId) return;
-    loadSelectedDocument(docId);
+let lastDocumentRightButton = {id:null, time:0};
+let pendingDocumentContextMenu = false;
+document.addEventListener('pointerdown', () => { pendingDocumentContextMenu = false; }, true);
+document.addEventListener('contextmenu', event => {
+    if (!pendingDocumentContextMenu) return;
+    pendingDocumentContextMenu = false;
+    event.preventDefault(); event.stopImmediatePropagation();
+}, true);
+function handleDocumentRightButton(event, docId) {
+    if (event.type === 'pointerdown' && event.button !== 2) return;
+    event.preventDefault(); event.stopPropagation();
+    // Windows emits contextmenu after the right-button pointerdown.
+    const now = performance.now();
+    if (event.type === 'contextmenu' && lastDocumentRightButton.id === docId && now - lastDocumentRightButton.time < 2000) return;
+    lastDocumentRightButton = {id:docId, time:now};
+    pendingDocumentContextMenu = event.type === 'pointerdown';
+    closeDocumentPicker();
+    return openAdjacentDocument(docId);
 }
 
-async function loadSelectedDocument(forcedDocId = null) {
-    const select = document.getElementById('docSelect');
-    const targetDocId = forcedDocId || (select ? select.value : null);
-    if (!targetDocId) return;
-
-    // 切り替え前に未保存の変更がある場合は自動保存を実行
-    if (isDirty && currentDocId && currentDocId !== targetDocId) {
-        try {
-            await saveDocument(true);
-            showToast('直前の文書の変更を自動保存しました');
-        } catch (e) {
-            console.error('Auto-save error before switching document:', e);
-        }
+async function openAdjacentDocument(docId) {
+    if (documentTabBusy) { showToast('文書の切り替え中です'); return false; }
+    if (docId === currentDocId) return true;
+    const before = [...openDocumentTabs];
+    if (currentDocId && !openDocumentTabs.some(tab => tab.id === currentDocId)) {
+        openDocumentTabs.push({id:currentDocId, title:currentBundle?.document?.title || '無題'});
     }
+    const target = allDocs.find(doc => doc.id === docId);
+    openDocumentTabs = arrangeDocumentTabs(openDocumentTabs, currentDocId,
+        {id:docId, title:target?.title || '読み込み中…'}, 'adjacent');
+    renderDocumentTabs();
+    const loaded = await loadSelectedDocument(docId, 'activate');
+    if (!loaded) { openDocumentTabs = before; renderDocumentTabs(); }
+    return loaded;
+}
 
+function selectDocumentById(docId, mode = 'replace') {
+    if (docId === currentDocId) return;
+    loadSelectedDocument(docId, mode);
+}
+
+function arrangeDocumentTabs(tabs, activeId, target, mode) {
+    if (mode === 'activate') {
+        return tabs.some(t => t.id === target.id) ? tabs : [...tabs, target];
+    }
+    const next = tabs.filter(t => t.id !== target.id);
+    const activeIndex = next.findIndex(t => t.id === activeId);
+    if (activeIndex < 0) next.push(target);
+    else if (mode === 'adjacent') next.splice(activeIndex + 1, 0, target);
+    else next.splice(activeIndex, 1, target);
+    return next;
+}
+
+async function loadSelectedDocument(forcedDocId = null, mode = 'replace') {
+    const select = document.getElementById('docSelect');
+    const targetDocId = forcedDocId || select?.value;
+    if (!targetDocId) return false;
+    if (documentTabBusy) { showToast('文書の切り替え中です'); return false; }
+    if (targetDocId === currentDocId) { renderDocumentTabs(); return true; }
+    documentTabBusy = true;
+    const editor = document.getElementById('editorContent');
+    const titleInput = document.getElementById('docTitleInput');
+    const oldEditable = editor.getAttribute('contenteditable');
+    editor.setAttribute('contenteditable', 'false'); titleInput.disabled = true;
     try {
+        await saveBeforeDocumentSwitch();
         const res = await fetch(`/api/editor/document/${targetDocId}`);
+        if (!res.ok) throw new Error('文書を開けませんでした');
         const data = await res.json();
-        if (data.status === 'success') {
-            currentDocId = targetDocId;
-            if (select) select.value = targetDocId;
-            currentBundle = data.bundle;
-            renderDocument(currentBundle);
-            renderNavDocList();
-            markSynced();
-        }
-    } catch (e) {
-        console.error('Error loading document:', e);
+        if (data.status !== 'success') throw new Error(data.detail || '文書を開けませんでした');
+        await loadParagraphStylesForDocument(targetDocId);
+        openDocumentTabs = arrangeDocumentTabs(openDocumentTabs, currentDocId,
+            {id:targetDocId, title:data.bundle.document.title}, mode);
+        currentDocId = targetDocId;
+        if (select) select.value = targetDocId;
+        currentBundle = data.bundle;
+        renderDocument(currentBundle); renderNavDocList(); markSynced();
+        const pane = document.querySelector('.pane-editor');
+        if (pane) pane.scrollTop = documentTabScroll.get(targetDocId) || 0;
+        return true;
+    } catch (error) {
+        if (select) select.value = currentDocId || '';
+        showToast(error.message || '文書を開けませんでした'); return false;
+    } finally {
+        editor.setAttribute('contenteditable', oldEditable || 'true'); titleInput.disabled = false;
+        documentTabBusy = false; renderDocumentTabs();
     }
 }
 
 function renderDocument(bundle) {
+    if (currentDocId) {
+        let tab = openDocumentTabs.find(t => t.id === currentDocId);
+        if (!tab) { tab = {id:currentDocId}; openDocumentTabs.push(tab); }
+        tab.title = bundle.document.title;
+    }
+    renderDocumentTabs();
     const doc = bundle.document;
     document.getElementById('docTitleInput').value = doc.title || '無題のドキュメント';
     document.getElementById('statusDocName').innerText = `文書: ${doc.title}`;
@@ -4895,7 +5308,9 @@ function renderDocument(bundle) {
     updateCharCount();
     refreshHeadingTree();
     renderAnnotations(bundle.annotations || []);
+    updateBookmarkCount();
     renderFiguresInspector(bundle.figures || []);
+    installFigureReplaceButtons();
     renderToolbarCurrentDocTags();
 }
 
@@ -4925,7 +5340,7 @@ function renderHeadingTree(sections) {
 
 function refreshHeadingTree() {
     const editor = document.getElementById('editorContent');
-    const headings = editor.querySelectorAll('h1, h2, h3, h4');
+    const headings = editor.querySelectorAll('h1, h2, h3, h4, h5, h6');
     const treeDiv = document.getElementById('navTree');
     treeDiv.innerHTML = '';
 
@@ -4939,7 +5354,11 @@ function refreshHeadingTree() {
         const text = h.innerText.trim() || `見出し ${idx+1}`;
         const item = document.createElement('div');
         item.className = `tree-node lvl-${lvl}`;
-        item.innerHTML = `<i class="fa-solid fa-heading" style="font-size:0.75rem; color:#94a3b8;"></i> <span>${text}</span>`;
+        item.style.paddingLeft = `${10 + (lvl - 1) * 14}px`;
+        const icon = document.createElement('i'); icon.className = 'fa-solid fa-heading';
+        icon.style.cssText = 'font-size:0.75rem;color:#64748b;';
+        const label = document.createElement('span'); label.textContent = text;
+        item.append(icon, label);
         item.onclick = () => {
             h.scrollIntoView({ behavior: 'smooth', block: 'center' });
             document.querySelectorAll('.tree-node').forEach(n => n.classList.remove('active'));
@@ -4951,7 +5370,7 @@ function refreshHeadingTree() {
 
 function scrollToHeading(title) {
     const editor = document.getElementById('editorContent');
-    const headings = editor.querySelectorAll('h1, h2, h3, h4');
+    const headings = editor.querySelectorAll('h1, h2, h3, h4, h5, h6');
     for (let h of headings) {
         if (h.innerText.trim().includes(title) || title.includes(h.innerText.trim())) {
             h.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -4995,6 +5414,7 @@ function renderFiguresInspector(figures) {
                 <div style="font-size:0.83rem; font-weight:600; color:#334155; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${f.caption || `図版 ${idx+1}`}</div>
                 <div style="font-size:0.75rem; color:var(--text-muted);">${sizeKb} KB</div>
             </div>
+            <button class="tb-btn" onclick="triggerReplaceFigure('${f.id}')" title="画像を差し替え（1MB以下に自動調整）">差し替え</button>
             <button class="tb-btn" style="color:#64748b; padding:4px 6px; font-size:0.8rem;" onclick="openMoveFigureModal('${f.id}')" title="この図版を見出し位置へ移動">
                 <i class="fa-solid fa-arrows-up-down-left-right"></i>
             </button>
@@ -5083,6 +5503,7 @@ function updateSelectedFiguresState(changedCb = null) {
     const moveBtn = document.getElementById('moveSelectedFigsBtn');
     
     if (delBtn) {
+        delBtn.disabled = checkedCount === 0;
         if (checkedCount > 0) {
             delBtn.title = `チェックした ${checkedCount} 件の図版を一括削除`;
             delBtn.style.opacity = '1';
@@ -5093,6 +5514,7 @@ function updateSelectedFiguresState(changedCb = null) {
     }
 
     if (moveBtn) {
+        moveBtn.disabled = checkedCount === 0;
         if (checkedCount > 0) {
             moveBtn.title = `チェックした ${checkedCount} 件の図版を一括移動`;
             moveBtn.style.opacity = '1';
@@ -5158,7 +5580,7 @@ function renderMoveFigureModalContent() {
     }
 
     const editor = document.getElementById('editorContent');
-    const headings = editor.querySelectorAll('h1, h2, h3, h4');
+    const headings = editor.querySelectorAll('h1, h2, h3, h4, h5, h6');
     
     let html = `
         <div class="move-dest-item ${selectedDestKey === 'doc-start' ? 'selected' : ''}" onclick="selectMoveDest('doc-start', this)">
@@ -5234,7 +5656,7 @@ function executeMoveFigures() {
         });
     } else if (selectedDestKey.startsWith('heading-')) {
         const headingIdx = parseInt(selectedDestKey.replace('heading-', ''));
-        const headings = editor.querySelectorAll('h1, h2, h3, h4');
+        const headings = editor.querySelectorAll('h1, h2, h3, h4, h5, h6');
         const targetH = headings[headingIdx];
 
         if (!targetH) {
@@ -5341,20 +5763,24 @@ function deleteFigure(figId) {
 
 function renderAnnotations(annotations) {
     const container = document.getElementById('inspectorAnnotations');
-    container.innerHTML = '';
-    if (!annotations || annotations.length === 0) {
-        container.innerHTML = '<div style="font-size: 0.82rem; color: var(--text-muted);">注釈はありません</div>';
-        return;
+    if(!container) return;
+    const notes=[...(annotations || [])];
+    // Notes inserted in the editor are stored in the document HTML.
+    document.querySelectorAll('#editorContent .doc-footnote-item').forEach(item=>{
+        const text=item.textContent.trim();
+        if(text && !notes.some(note=>note.target_value===text)) notes.push({anchor_text:'文書内の注釈',target_value:text});
+    });
+    container.replaceChildren();
+    const count=document.getElementById('annotationSidebarCount');
+    if(count) count.textContent=`（${notes.length}件）`;
+    if(!notes.length) {
+        const empty=document.createElement('div');empty.textContent='注釈はありません';empty.style.color='var(--text-muted)';container.appendChild(empty);return;
     }
-
-    annotations.forEach((a, idx) => {
-        const item = document.createElement('div');
-        item.className = 'ann-item';
-        item.innerHTML = `
-            <div class="ann-anchor">【注${idx+1}】 ${a.anchor_text || ''}</div>
-            <div class="ann-text">${a.target_value || ''}</div>
-        `;
-        container.appendChild(item);
+    notes.forEach((note,index)=>{
+        const item=document.createElement('div');item.className='ann-item';
+        const anchor=document.createElement('div');anchor.className='ann-anchor';anchor.textContent=note.anchor_text || `【注${index+1}】`;
+        const text=document.createElement('div');text.className='ann-text';text.textContent=note.target_value || '';
+        item.append(anchor,text);container.appendChild(item);
     });
 }
 
@@ -5363,6 +5789,8 @@ async function createNewDocument() {
     if (title === null) return;
     const cleanTitle = title.trim() || '新規ノート';
 
+    if (documentTabBusy) return;
+    try { await saveBeforeDocumentSwitch(); } catch (error) { showToast(error.message); return; }
     currentDocId = 'doc-' + Math.random().toString(36).substring(2, 10);
     currentBundle = {
         document: { id: currentDocId, title: cleanTitle, source_type: 'manual', total_pages: 1 },
@@ -5392,7 +5820,7 @@ async function createNewDocument() {
     showToast(`新規ドキュメント「${cleanTitle}」を作成しました`);
 }
 
-async function saveDocument(silent = false) {
+async function saveDocument(silent = false, throwOnError = false) {
     if (editorSaveInProgress) {
         editorSaveQueued = true;
         return;
@@ -5403,6 +5831,7 @@ async function saveDocument(silent = false) {
     const saveRevision = editorEditRevision;
     let savingDocId = currentDocId;
 
+    try {
     const title = document.getElementById('docTitleInput').value.trim() || '無題のドキュメント';
     const editor = document.getElementById('editorContent');
 
@@ -5444,7 +5873,7 @@ async function saveDocument(silent = false) {
         const text = el.innerText.trim();
 
         // 直接または包含見出しタグの検出
-        const headingEl = ['h1', 'h2', 'h3', 'h4'].includes(tag) ? el : el.querySelector('h1, h2, h3, h4');
+        const headingEl = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].includes(tag) ? el : el.querySelector('h1, h2, h3, h4, h5, h6');
 
         if (headingEl) {
             const hTag = headingEl.tagName.toLowerCase();
@@ -5521,7 +5950,6 @@ async function saveDocument(silent = false) {
         }
     };
 
-    try {
         const res = await fetch(`/api/editor/document/${savingDocId}/save`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -5552,6 +5980,9 @@ async function saveDocument(silent = false) {
             const foundInList = allDocs.find(d => d.id === savingDocId);
             if (foundInList) foundInList.title = title;
             renderNavDocList();
+            const tab = openDocumentTabs.find(t => t.id === savingDocId);
+            if (tab) tab.title = title;
+            renderDocumentTabs();
             renderHeaderDocSelect();
             renderFiguresInspector(activeFigures);
             refreshHeadingTree();
@@ -5565,6 +5996,7 @@ async function saveDocument(silent = false) {
             if (dot) dot.style.background = 'var(--warning)';
             if (label) label.innerText = `保存失敗: ${message}`;
         }
+        if (throwOnError) throw new Error('文書の保存に失敗しました: ' + message);
         if (!silent) {
             alert('保存エラー: ' + message);
         } else if (currentDocId === savingDocId && autoSaveRetryCount < 3) {
@@ -5608,6 +6040,8 @@ async function deleteDocumentById(docId) {
         showToast(`「${docTitle}」を削除しました`);
 
         // 1. ローカル配列から即座に除外してリアルタイム再描画
+        openDocumentTabs = openDocumentTabs.filter(t => t.id !== docId);
+        renderDocumentTabs();
         allDocs = allDocs.filter(d => d.id !== docId);
         renderNavDocList();
         renderHeaderDocSelect();
@@ -5642,6 +6076,7 @@ async function deleteCurrentDocument() {
 
 // 空のエディタ状態へのリセット
 function resetEditorToEmpty() {
+    renderAnnotations([]);
     currentDocId = null;
     currentBundle = null;
     renderToolbarCurrentDocTags();
@@ -5703,7 +6138,108 @@ function setupDropZone() {
     });
 }
 
+let importSelectionBusy = false;
+
 async function handleFileSelected(files) {
+    if (!files?.length || importSelectionBusy) return;
+    importSelectionBusy = true;
+    const selected = Array.from(files);
+    const progress = document.getElementById('importProgress');
+    const label = document.getElementById('importProgressText');
+    try {
+        if (progress) progress.style.display = 'block';
+        if (label) label.textContent = 'インポート前に重複の可能性を確認しています…';
+        const descriptions = [];
+        for (const file of selected) {
+            let sha256 = '';
+            if (window.crypto?.subtle) {
+                const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+                sha256 = Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join('');
+            }
+            descriptions.push({name: file.name, sha256});
+        }
+        const response = await safeFetchJson('/api/editor/import-preflight', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({files: descriptions})
+        });
+        if (response.status !== 'success' || !Array.isArray(response.duplicates)) {
+            throw new Error('重複確認ができませんでした。');
+        }
+        if (progress) progress.style.display = 'none';
+        let chosen = selected;
+        if (response.duplicates.length) {
+            chosen = await reviewImportDuplicates(selected, response.duplicates);
+        }
+        if (chosen?.length) await importSelectedFiles(chosen);
+    } catch (error) {
+        alert('インポート前の確認に失敗しました。\n' + (error.message || error));
+    } finally {
+        importSelectionBusy = false;
+        if (progress) progress.style.display = 'none';
+        const input = document.getElementById('fileInput');
+        if (input) input.value = '';
+    }
+}
+
+function reviewImportDuplicates(files, duplicates) {
+    return new Promise(resolve => {
+        const backdrop = document.createElement('div');
+        backdrop.className = 'modal-backdrop show';
+        backdrop.id = 'importDuplicateReview';
+        backdrop.style.zIndex = '3000';
+        const dialog = document.createElement('div');
+        dialog.style.cssText = 'background:white;color:#1e293b;border-radius:12px;padding:24px;width:min(800px,94vw);max-height:85vh;display:flex;flex-direction:column;gap:14px;box-shadow:0 20px 60px #0004';
+        dialog.setAttribute('role','dialog'); dialog.setAttribute('aria-modal','true');
+        dialog.setAttribute('aria-labelledby','importDuplicateTitle');
+        const title = document.createElement('h3');
+        title.id = 'importDuplicateTitle'; title.textContent = '重複の可能性があるファイル'; title.style.margin = '0';
+        const explanation = document.createElement('p');
+        explanation.textContent = 'まだインポートしていません。候補と理由を確認し、取り込むファイルにチェックを付けてください。重複候補は初めは選択していません。既存文書は上書きしません。';
+        explanation.style.margin = '0';
+        const list = document.createElement('div'); list.style.cssText = 'overflow:auto;flex:1;border:1px solid #cbd5e1;border-radius:6px';
+        const byIndex = new Map(duplicates.map(d => [d.index,d]));
+        const checkboxes = [];
+        files.forEach((file,index) => {
+            const row = document.createElement('div'); row.style.cssText = 'padding:12px;border-bottom:1px solid #e2e8f0';
+            const heading = document.createElement('label'); heading.style.cssText = 'display:flex;gap:8px;align-items:center;font-weight:600';
+            const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.checked = !byIndex.has(index);
+            checkboxes.push(checkbox);
+            const name = document.createElement('span'); name.textContent = file.name;
+            heading.append(checkbox,name); row.appendChild(heading);
+            const duplicate = byIndex.get(index);
+            if (duplicate) duplicate.candidates.forEach(candidate => {
+                const line = document.createElement('div'); line.style.cssText = 'margin:8px 0 0 24px;font-size:0.88rem';
+                const text = document.createElement('div');
+                text.textContent = (candidate.document_id ? '登録済み: ' : '今回の選択: ') + candidate.title;
+                const reason = document.createElement('div'); reason.style.color = '#92400e';
+                reason.textContent = candidate.reasons.join(' ／ ');
+                line.append(text,reason); row.appendChild(line);
+            });
+            else {
+                const note = document.createElement('div'); note.style.cssText = 'margin:6px 0 0 24px;color:#475569;font-size:0.85rem';
+                note.textContent = '重複候補なし'; row.appendChild(note);
+            }
+            list.appendChild(row);
+        });
+        const buttons = document.createElement('div'); buttons.style.cssText = 'display:flex;justify-content:flex-end;gap:10px';
+        const cancel = document.createElement('button'); cancel.className = 'btn btn-outline'; cancel.textContent = 'キャンセル';
+        const execute = document.createElement('button'); execute.className = 'btn btn-primary';
+        const update = () => {
+            const count = checkboxes.filter(c => c.checked).length;
+            execute.textContent = `選択した ${count} 件をインポート`; execute.disabled = !count;
+        };
+        checkboxes.forEach(c => c.addEventListener('change',update)); update();
+        const onKey = event => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); finish(null); } };
+        const finish = value => { document.removeEventListener('keydown',onKey,true); backdrop.remove(); resolve(value); };
+        cancel.onclick = () => finish(null);
+        execute.onclick = () => finish(files.filter((f,i) => checkboxes[i].checked));
+        document.addEventListener('keydown',onKey,true);
+        buttons.append(cancel,execute); dialog.append(title,explanation,list,buttons); backdrop.appendChild(dialog); document.body.appendChild(backdrop);
+        cancel.focus();
+    });
+}
+
+async function importSelectedFiles(files) {
     if (!files || files.length === 0) return;
 
     const fileList = Array.from(files);
@@ -5807,6 +6343,55 @@ async function handleFileSelected(files) {
     }
 }
 
+let figureReplaceTarget = null;
+let figureReplaceBusy = false;
+function triggerReplaceFigure(figId) {
+    if (figureReplaceBusy) { showToast('図版を差し替え中です'); return; }
+    if (!currentDocId) { showToast('文書を開いてください'); return; }
+    figureReplaceTarget = {figId, docId:currentDocId, bundle:currentBundle};
+    const input=document.getElementById('figureReplaceInput');
+    input.value=''; input.click();
+}
+function installFigureReplaceButtons() {
+    document.querySelectorAll('#editorContent .figure-embed').forEach(figure=>{
+        if (figure.querySelector('.btn-replace')) return;
+        let actions=figure.querySelector('.fig-actions');
+        if (!actions) { actions=document.createElement('div'); actions.className='fig-actions'; actions.contentEditable='false'; figure.prepend(actions); }
+        const button=document.createElement('button');
+        button.className='fig-action-btn btn-replace'; button.type='button'; button.textContent='差し替え';
+        button.title='画像を差し替え（1MB以下に自動調整）';
+        button.onclick=()=>triggerReplaceFigure(figure.dataset.figId);
+        actions.prepend(button);
+    });
+}
+async function handleFigureReplacement(files) {
+    const target=figureReplaceTarget;
+    if (!files?.length || !target || figureReplaceBusy) return;
+    figureReplaceBusy=true;
+    try {
+        const form=new FormData(); form.append('file',files[0]);
+        showToast('図版を1MB以下に調整しています...');
+        const response=await fetch('/api/editor/upload-image',{method:'POST',body:form});
+        const data=await response.json();
+        if (!response.ok || data.status!=='success') throw new Error(data.detail || '画像の差し替えに失敗しました');
+        if (data.file_size_bytes>1000000) throw new Error('画像が1MBを超えています');
+        if (currentDocId!==target.docId || currentBundle!==target.bundle) {showToast('文書が切り替わったため差し替えを中止しました');return;}
+        const figure=Array.from(document.querySelectorAll('#editorContent .figure-embed')).find(el=>el.dataset.figId===target.figId);
+        const saved=currentBundle.figures?.find(f=>f.id===target.figId);
+        const image=figure?.querySelector('img');
+        if (!saved || !image) throw new Error('差し替える図版が見つかりません');
+        // 位置・図版ID・キャプションはそのまま維持する。
+        Object.assign(saved,{file_path:data.file_path,image_base64:data.image_base64,file_hash:data.file_hash,
+            file_size_kb:data.file_size_kb,width:data.width,height:data.height,is_custom:true});
+        image.src=data.file_path || data.image_base64;
+        image.removeAttribute('srcset');
+        renderFiguresInspector(currentBundle.figures);
+        markDirty();
+        showToast(`図版を差し替えました（${data.file_size_kb} KB）。DB保存で確定します`);
+    } catch(error) {alert(error.message);}
+    finally {figureReplaceBusy=false;figureReplaceTarget=null;document.getElementById('figureReplaceInput').value='';}
+}
+
 function triggerInsertImage() {
     document.getElementById('imageInsertInput').click();
 }
@@ -5852,6 +6437,7 @@ async function uploadAndInsertImageBlob(fileBlob) {
                 image_base64: data.image_base64
             });
             renderFiguresInspector(currentBundle.figures);
+            installFigureReplaceButtons();
             markDirty();
             showToast('画像を挿入しました');
         } else {
@@ -6169,6 +6755,8 @@ async function executeAssignSelectedDocsToGroup() {
 // ==========================================
 
 async function openTagManagerModal() {
+    pendingTagIdsInModal.clear();
+    modalResultTagIds=[];
     selectedDocIdsInModal.clear();
     lastClickedDocId = null;
     lastClickedIdx = -1;
@@ -6186,6 +6774,8 @@ async function openTagManagerModal() {
 
 
 function closeTagManagerModal() {
+    if(tagBatchExecuting) return;
+    pendingTagIdsInModal.clear();
     document.getElementById('tagManagerModal').classList.remove('show');
     loadTags();
     loadDocumentList();
@@ -6257,6 +6847,7 @@ function updateModalFilterTargetDropdown() {
         }
     }
 
+    if(modalResultTagIds.length) html += '<option value="selected_tags">🏷️ 実行したタグすべてのファイル</option>';
     select.innerHTML = html;
 
     // 前回の選択値が有効なら維持、無ければ先頭の選択肢をセット
@@ -6306,7 +6897,9 @@ async function loadModalDocuments() {
     let orderParam = modalSortBy.endsWith('_asc') ? 'asc' : 'desc';
     let url = `/api/editor/documents?sort_by=${encodeURIComponent(sortParam)}&order=${encodeURIComponent(orderParam)}`;
 
-    if (target === 'unassigned') {
+    if (target === 'selected_tags') {
+        url += '&tag_ids='+encodeURIComponent(modalResultTagIds.join(','))+'&tag_op=and';
+    } else if (target === 'unassigned') {
         url += '&unassigned=true';
     } else if (target === 'all') {
         // 全ファイル取得
@@ -6333,6 +6926,7 @@ async function loadModalDocuments() {
 }
 
 function renderModalTagBar() {
+    updatePendingTagBatchUI();
     const groupTabsContainer = document.getElementById('modalTagGroupTabs');
     const tagListContainer = document.getElementById('modalTagList');
     const selectEl = document.getElementById('selectByTagSelect');
@@ -6413,11 +7007,17 @@ function renderModalTagBar() {
             // 左側クリックエリア（選択中ファイルへのタグ付与）
             const assignWrap = document.createElement('div');
             assignWrap.style.cssText = 'cursor: pointer; display: inline-flex; align-items: center; gap: 5px;';
-            assignWrap.title = `クリックして選択中ファイルにタグ『${t.name}』を付与`;
+            assignWrap.title = `タグ『${t.name}』を選択（実行ボタンで確定）`;
+            assignWrap.setAttribute('role','checkbox');
+            assignWrap.setAttribute('aria-label',t.name+'を付与');
+            assignWrap.setAttribute('aria-checked',String(pendingTagIdsInModal.has(t.id)));
+            assignWrap.tabIndex=0;
+            assignWrap.onkeydown=e=>{if(e.key===' ' || e.key==='Enter'){e.preventDefault();assignTagToSelected(t.id);}};
+            if(pendingTagIdsInModal.has(t.id)) {item.style.background='#dbeafe';item.style.outline='2px solid #2563eb';}
             assignWrap.onclick = () => assignTagToSelected(t.id);
 
             const tagIcon = document.createElement('i');
-            tagIcon.className = 'fa-solid fa-tag';
+            tagIcon.className = pendingTagIdsInModal.has(t.id)?'fa-solid fa-check-square':'fa-regular fa-square';
             tagIcon.style.color = t.color || '#2563eb';
             tagIcon.style.fontSize = '0.75rem';
             assignWrap.appendChild(tagIcon);
@@ -6601,6 +7201,7 @@ function renderTagManagerContent() {
 }
 
 function updateModalSelectionUI() {
+    updatePendingTagBatchUI();
     const total = modalDocs.length;
     const count = selectedDocIdsInModal.size;
     const badge = document.getElementById('modalSelectedCountBadge');
@@ -6812,39 +7413,43 @@ function selectModalDocsByTag(tagId) {
     if (selectEl) selectEl.value = '';
 }
 
-async function assignTagToSelected(tagId) {
-    if (selectedDocIdsInModal.size === 0) {
-        alert('タグを付与するファイルを1件以上選択（チェック）してください。');
-        return;
-    }
-    const docIds = Array.from(selectedDocIdsInModal);
-    const tag = allTags.find(t => t.id === tagId);
-    const tagName = tag ? tag.name : 'タグ';
-
+function updatePendingTagBatchUI() {
+    const summary=document.getElementById('pendingTagBatchSummary');
+    const names=allTags.filter(t=>pendingTagIdsInModal.has(t.id)).map(t=>t.name);
+    if(summary) summary.textContent=`選択ファイル: ${selectedDocIdsInModal.size}件 ／ 付与するタグ: ${names.length}個${names.length?'（'+names.join('、')+'）':''}`;
+    const button=document.getElementById('btnExecuteTagBatch');
+    if(button) {button.disabled=tagBatchExecuting || !selectedDocIdsInModal.size || !pendingTagIdsInModal.size;button.textContent=tagBatchExecuting?'実行中…':'実行';}
+}
+function assignTagToSelected(tagId) {
+    if(tagBatchExecuting) return;
+    if(!selectedDocIdsInModal.size) {alert('先にファイルを1件以上選択してください。');return;}
+    if(pendingTagIdsInModal.has(tagId)) pendingTagIdsInModal.delete(tagId);
+    else pendingTagIdsInModal.add(tagId);
+    renderModalTagBar();
+    updatePendingTagBatchUI();
+}
+async function executePendingTagBatch() {
+    if(tagBatchExecuting || !selectedDocIdsInModal.size || !pendingTagIdsInModal.size) return;
+    const docIds=Array.from(selectedDocIdsInModal),tagIds=Array.from(pendingTagIdsInModal);
+    tagBatchExecuting=true;updatePendingTagBatchUI();
+    let committed=false;
     try {
-        const data = await safeFetchJson('/api/documents/tags/batch-assign', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                doc_ids: docIds,
-                tag_id: tagId
-            })
+        await safeFetchJson('/api/documents/tags/batch-assign-many',{
+            method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({doc_ids:docIds,tag_ids:tagIds})
         });
-        const assignedCount = data.assigned_count !== undefined ? data.assigned_count : docIds.length;
-        showToast(`${assignedCount} 件のファイルにタグ「${tagName}」を付与しました`);
+        committed=true;
+        modalResultTagIds=tagIds;
+        pendingTagIdsInModal.clear();
         await loadTags();
         await loadDocumentList();
         updateModalFilterTargetDropdown();
-
-        // 付与したタグだけのファイル一覧を表示
-        const targetSelect = document.getElementById('modalDocFilterTarget');
-        if (targetSelect) {
-            targetSelect.value = `tag_${tagId}`;
-        }
+        document.getElementById('modalDocFilterTarget').value='selected_tags';
         await loadModalDocuments();
-    } catch (e) {
-        alert('タグ付与エラー: ' + e.message);
-    }
+        showToast(`${docIds.length}件のファイルに${tagIds.length}個のタグを付与しました。指定タグすべてを持つファイルを表示しています。`);
+    } catch(error) {
+        alert((committed?'タグは保存されました。一覧の読み込みに失敗しました: ':'タグ付与に失敗しました: ')+error.message);
+    } finally {tagBatchExecuting=false;renderModalTagBar();updatePendingTagBatchUI();}
 }
 
 async function removeTagFromSingleDoc(docId, tagId) {
@@ -7707,35 +8312,36 @@ function applyEditorDisplayOptions(options) {
     const paragraphs = editor.querySelectorAll('p');
     paragraphs.forEach(p => p.style.margin = `${psVal} 0`);
 
-    // 6. 用紙テーマ & 背景色
+    // 6. 編集領域全体の背景色（用紙枠は描画しない）
+    docPage.style.background = 'transparent';
     let theme = options.paperTheme || 'white';
     if (theme === 'ivory') {
-        docPage.style.background = '#fcfaf2';
+        document.documentElement.style.setProperty('--editor-bg-paper', '#fcfaf2');
         docPage.style.color = '#2d2a26';
         if (titleInput) {
-            titleInput.style.background = '#fcfaf2';
+            titleInput.style.background = 'transparent';
             titleInput.style.color = '#1f1d1a';
         }
     } else if (theme === 'gray') {
-        docPage.style.background = '#f1f5f9';
+        document.documentElement.style.setProperty('--editor-bg-paper', '#f1f5f9');
         docPage.style.color = '#0f172a';
         if (titleInput) {
-            titleInput.style.background = '#f1f5f9';
+            titleInput.style.background = 'transparent';
             titleInput.style.color = '#0f172a';
         }
     } else if (theme === 'dark') {
-        docPage.style.background = '#1e293b';
+        document.documentElement.style.setProperty('--editor-bg-paper', '#1e293b');
         docPage.style.color = '#f8fafc';
         if (titleInput) {
-            titleInput.style.background = '#1e293b';
+            titleInput.style.background = 'transparent';
             titleInput.style.color = '#f8fafc';
         }
     } else {
         // white
-        docPage.style.background = '#ffffff';
+        document.documentElement.style.setProperty('--editor-bg-paper', '#ffffff');
         docPage.style.color = '#1e293b';
         if (titleInput) {
-            titleInput.style.background = '#ffffff';
+            titleInput.style.background = 'transparent';
             titleInput.style.color = '#0f172a';
         }
     }
@@ -7743,6 +8349,7 @@ function applyEditorDisplayOptions(options) {
 }
 
 function openEditorOptionsModal() {
+    refreshStorageFolderMenu();
     populateOptionsModalFromState(currentEditorOptions);
     updateOptionsPreview();
     const modal = document.getElementById('editorOptionsModal');
@@ -7955,6 +8562,15 @@ function loadCustomStylesFromStorage() {
     return [...DEFAULT_CHARACTER_STYLES, ...DEFAULT_PARAGRAPH_STYLES];
 }
 
+async function loadParagraphStylesForDocument(docId) {
+    const response=await fetch('/api/editor/paragraph-styles'+(docId?'?document_id='+encodeURIComponent(docId):''));
+    if(!response.ok) throw new Error('段落スタイルを読み込めませんでした。');
+    const {styles}=await response.json();
+    const base=loadCustomStylesFromStorage();
+    for(const style of styles || []) {const index=base.findIndex(item=>item.id===style.id);if(index<0)base.push(style);else base[index]=style;}
+    customEditorStyles=base;
+}
+
 function saveCustomStylesToStorage() {
     try {
         localStorage.setItem('custom_editor_text_styles', JSON.stringify(customEditorStyles));
@@ -8033,6 +8649,7 @@ function renderStyleGalleryPopover() {
         editBtn.type = 'button';
         editBtn.className = 'style-card-action-btn';
         editBtn.title = 'このスタイルを変更・編集';
+        editBtn.setAttribute('aria-label',style.name+'を変更・編集');
         editBtn.innerHTML = '<i class="fa-solid fa-pen-to-square"></i>';
         editBtn.onclick = (e) => {
             e.stopPropagation();
@@ -8113,9 +8730,11 @@ function applyPresetStyle(styleId) {
         }
 
         if (block && block !== editor) {
+            block.dataset.editorStyleId = style.id;
             if (style.lineHeight) block.style.lineHeight = style.lineHeight;
             if (style.textIndent) block.style.textIndent = style.textIndent;
             else block.style.textIndent = '';
+            block.style.paddingInlineStart = style.paddingInlineStart || '';
             if (style.marginTop) block.style.marginTop = style.marginTop;
             if (style.marginBottom) block.style.marginBottom = style.marginBottom;
             if (style.textAlign) block.style.textAlign = style.textAlign;
@@ -8169,6 +8788,9 @@ function clearPresetFormat() {
 }
 
 function openStyleEditModal(styleId = null, defaultCategory = 'character') {
+    const errorBox=document.getElementById('styleSaveError');
+    if(errorBox) {errorBox.hidden=true;errorBox.textContent='';}
+    document.getElementById('styleApplyScope').value='database';
     closeStyleGalleryPopover();
     currentEditingStyleId = styleId;
 
@@ -8203,7 +8825,8 @@ function openStyleEditModal(styleId = null, defaultCategory = 'character') {
         document.getElementById('styleInputHeadingLevel').value = style.headingLevel || 'p';
         document.getElementById('styleInputLineHeight').value = style.lineHeight || '1.6';
         document.getElementById('styleInputTextAlign').value = style.textAlign || 'left';
-        document.getElementById('styleInputIndent').checked = Boolean(style.textIndent);
+        document.getElementById('styleInputIndent').value = parseFloat(style.textIndent)<0?'hanging':parseFloat(style.textIndent)>0?'first':'none';
+        document.getElementById('styleInputIndentAmount').value = Math.abs(parseFloat(style.textIndent)) || 1;
         document.getElementById('styleInputMarginTop').value = style.marginTop || '';
         document.getElementById('styleInputMarginBottom').value = style.marginBottom || '';
     } else {
@@ -8227,7 +8850,8 @@ function openStyleEditModal(styleId = null, defaultCategory = 'character') {
         document.getElementById('styleInputHeadingLevel').value = 'p';
         document.getElementById('styleInputLineHeight').value = '1.6';
         document.getElementById('styleInputTextAlign').value = 'left';
-        document.getElementById('styleInputIndent').checked = false;
+        document.getElementById('styleInputIndent').value = 'none';
+        document.getElementById('styleInputIndentAmount').value = 1;
         document.getElementById('styleInputMarginTop').value = '';
         document.getElementById('styleInputMarginBottom').value = '';
     }
@@ -8263,6 +8887,7 @@ function switchModalCategory(cat) {
 }
 
 function updateStyleEditModalPreview() {
+    document.getElementById('styleApplyScopeRow').style.display=currentModalCategory==='paragraph'?'block':'none';
     const target = document.getElementById('styleModalPreviewTarget');
     if (!target) return;
 
@@ -8302,18 +8927,25 @@ function updateStyleEditModalPreview() {
     if (currentModalCategory === 'paragraph') {
         const lh = document.getElementById('styleInputLineHeight')?.value || '1.6';
         const align = document.getElementById('styleInputTextAlign')?.value || 'left';
-        const indent = document.getElementById('styleInputIndent')?.checked;
+        const indent = paragraphIndentStyles(document.getElementById('styleInputIndent')?.value, document.getElementById('styleInputIndentAmount')?.value);
         target.style.lineHeight = lh;
         target.style.textAlign = align;
-        target.style.textIndent = indent ? '1.2em' : '0';
+        Object.assign(target.style,indent);
     } else {
         target.style.lineHeight = '1.6';
         target.style.textAlign = 'left';
         target.style.textIndent = '0';
+        target.style.paddingInlineStart = '0';
     }
 }
 
-function saveCustomStyleFromModal() {
+async function saveCustomStyleFromModal() {
+    const errorBox=document.getElementById('styleSaveError');
+    if(errorBox) {errorBox.hidden=true;errorBox.textContent='';}
+    const saveButton=document.querySelector('#styleEditModal button[onclick="saveCustomStyleFromModal()"]');
+    if(saveButton?.disabled) return;
+    const originalButtonHtml=saveButton?.innerHTML;
+    try {
     const nameInput = document.getElementById('styleInputName');
     const name = nameInput ? nameInput.value.trim() : '';
     if (!name) {
@@ -8359,7 +8991,7 @@ function saveCustomStyleFromModal() {
         const heading = document.getElementById('styleInputHeadingLevel')?.value || 'p';
         const lh = document.getElementById('styleInputLineHeight')?.value || '1.6';
         const align = document.getElementById('styleInputTextAlign')?.value || 'left';
-        const indent = document.getElementById('styleInputIndent')?.checked;
+        const indent = paragraphIndentStyles(document.getElementById('styleInputIndent')?.value, document.getElementById('styleInputIndentAmount')?.value);
         const mt = document.getElementById('styleInputMarginTop')?.value.trim();
         const mb = document.getElementById('styleInputMarginBottom')?.value.trim();
 
@@ -8367,11 +8999,29 @@ function saveCustomStyleFromModal() {
         newStyle.headingLevel = heading;
         newStyle.lineHeight = lh;
         newStyle.textAlign = align;
-        newStyle.textIndent = indent ? '1.2em' : undefined;
+        newStyle.textIndent = indent.textIndent;
+        newStyle.paddingInlineStart = indent.paddingInlineStart;
         newStyle.marginTop = mt || undefined;
         newStyle.marginBottom = mb || undefined;
     }
 
+    if(currentModalCategory==='paragraph') {
+        const scope=document.getElementById('styleApplyScope').value;
+        const previous=customEditorStyles.find(style=>style.id===currentEditingStyleId) || null;
+        const activeId=currentDocId;
+        if(scope==='document' && !activeId) throw new Error('文書を開いてください。');
+        if(saveButton) {saveButton.disabled=true;saveButton.textContent='保存中…';}
+            if(editorSaveInProgress) throw new Error('文書の保存中です。完了後に再実行してください。');
+            if(isDirty) {await saveDocument(true, true);if(isDirty) throw new Error('編集中の文書が更新されました。保存が完了してから再実行してください。');}
+            const res=await fetch('/api/editor/paragraph-styles',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({style:newStyle,previous,scope,document_id:activeId})});
+            const result=await res.json();
+            if(!res.ok || result.status!=='success') throw new Error(result.detail || '書式変更を保存できませんでした。');
+            if(activeId===currentDocId && activeId) await loadSelectedDocument(activeId);
+            else await loadParagraphStylesForDocument(currentDocId);
+            renderStyleGalleryPopover();closeStyleEditModal();
+            showToast(`書式を変更しました（${scope==='database'?'DB全体':'アクティブな文書だけ'}: ${result.documents}文書・${result.blocks}ブロック）`);
+        return;
+    }
     if (currentEditingStyleId) {
         const idx = customEditorStyles.findIndex(s => s.id === currentEditingStyleId);
         if (idx !== -1) {
@@ -8387,6 +9037,12 @@ function saveCustomStyleFromModal() {
     renderStyleGalleryPopover();
     closeStyleEditModal();
     showToast(`スタイル「${name}」を保存しました`);
+    } catch(error) {
+        console.error('Style save failed:',error);
+        if(errorBox) {errorBox.textContent=error.message || String(error);errorBox.hidden=false;}
+    } finally {
+        if(saveButton) {saveButton.disabled=false;saveButton.innerHTML=originalButtonHtml;}
+    }
 }
 
 function deleteCustomStyle(styleId) {
@@ -8468,6 +9124,105 @@ async function scanPCFontsForModal() {
 }
 
 </script>
+<script>
+async function openResearchSource(target) {
+    if(!target || !['threadId','runId','citationId'].every(k=>typeof target[k]==='string' && target[k].length>0 && target[k].length<=100)) throw new Error('出典の指定が正しくありません。');
+    const path='/api/research/threads/'+encodeURIComponent(target.threadId)+'/searches/'+encodeURIComponent(target.runId)+'/sources/'+encodeURIComponent(target.citationId);
+    const response=await fetch(path,{cache:'no-store'});
+    const result=await response.json();
+    if(!response.ok) throw new Error(typeof result.detail==='string'?result.detail:'出典を確認できませんでした。');
+    if(result.state==='deleted') throw new Error(result.message);
+    if(isDirty && !currentDocId) throw new Error('編集中の新規文書を保存してから、出典を開いてください。');
+    if(!await openAdjacentDocument(result.source.document_id)) throw new Error('文書を開けませんでした。編集内容の保存状態を確認してください。');
+    const editor=document.getElementById('editorContent');
+    const needle=result.source.quote.replace(/\s/g,'');
+    const walker=document.createTreeWalker(editor,NodeFilter.SHOW_TEXT);
+    let node,joined='',positions=[];
+    while(node=walker.nextNode()) {
+        for(let i=0;i<node.textContent.length;i++) {
+            const char=node.textContent[i];
+            if(!/\s/.test(char)) {joined+=char;positions.push([node,i]);}
+        }
+    }
+    const index=needle ? joined.indexOf(needle) : -1;
+    if(index<0 || joined.indexOf(needle,index+1)>=0) {
+        showToast(result.state==='changed' ? '文書は検索後に更新されています。引用位置を特定できないため、文書を開きました。' : '文書を開きました。引用位置を一意に特定できませんでした。');
+        return;
+    }
+    const start=positions[index],end=positions[index+needle.length-1];
+    const range=document.createRange();range.setStart(start[0],start[1]);range.setEnd(end[0],end[1]+1);
+    const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);
+    start[0].parentElement?.scrollIntoView({block:'center'});
+    showToast(result.state==='changed' ? '文書は検索後に更新されています。現在の本文に残る引用箇所を選択しました。' : '引用箇所を選択しました。');
+}
+
+</script>
+<!-- Keep the editor DOM alive, including unsaved text and open document tabs. -->
+<style id="researchNavigationStyles">
+#researchScreenDialog{position:fixed;inset:0;width:100vw;max-width:none;height:100dvh;max-height:none;padding:0;margin:0;border:0;background:#f5f6f2;overflow:hidden;z-index:2147483000}
+#researchScreenDialog::backdrop{background:#f5f6f2}
+#researchScreenDialog iframe{display:block;width:100%;height:100%;border:0}
+</style>
+<dialog id="researchScreenDialog" aria-label="リサーチ画面">
+    <iframe id="researchScreenFrame" title="リサーチ：資料の選択と質問" data-src="/research_form.html"></iframe>
+</dialog>
+<script>
+(() => {
+    const dialog = document.getElementById('researchScreenDialog');
+    const frame = document.getElementById('researchScreenFrame');
+    let returnFocus = null;
+    function closeResearch() {
+        if (dialog.open) dialog.close();
+        if (returnFocus?.isConnected) returnFocus.focus({preventScroll: true});
+    }
+    document.getElementById('btnJumpToResearch').addEventListener('click', event => {
+        // Modified clicks retain the normal link behavior for a separate tab.
+        if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+        event.preventDefault();
+        returnFocus = document.activeElement;
+        const initialized = frame.hasAttribute('src');
+        if (!initialized) frame.src = frame.dataset.src;
+        if (!dialog.open) dialog.showModal();
+        if (initialized) frame.contentWindow.postMessage({type: 'mynotebook:research:refresh'}, window.location.origin);
+        frame.focus();
+    });
+    dialog.addEventListener('cancel', event => {event.preventDefault(); closeResearch();});
+    window.addEventListener('message', async event => {
+        if (event.origin !== window.location.origin || event.source !== frame.contentWindow) return;
+        if (event.data?.type === 'mynotebook:research:return') closeResearch();
+        if (event.data?.type === 'mynotebook:research:source') {
+            try {await openResearchSource(event.data);closeResearch();}
+            catch(error) {frame.contentWindow.postMessage({type:'mynotebook:research:source:error',message:error.message},location.origin);}
+        }
+    });
+})();
+</script>
+
+<script src="storage_folders.js"></script>
+
+<dialog id="dataBackupDialog" aria-labelledby="dataBackupTitle" style="position:fixed;inset:0;margin:auto;width:620px;max-width:90vw;max-height:85vh;overflow:auto;box-sizing:border-box;border:1px solid #94a3b8;border-radius:10px;padding:22px;color:#1e293b;background:white;font:14px sans-serif;">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:15px;">
+    <h2 id="dataBackupTitle" style="font-size:19px;margin:0;">バックアップ</h2>
+    <button type="button" aria-label="バックアップ画面を閉じる" onclick="document.getElementById('dataBackupDialog').close()" style="cursor:pointer;">閉じる</button>
+  </div>
+  <p id="dataBackupHelp" style="line-height:1.8;"></p>
+  <p style="font-size:12px;line-height:1.8;color:#64748b;">対象：DB・透明テキスト付きPDF・図版・補正辞書。OCR生データ、元のインポートファイル、APIキー、アプリ本体は含みません。</p>
+  <label id="dataBackupPathLabel" for="dataBackupPath" style="display:block;font-weight:bold;margin-bottom:8px;">保存先フォルダ</label>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;">
+    <input id="dataBackupPath" type="text" placeholder="フォルダを選択、またはパスを入力" style="flex:1;min-width:160px;padding:9px;border:1px solid #94a3b8;border-radius:4px;">
+    <button id="dataBackupBrowse" type="button" onclick="chooseDataBackupFolder()" style="padding:8px 14px;cursor:pointer;">参照…</button>
+  </div>
+  <div id="dataBackupPreview" style="white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.8;margin:12px 0;"></div>
+  <label id="dataBackupConfirm" hidden style="line-height:1.8;"><input id="dataBackupConsent" type="checkbox"> 現在のDB・PDF・図版・補正辞書を、このバックアップの内容に置き換えます。</label>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin:18px 0 12px;">
+    <button id="dataBackupRun" type="button" onclick="runDataBackup()" style="background:#1d4ed8;color:white;border:0;border-radius:5px;padding:10px 15px;cursor:pointer;">バックアップを作成</button>
+    <button id="dataBackupCancelRestore" type="button" hidden onclick="cancelDataRestore()" style="padding:8px 12px;cursor:pointer;">復元を取り消す</button>
+  </div>
+  <progress id="dataBackupProgress" hidden style="width:100%;height:14px;"></progress>
+  <div id="dataBackupProgressText" style="font-size:12px;margin:5px 0;"></div>
+  <div id="dataBackupStatus" role="status" aria-live="polite" style="white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.8;min-height:2em;"></div>
+</dialog>
+<script src="backup_restore.js"></script>
 </body>
 </html>
 

@@ -3,6 +3,9 @@ import io
 import re
 import base64
 import tempfile
+import sys
+import os
+from difflib import SequenceMatcher
 from typing import Dict, Any, List, Tuple, Optional
 import cv2
 import numpy as np
@@ -451,6 +454,56 @@ def split_item_by_vertical_lines(item: Dict[str, Any], v_lines: List[int]) -> Li
     return current_items
 
 
+def recover_missing_table_year_prefixes(img_bgr: np.ndarray, items: List[Dict[str, Any]]) -> None:
+    """Recover a missing numeric prefix in year labels such as '年〜' from a focused cell crop."""
+    image_h, image_w = img_bgr.shape[:2]
+    for item in items:
+        text = str(item.get("text", "")).strip()
+        if re.search(r"\d", text) or not re.search(r"年\s*[〜～~\-‐ー]?\s*$", text):
+            continue
+
+        x = int(round(item.get("x", 0)))
+        y = int(round(item.get("y", 0)))
+        w = max(1, int(round(item.get("w", 0))))
+        h = max(1, int(round(item.get("h", 0))))
+        # Year digits precede 年 in horizontal Japanese labels. Isolate that left part,
+        # remove table rules from the crop, then enlarge it for a focused numeric pass.
+        crop_x0 = max(0, x - 2)
+        crop_x1 = min(image_w, x + max(1, int(round(w * 0.58))))
+        crop_y0 = max(0, y - max(2, int(round(h * 0.35))))
+        crop_y1 = min(image_h, y + h + max(2, int(round(h * 0.35))))
+        crop = img_bgr[crop_y0:crop_y1, crop_x0:crop_x1]
+        if crop.size == 0:
+            continue
+
+        gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY) if crop.ndim == 3 else crop
+        _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        enlarged = cv2.resize(binary, None, fx=8, fy=8, interpolation=cv2.INTER_CUBIC)
+        canvas = np.full((800, 1100), 255, dtype=np.uint8)
+        place_x = 100
+        place_y = max(40, (canvas.shape[0] - enlarged.shape[0]) // 2)
+        max_w = min(enlarged.shape[1], canvas.shape[1] - place_x - 40)
+        max_h = min(enlarged.shape[0], canvas.shape[0] - place_y - 40)
+        if max_w <= 0 or max_h <= 0:
+            continue
+        canvas[place_y:place_y + max_h, place_x:place_x + max_w] = enlarged[:max_h, :max_w]
+
+        try:
+            digit_lines = run_ndlocr_on_image(canvas, orientation="horizontal", doc_type="western")
+        except Exception as exc:
+            print(f"[Table OCR] Year-prefix recovery skipped: {exc}", file=sys.stderr)
+            continue
+        digits = ""
+        for line in digit_lines:
+            match = re.search(r"(?<!\d)(?:18|19|20|21)\d{2}(?!\d)", str(line.get("text", "")))
+            if match:
+                digits = match.group(0)
+                break
+        if digits:
+            suffix = re.search(r"年\s*[〜～~\-‐ー]?\s*$", text)
+            item["text"] = digits + (suffix.group(0).replace(" ", "") if suffix else "年")
+
+
 def is_ascii_alnum(c: str) -> bool:
     return c.isalnum() and ord(c) < 128
 
@@ -591,6 +644,7 @@ def extract_table_cells_and_matrix(
             })
 
     # 縦罫線（列境界）をまたぐOCRアイテムがあれば、境界位置で分割して各列に正しく配分
+    recover_missing_table_year_prefixes(img_bgr, inside_items)
     if v_clustered:
         split_items = []
         for it in inside_items:
@@ -1809,17 +1863,398 @@ def process_digital_page_layout(
     }
 
 
+def _run_windows_ocr_on_footnote_image(image: np.ndarray) -> List[Dict[str, Any]]:
+    temp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as temp_file:
+            temp_path = temp_file.name
+        if not cv2.imwrite(temp_path, image):
+            return []
+        lines = run_ocr_on_image(temp_path, lang="ja")
+        normalized = []
+        for source in lines:
+            text = re.sub(r"\s+", "", str(source.get("text", ""))).strip()
+            if not text:
+                continue
+            line = dict(source)
+            line["text"] = text
+            line["is_vertical"] = int(line.get("h", 0)) > int(line.get("w", 0)) * 1.25
+            if line["is_vertical"]:
+                normalized.append(line)
+        normalized.sort(key=lambda line: (-line.get("x", 0), line.get("y", 0)))
+        return normalized
+    except Exception as exc:
+        print(f"[Footnote OCR Retry] Windows OCR unavailable: {exc}", file=sys.stderr)
+        return []
+    finally:
+        if temp_path and os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except OSError:
+                pass
+
+
+_JAPANESE_YEAR_PATTERN = re.compile(r"([一二三四五六七八九十百千万億兆〇○零0-9ニ]{3,6}年)")
+
+
+def _normalize_ocr_year_token(token: str) -> str:
+    """Normalize common OCR glyph variants inside a Japanese numeral year only."""
+    if not re.search(r"[一二三四五六七八九十百千万億兆〇○零ニ]", token):
+        return token
+    return token.translate(str.maketrans({"ニ": "二", "0": "〇", "○": "〇", "零": "〇"}))
+
+
+def _vertical_ink_bands(
+    region_image: np.ndarray,
+    line_y: int,
+    line_h: int,
+    line_count: int,
+    expected_width: int,
+) -> List[Tuple[int, int]]:
+    """Find vertical text columns from ink projection rather than OCR's drifting X boxes."""
+    image_h, image_w = region_image.shape[:2]
+    y0 = max(0, int(line_y))
+    y1 = min(image_h, int(line_y + line_h))
+    if y1 <= y0:
+        return []
+    gray = cv2.cvtColor(region_image[y0:y1], cv2.COLOR_BGR2GRAY) if region_image.ndim == 3 else region_image[y0:y1]
+    _, ink = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    projection = np.count_nonzero(ink, axis=0)
+    if not projection.size or int(projection.max()) == 0:
+        return []
+    active = projection >= max(5, int(projection.max() * 0.10))
+    # Bridge tiny gaps inside glyph strokes without joining adjacent columns.
+    for x in range(1, len(active) - 2):
+        if active[x - 1] and active[x + 1] and not active[x]:
+            active[x] = True
+
+    bands = []
+    start = None
+    min_band_width = max(5, int(expected_width * 0.35))
+    for x, is_active in enumerate(list(active) + [False]):
+        if is_active and start is None:
+            start = x
+        elif not is_active and start is not None:
+            if x - start >= min_band_width:
+                bands.append((start, x, int(projection[start:x].sum())))
+            start = None
+    strongest = sorted(bands, key=lambda band: band[2], reverse=True)[:line_count]
+    return [(band[0], band[1]) for band in sorted(strongest, key=lambda band: -band[0])]
+
+
+def _merge_split_ichi_as_ni(
+    region_image: np.ndarray,
+    line: Dict[str, Any],
+    column_band: Tuple[int, int],
+) -> None:
+    """Merge two close horizontal ink strokes into 二 only when they share one glyph cell."""
+    text = str(line.get("text", ""))
+    line_y = int(line.get("y", 0))
+    line_h = max(1, int(line.get("h", 1)))
+    pitch = line_h / max(1, len(text))
+    x0, x1 = column_band
+    width = x1 - x0
+    for year_match in _JAPANESE_YEAR_PATTERN.finditer(text):
+        token = year_match.group(1)
+        for split_match in re.finditer(r"一一", token):
+            text_index = year_match.start(1) + split_match.start()
+            expected_center = line_y + (text_index + 1) * pitch
+            y0 = max(0, int(expected_center - pitch * 0.85))
+            y1 = min(region_image.shape[0], int(expected_center + pitch * 0.85))
+            if y1 <= y0:
+                continue
+            roi = region_image[y0:y1, x0:x1]
+            gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY) if roi.ndim == 3 else roi
+            _, ink = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+            count, _, stats, _ = cv2.connectedComponentsWithStats(ink, 8)
+            min_stroke_width = max(6, int(width * 0.40))
+            max_stroke_height = max(4, int(pitch * 0.30))
+            strokes = []
+            for component in range(1, count):
+                cx, cy, cw, ch, area = map(int, stats[component])
+                if area >= 5 and cw >= min_stroke_width and ch <= max_stroke_height:
+                    center_y = y0 + cy + ch / 2
+                    if abs(center_y - expected_center) <= pitch * 0.55:
+                        strokes.append((cx, center_y, cw))
+
+            for i, first in enumerate(strokes):
+                for second in strokes[i + 1:]:
+                    gap = abs(second[1] - first[1])
+                    overlap = max(0, min(first[0] + first[2], second[0] + second[2]) - max(first[0], second[0]))
+                    overlap_ratio = overlap / max(1, min(first[2], second[2]))
+                    midpoint = (first[1] + second[1]) / 2
+                    if (
+                        pitch * 0.35 <= gap <= pitch * 0.75
+                        and overlap_ratio >= 0.65
+                        and abs(midpoint - expected_center) <= pitch * 0.40
+                    ):
+                        start = year_match.start(1) + split_match.start()
+                        line["text"] = text[:start] + "二" + text[start + 2:]
+                        return
+
+
+def _refine_vertical_years(region_image: np.ndarray, lines: List[Dict[str, Any]]) -> None:
+    """Use glyph geometry and Japanese year notation to refine vertical year tokens."""
+    if not lines:
+        return
+    median_width = int(np.median([max(1, int(line.get("w", 1))) for line in lines]))
+    for index, line in enumerate(lines):
+        if not _JAPANESE_YEAR_PATTERN.search(str(line.get("text", ""))):
+            continue
+        bands = _vertical_ink_bands(
+            region_image,
+            int(line.get("y", 0)),
+            int(line.get("h", 1)),
+            len(lines),
+            median_width,
+        )
+        if index < len(bands):
+            _merge_split_ichi_as_ni(region_image, line, bands[index])
+
+        # In Japanese vertical year notation, zero glyphs belong to the kanji
+        # numeral sequence; do not leave an Arabic '0' mixed into that token.
+        line["text"] = _JAPANESE_YEAR_PATTERN.sub(
+            lambda match: _normalize_ocr_year_token(match.group(1)),
+            str(line.get("text", "")),
+        )
+
+
+def _correct_rotated_latin_in_vertical_lines(
+    region_image: np.ndarray,
+    lines: List[Dict[str, Any]],
+) -> None:
+    """Re-read ASCII spans printed sideways inside vertical Japanese columns."""
+    image_h, image_w = region_image.shape[:2]
+    for line in lines:
+        text = str(line.get("text", ""))
+        ascii_positions = [i for i, char in enumerate(text) if char.isascii() and char.isalpha()]
+        groups: List[List[int]] = []
+        for pos in ascii_positions:
+            if not groups or pos - groups[-1][-1] > 4:
+                groups.append([pos])
+            else:
+                groups[-1].append(pos)
+
+        for group in reversed(groups):
+            if len(group) < 3:
+                continue
+            first, last = group[0], group[-1]
+            opening = text.rfind("(", 0, first + 1)
+            start = opening if opening >= 0 and first - opening <= 6 else max(0, first - 2)
+
+            # Stop before a following Japanese year or immediately after this
+            # English token, preserving the Japanese text around it.
+            tail = re.search(r"[一二三四五六七八九十〇]{4,}", text[last + 1:])
+            closing = text.find(")", last + 1)
+            if tail and (closing < 0 or last + 1 + tail.start() < closing):
+                end = last + 1 + tail.start()
+            elif 0 <= closing - last <= 4:
+                end = closing + 1
+            else:
+                end = last + 1
+
+            line_x, line_y = int(line.get("x", 0)), int(line.get("y", 0))
+            line_w, line_h = max(1, int(line.get("w", 1))), max(1, int(line.get("h", 1)))
+            pitch = line_h / max(1, len(text))
+            pad_x = max(14, int(round(line_w * 0.75)))
+            x0, x1 = max(0, line_x - pad_x), min(image_w, line_x + line_w + pad_x)
+            if len(group) <= 8:
+                # Short Latin words need a tight crop. Including the opening
+                # parenthesis and several Japanese glyphs makes the rotated
+                # recognizer lose the Latin run entirely.
+                crop_start = first
+                before_cells, after_cells = 0.0, 2.0
+            else:
+                crop_start = start
+                before_cells, after_cells = 1.5, 1.5
+            y0 = max(0, int(line_y + (crop_start - before_cells) * pitch))
+            y1 = min(image_h, int(line_y + (end + after_cells) * pitch))
+            if x1 <= x0 or y1 - y0 < 30:
+                continue
+
+            crop = region_image[y0:y1, x0:x1]
+            candidates = []
+            for rotation in (cv2.ROTATE_90_COUNTERCLOCKWISE, cv2.ROTATE_90_CLOCKWISE):
+                rotated = cv2.rotate(crop, rotation)
+                temp_path = None
+                try:
+                    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as temp_file:
+                        temp_path = temp_file.name
+                    if not cv2.imwrite(temp_path, rotated):
+                        continue
+                    recognized = run_ocr_on_image(temp_path, lang="ja")
+                    raw_text = " ".join(str(item.get("text", "")) for item in recognized)
+                    words = re.findall(r"[A-Za-z]{2,}", raw_text)
+                    phrase = " ".join(words)
+                    score = sum(len(word) for word in words) + max(0, len(words) - 1) * 3
+                    if score >= 5:
+                        candidates.append((score, phrase, raw_text))
+                except Exception as exc:
+                    print(f"[Footnote Latin OCR] Rotated OCR skipped: {exc}", file=sys.stderr)
+                finally:
+                    if temp_path and os.path.exists(temp_path):
+                        try:
+                            os.remove(temp_path)
+                        except OSError:
+                            pass
+
+            if not candidates:
+                continue
+            candidates.sort(key=lambda item: item[0], reverse=True)
+            best_score, phrase, raw_text = candidates[0]
+            second_score = candidates[1][0] if len(candidates) > 1 else 0
+            if best_score < 5 or best_score < second_score + 2:
+                continue
+
+            prefix = "(" if start == opening and opening >= 0 else ""
+            last_word = phrase.split()[-1]
+            has_comma = bool(re.search(rf"{re.escape(last_word)}\s*[,，]", raw_text))
+            has_close = bool(re.search(rf"{re.escape(last_word)}\s*\)", raw_text))
+            suffix = ", " if end < len(text) and re.match(r"[一二三四五六七八九十〇]", text[end:]) and has_comma else (" " if end < len(text) and re.match(r"[一二三四五六七八九十〇]", text[end:]) else "")
+            if has_close and (end >= len(text) or text[end:end + 1] != ")"):
+                suffix = ")" + suffix
+            replacement = prefix + phrase + ("," if has_comma and not suffix.startswith(",") else "")
+            line["text"] = text[:start] + replacement + suffix + text[end:]
+            text = str(line["text"])
+
+
+def _has_recognized_inline_latin(lines: List[Dict[str, Any]]) -> bool:
+    """Keep upright single-letter labels already read inside Japanese columns."""
+    labels = []
+    for line in lines:
+        if not line.get("is_vertical") or float(line.get("confidence", 0)) < 0.80:
+            continue
+        text = str(line.get("text", ""))
+        labels.extend(re.findall(
+            r"(?<=[一-龥ぁ-んァ-ヶ、。])[A-Za-z](?=[一-龥ぁ-んァ-ヶ、。])",
+            text,
+        ))
+    return len(labels) >= 4 and len(set(labels)) >= 2
+
+
+def _retry_tall_footnote_with_windows_ocr(region_image: np.ndarray) -> List[Dict[str, Any]]:
+    """Recognize a tall note at native scale and vote across tiny X-shear variants."""
+    height, width = region_image.shape[:2]
+    base_lines = _run_windows_ocr_on_footnote_image(region_image)
+    if len(base_lines) < 2 or max(len(line["text"]) for line in base_lines) < 12:
+        return []
+
+    base_text = "".join(line["text"] for line in base_lines)
+    votes: List[Dict[str, int]] = [{char: 1} for char in base_text]
+    margin = max(1, int(round(height * 0.008)))
+    variant_width = width + margin
+
+    for shear in (-0.008, 0.008):
+        offset_x = margin if shear < 0 else 0
+        transform = np.float32([[1.0, shear, offset_x], [0.0, 1.0, 0.0]])
+        variant_image = cv2.warpAffine(
+            region_image,
+            transform,
+            (variant_width, height),
+            flags=cv2.INTER_LINEAR,
+            borderMode=cv2.BORDER_CONSTANT,
+            borderValue=(255, 255, 255),
+        )
+        variant_lines = _run_windows_ocr_on_footnote_image(variant_image)
+        candidate = "".join(line["text"] for line in variant_lines)
+        if not candidate or SequenceMatcher(None, base_text, candidate, autojunk=False).ratio() < 0.80:
+            continue
+
+        # Align each candidate to the native result. Only vote on substitutions
+        # at existing positions; this avoids inventing or deleting characters.
+        matcher = SequenceMatcher(None, base_text, candidate, autojunk=False)
+        for tag, a0, a1, b0, b1 in matcher.get_opcodes():
+            if tag == "equal":
+                for offset in range(a1 - a0):
+                    char = candidate[b0 + offset]
+                    votes[a0 + offset][char] = votes[a0 + offset].get(char, 0) + 1
+            elif tag == "replace":
+                old_part, new_part = base_text[a0:a1], candidate[b0:b1]
+                local = SequenceMatcher(None, old_part, new_part, autojunk=False)
+                for local_tag, la0, la1, lb0, lb1 in local.get_opcodes():
+                    if local_tag == "equal":
+                        for offset in range(la1 - la0):
+                            char = new_part[lb0 + offset]
+                            index = a0 + la0 + offset
+                            votes[index][char] = votes[index].get(char, 0) + 1
+                    elif local_tag == "replace":
+                        for offset in range(min(la1 - la0, lb1 - lb0)):
+                            char = new_part[lb0 + offset]
+                            index = a0 + la0 + offset
+                            votes[index][char] = votes[index].get(char, 0) + 1
+
+    consensus = []
+    for original, char_votes in zip(base_text, votes):
+        winner, count = max(char_votes.items(), key=lambda item: item[1])
+        consensus.append(winner if count > char_votes.get(original, 0) else original)
+    consensus_text = "".join(consensus)
+
+    # Retain the native OCR geometry and its column boundaries while replacing
+    # only characters supported by both perturbed-image recognitions.
+    offset = 0
+    for line in base_lines:
+        length = len(line["text"])
+        line["text"] = consensus_text[offset:offset + length]
+        offset += length
+    _refine_vertical_years(region_image, base_lines)
+    _correct_rotated_latin_in_vertical_lines(region_image, base_lines)
+    return correct_ocr_lines(base_lines, doc_type="japanese")
+
+
+def _extract_custom_region_figures(regions, page_number, pix, image_override=None):
+    """Crop figures from their own page, even when it is not displayed in the UI."""
+    figures = []
+    source = image_override
+    for reg in sorted(regions, key=lambda r: r.get("reading_order", 999)):
+        if reg.get("type") != "image":
+            continue
+        encoded = reg.get("image_base64") or ""
+        if not encoded:
+            if source is None:
+                pixels = np.frombuffer(pix.samples, dtype=np.uint8).reshape((pix.height, pix.width, pix.n))
+                source = cv2.cvtColor(pixels, cv2.COLOR_RGB2BGR if pix.n == 3 else cv2.COLOR_RGBA2BGR)
+            height, width = source.shape[:2]
+            x, y, w, h = (float(reg.get(k, 0)) for k in ("x", "y", "w", "h"))
+            if not all(np.isfinite(v) for v in (x, y, w, h)) or w <= 0 or h <= 0:
+                raise ValueError("図版の領域位置と大きさを確認してください。")
+            x0, y0 = max(0, int(np.floor(x))), max(0, int(np.floor(y)))
+            x1, y1 = min(width, int(np.ceil(x + w))), min(height, int(np.ceil(y + h)))
+            if x1 <= x0 or y1 <= y0:
+                raise ValueError("図版の領域がページ画像の外にあります。")
+            ok, png = cv2.imencode(".png", source[y0:y1, x0:x1])
+            if not ok:
+                raise ValueError("図版画像を切り出せませんでした。")
+            encoded = "data:image/png;base64," + base64.b64encode(png).decode("ascii")
+            reg["image_base64"] = encoded
+        figures.append({
+            "id": reg.get("id", "fig-custom"),
+            "region_id": reg.get("id", "fig-custom"),
+            "name": reg.get("name", "図版"),
+            "page": page_number,
+            "x": reg.get("x", 0), "y": reg.get("y", 0),
+            "w": reg.get("w", 0), "h": reg.get("h", 0),
+            "image_base64": encoded,
+            "is_custom_image": reg.get("is_custom_image", False),
+            "caption": reg.get("caption", ""),
+            "rotation": reg.get("rotation", 0),
+        })
+    return figures
+
+
 def recognize_custom_regions(
     doc: fitz.Document,
     page_number: int,
     regions: List[Dict[str, Any]],
     orientation: str = "auto",
     doc_type: str = "japanese",
-    filename: str = "document.pdf"
+    filename: str = "document.pdf",
+    severe_skew: bool = False,
+    image_override = None
 ) -> Dict[str, Any]:
     """
     ユーザーが手動で作成・変更・リサイズした領域に対する文字認識・抽出実行
     """
+    all_region_ocr_lines = []
     total_pages = len(doc)
     pno = max(0, min(page_number - 1, total_pages - 1))
     page = doc[pno]
@@ -1833,6 +2268,11 @@ def recognize_custom_regions(
 
     raw_text = page.get_text().strip()
     is_digital = len(raw_text) > 50 and (raw_text.count('\ufffd') / max(1, len(raw_text)) < 0.2)
+
+    if image_override is not None:
+        if image_override.shape[:2] != (img_h, img_w):
+            raise ValueError("補正画像の大きさが元のページと一致しません。")
+        is_digital = False
 
     if is_digital:
         blocks = page.get_text("blocks")
@@ -1858,22 +2298,46 @@ def recognize_custom_regions(
     else:
         img_data = np.frombuffer(pix.samples, dtype=np.uint8).reshape((pix.height, pix.width, pix.n))
         img_bgr = cv2.cvtColor(img_data, cv2.COLOR_RGB2BGR) if pix.n == 3 else cv2.cvtColor(img_data, cv2.COLOR_RGBA2BGR)
-        ocr_lines = run_ndlocr_on_image(img_bgr, orientation=orientation, doc_type=doc_type)
-        vert_count = sum(1 for l in ocr_lines if l.get("is_vertical"))
-        is_vert = (orientation == "vertical") or (vert_count > len(ocr_lines) * 0.4)
-
+        if image_override is not None:
+            img_bgr = image_override
+        page_h, page_w = img_bgr.shape[:2]
         for reg in regions:
             if reg.get("type") == "image":
                 continue
+
+            # OCR only the user-defined region. Running detection over the full
+            # page first lets a vertical line continue through another band.
+            rx = max(0, min(page_w, int(round(reg.get("x", 0)))))
+            ry = max(0, min(page_h, int(round(reg.get("y", 0)))))
+            rw = max(0, min(page_w - rx, int(round(reg.get("w", 0)))))
+            rh = max(0, min(page_h - ry, int(round(reg.get("h", 0)))))
+            if rw == 0 or rh == 0:
+                reg["text"] = ""
+                continue
+
+            region_image = img_bgr[ry:ry + rh, rx:rx + rw]
+            region_lines = run_ndlocr_on_image(
+                region_image, orientation=orientation, doc_type=doc_type,
+                recover_small_text=severe_skew, recover_missing_columns=severe_skew, strict=True
+            )
+            ocr_lines = []
+            for item in region_lines:
+                line = dict(item)
+                line["x"] = int(round(line.get("x", 0) + rx))
+                line["y"] = int(round(line.get("y", 0) + ry))
+                ocr_lines.append(line)
+
+            vert_count = sum(1 for line in ocr_lines if line.get("is_vertical"))
+            is_vert = (orientation == "vertical") or (
+                orientation not in ("vertical", "horizontal")
+                and bool(ocr_lines) and vert_count > len(ocr_lines) * 0.4
+            )
+
             if reg.get("type") == "table":
-                tx = reg.get("x", 0)
-                ty = reg.get("y", 0)
-                tw = reg.get("w", 0)
-                th = reg.get("h", 0)
-                rl = reg.get("rule_lines", [])
+                tx, ty, tw, th = (reg.get(k, 0) for k in ("x", "y", "w", "h"))
                 t_res = extract_table_cells_and_matrix(
                     img_bgr, tx, ty, tw, th,
-                    existing_rule_lines=rl,
+                    existing_rule_lines=reg.get("rule_lines", []),
                     doc_type=doc_type,
                     ocr_lines=ocr_lines
                 )
@@ -1892,17 +2356,37 @@ def recognize_custom_regions(
             else:
                 reg_is_vert = is_vert
 
+            if (reg.get("type") == "footnote" and reg_is_vert and rh >= 600 and rw <= 300
+                    and not _has_recognized_inline_latin(ocr_lines)):
+                retry_lines = _retry_tall_footnote_with_windows_ocr(region_image)
+                if retry_lines:
+                    # A tall vertical footnote region is composed of vertical
+                    # columns. Mixing the alternate result with NDLOCR fragments
+                    # can duplicate or splice unrelated text into those columns.
+                    ocr_lines = [
+                        {
+                            **line,
+                            "x": int(round(line.get("x", 0) + rx)),
+                            "y": int(round(line.get("y", 0) + ry)),
+                        }
+                        for line in retry_lines
+                    ]
+            all_region_ocr_lines.extend(ocr_lines)
             matching_lines = filter_matching_lines(reg, ocr_lines, is_page_vert=reg_is_vert)
             if matching_lines:
-                reg["text"] = format_lines_into_paragraphs(matching_lines, is_vertical=reg_is_vert, doc_type=doc_type)
+                reg["text"] = format_lines_into_paragraphs(
+                    matching_lines, is_vertical=reg_is_vert, doc_type=doc_type
+                )
             else:
-                reg["text"] = ""
-
+                raise ValueError(f"P{page_number}: 領域 {reg.get('name') or reg.get('id')} ({reg.get('type')}) の文字を認識できませんでした。空の結果で上書きせず、このページは未保存です。")
+    for reg in regions:
+        if reg.get("type") in ("body", "paragraph", None):
+            reg["source_text"] = reg.get("text", "")
     headings_list = []
     footnotes_list = []
     tables = []
     body_parts = []
-    figures = []
+    figures = _extract_custom_region_figures(regions, pno + 1, pix, image_override)
 
     sorted_regs = sorted(regions, key=lambda r: r.get("reading_order", 999))
     for reg in sorted_regs:
@@ -1911,7 +2395,7 @@ def recognize_custom_regions(
         if not rtext:
             continue
         if rtype == "heading":
-            headings_list.append({"title": rtext, "level": 1, "page": pno + 1})
+            headings_list.append({"title": rtext, "level": max(1, min(9, int(reg.get("heading_level", 1)))), "region_id": reg.get("id"), "page": pno + 1})
         elif rtype == "footnote":
             footnotes_list.append(f"[P{pno + 1}] {rtext}")
         elif rtype == "table":
@@ -1931,34 +2415,6 @@ def recognize_custom_regions(
             })
         elif rtype == "body":
             body_parts.append(rtext)
-        elif rtype == "image":
-            figures.append({
-                "id": reg.get("id", "fig-custom"),
-                "name": reg.get("name", "図版"),
-                "page": pno + 1,
-                "x": reg.get("x", 0),
-                "y": reg.get("y", 0),
-                "w": reg.get("w", 0),
-                "h": reg.get("h", 0),
-                "image_base64": reg.get("image_base64", ""),
-                "is_custom_image": reg.get("is_custom_image", False)
-            })
-
-    # 画像領域でテキストが空の図版も確実に保持
-    for reg in regions:
-        if reg.get("type") == "image" and not any(f.get("id") == reg.get("id") for f in figures):
-            figures.append({
-                "id": reg.get("id", "fig-custom"),
-                "name": reg.get("name", "図版"),
-                "page": pno + 1,
-                "x": reg.get("x", 0),
-                "y": reg.get("y", 0),
-                "w": reg.get("w", 0),
-                "h": reg.get("h", 0),
-                "image_base64": reg.get("image_base64", ""),
-                "is_custom_image": reg.get("is_custom_image", False)
-            })
-
     body_full = f"=== ページ {pno + 1} ===\n\n" + "\n\n".join(body_parts)
 
     return {
@@ -1976,7 +2432,7 @@ def recognize_custom_regions(
         "page_height": int(page.rect.height),
         "image_width": pix.width,
         "image_height": pix.height,
-        "ocr_lines": ocr_lines if not is_digital else []
+        "ocr_lines": all_region_ocr_lines if not is_digital else []
     }
 
 

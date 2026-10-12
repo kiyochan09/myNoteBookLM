@@ -43,3 +43,31 @@ Thumbs.db
 ehthumbs.db
 Desktop.ini
 .DS_Store
+
+# Local research embeddings and isolated runtime
+.venv_research/
+models/research/
+data/research_index.lock
+
+# Per-user encrypted AI credentials
+data/research_ai.json
+data/research_ai.tmp
+
+# User data stays local, including PDFs, dictionaries and document media.
+/[Dd][Aa][Tt][Aa]/
+
+# Backup contents and pending/restored datasets, not the backup feature's code.
+.backup_restore/
+.restore_history/
+[Bb][Aa][Cc][Kk][Uu][Pp]*/
+*_[Bb][Aa][Cc][Kk][Uu][Pp]/
+*_[Bb][Aa][Kk]/
+*バックアップ*/
+*復元前*/
+*.[Bb][Aa][Kk]*
+*.[Bb][Aa][Cc][Kk][Uu][Pp]*
+*[Bb][Aa][Cc][Kk][Uu][Pp]*.zip
+*.db-wal
+*.db-shm
+*.sqlite-wal
+*.sqlite-shm

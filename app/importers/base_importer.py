@@ -26,6 +26,8 @@ class BaseImporter(ABC):
         """
         SHA-256ハッシュによる重複排除を行いながら画像を data/media/ に保存
         """
+        from app.image_formats import browser_image
+        img_bytes, original_ext = browser_image(img_bytes, original_ext)
         sha256 = hashlib.sha256(img_bytes).hexdigest()
         ext = original_ext if original_ext.startswith(".") else f".{original_ext}"
         ext_lower = ext.lower()

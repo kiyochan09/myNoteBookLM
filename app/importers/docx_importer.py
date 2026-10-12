@@ -13,6 +13,9 @@ from docx.table import Table
 from PIL import Image as PILImage
 
 from app.importers.base_importer import BaseImporter
+from app.importers.docx_annotations import extract_docx_annotations
+from app.importers.docx_tables import parse_docx_table
+from app.importers.textbox_colors import load_theme, textbox_style
 
 
 # XML名前空間定義
@@ -55,6 +58,7 @@ class DocxImporter(BaseImporter):
 
     def _extract_all_rels(self, zip_archive: zipfile.ZipFile) -> Dict[str, str]:
         """word/_rels/document.xml.rels から全リレーションシップ（画像、リンク等）を抽出"""
+        self._textbox_theme = load_theme(zip_archive)
         rels_map: Dict[str, str] = {}
         if "word/_rels/document.xml.rels" in zip_archive.namelist():
             try:
@@ -94,10 +98,25 @@ class DocxImporter(BaseImporter):
                     styles_map[s_id] = {
                         "name": s_name,
                         "type": s_type,
-                        "outline_level": outline_lvl
+                        "outline_level": outline_lvl,
+                        "based_on": (style.find(f'{{{NS["w"]}}}basedOn').get(f'{{{NS["w"]}}}val') if style.find(f'{{{NS["w"]}}}basedOn') is not None else None)
                     }
             except Exception as e:
                 print(f"[DocxImporter] Error parsing styles.xml: {e}")
+        def resolve_heading(style_id, visiting):
+            if style_id in visiting: return None
+            info = styles_map.get(style_id, {})
+            own = info.get("outline_level")
+            if own is not None: return min(own, 6) if 1 <= own <= 9 else None
+            for name in (style_id, info.get("name", "")):
+                match = re.fullmatch(r'(?:Heading|見出し|見だし|みだし|Titre|Header|Headline|H)\s*([1-9])', name or '', re.IGNORECASE)
+                if match: return min(int(match.group(1)), 6)
+                if (name or '').lower() in ('title','タイトル','表題'): return 1
+                if (name or '').lower() in ('subtitle','サブタイトル','副題'): return 2
+            parent = info.get("based_on")
+            return resolve_heading(parent, visiting | {style_id}) if parent else None
+        for style_id, info in styles_map.items():
+            info["heading_level"] = resolve_heading(style_id, set())
         return styles_map
 
     def _parse_run_element(self, r_elem: ET.Element) -> Tuple[str, str]:
@@ -119,6 +138,13 @@ class DocxImporter(BaseImporter):
             elif tag == 'tab':
                 raw_text_parts.append("\t")
                 html_text_parts.append("&emsp;")
+            elif tag in ('footnoteReference', 'endnoteReference', 'commentReference'):
+                ref_id = child.get(f'{{{NS["w"]}}}id') or ''
+                kind = {'footnoteReference':'footnote', 'endnoteReference':'endnote', 'commentReference':'comment'}[tag]
+                label = {'footnote':'脚注', 'endnote':'文末脚注', 'comment':'コメント'}[kind]
+                marker = f'【{label}{ref_id}】'
+                raw_text_parts.append(marker)
+                html_text_parts.append(f'<sup class="fn-anchor" data-note-key="{kind}:{html.escape(ref_id, quote=True)}">{html.escape(marker)}</sup>')
             elif tag == 'sym':
                 char_code = child.get(f'{{{NS["w"]}}}char')
                 if char_code:
@@ -213,6 +239,38 @@ class DocxImporter(BaseImporter):
 
         return plain_text, res_html
 
+    def _parse_textboxes(self, run, rels_map):
+        w = "{" + NS['w'] + "}"
+        mc = "{http://schemas.openxmlformats.org/markup-compatibility/2006}"
+        boxes = []
+        def visit(node):
+            if node.tag == w + 'txbxContent':
+                boxes.append(node)
+                return
+            if node.tag == mc + 'AlternateContent':
+                choices = [c for c in node if c.tag == mc+'Choice' and any(x.tag == w+'txbxContent' for x in c.iter())]
+                selected = choices[:1] or [c for c in node if c.tag == mc+'Fallback'][:1]
+                for child in selected: visit(child)
+                return
+            for child in node: visit(child)
+        visit(run)
+        plain = []
+        rich = []
+        for box in boxes:
+            box_style = textbox_style(box, run, getattr(self, "_textbox_theme", {}))
+            paragraphs = []
+            texts = []
+            for paragraph in box.findall(w+'p'):
+                text, markup, meta = self._parse_paragraph_content(paragraph, rels_map)
+                if not text and not markup: continue
+                texts.append(text)
+                align = 'text-align:'+meta['align']+';' if meta.get('align') else ''
+                paragraphs.append('<span style="display:block;'+align+'">'+markup+'</span>')
+            if paragraphs:
+                plain.append('\n'.join(texts))
+                rich.append('<span class="doc-textbox" style="display:block;border:1px solid #94a3b8;padding:8px;margin:8px 0;'+box_style+'">'+''.join(paragraphs)+'</span>')
+        return '\n'.join(plain), ''.join(rich)
+
     def _parse_paragraph_content(
         self,
         p_elem: ET.Element,
@@ -300,6 +358,9 @@ class DocxImporter(BaseImporter):
                     plain_parts.append(p_txt)
                 if h_txt:
                     html_parts.append(h_txt)
+                box_text, box_html = self._parse_textboxes(child, rels_map)
+                if box_text: plain_parts.append(box_text)
+                if box_html: html_parts.append(box_html)
 
             elif tag == 'fldSimple':
                 instr = child.get(f'{{{NS["w"]}}}instr') or ""
@@ -351,6 +412,7 @@ class DocxImporter(BaseImporter):
         annotations: List[Dict[str, Any]] = []
 
         zip_archive = zipfile.ZipFile(str(file_path), "r")
+        annotations = extract_docx_annotations(zip_archive, doc_id)
         rels_map = self._extract_all_rels(zip_archive)
         styles_map = self._extract_styles_map(zip_archive)
 
@@ -375,19 +437,22 @@ class DocxImporter(BaseImporter):
         reading_order = 0
         order_idx_counter = 0
 
+        pending_ocr_caption = None
         # XML要素の順次走査 (body 内の段落と表)
         for elem in doc.element.body:
             tag = elem.tag.split('}')[-1] if '}' in elem.tag else elem.tag
 
             if tag == 'p':
+                previous_ocr_caption = pending_ocr_caption
+                pending_ocr_caption = None
                 p_xml = elem.xml
 
                 # 1. 段落内のインライン画像をチェック
-                embed_rids = []
-                for m in re.finditer(r'r:embed="([^"]+)"', p_xml):
-                    embed_rids.append(m.group(1))
-                for m in re.finditer(r'r:id="([^"]+)"', p_xml):
-                    embed_rids.append(m.group(1))
+                # Inspect image relationships only; OLE and hyperlink r:id values are not images.
+                embed_rids = list(dict.fromkeys(
+                    [node.get("{" + NS['r'] + "}embed") for node in elem.iter("{" + NS['a'] + "}blip")]
+                    + [node.get("{" + NS['r'] + "}id") for node in elem.iter("{" + NS['v'] + "}imagedata")]
+                ))
 
                 for rId in embed_rids:
                     if rId in rels_map:
@@ -412,6 +477,15 @@ class DocxImporter(BaseImporter):
                             fig_id = f"fig-{uuid.uuid4().hex[:12]}"
                             fig_count = len(figures) + 1
                             caption = f"図版 {fig_count} ({saved['file_name']})"
+                            # Captions exported by the OCR tab travel with their image.
+                            for inline in elem.iter("{" + NS['wp'] + "}inline"):
+                                blip = inline.find(".//{" + NS['a'] + "}blip")
+                                properties = inline.find("{" + NS['wp'] + "}docPr")
+                                if blip is not None and blip.get("{" + NS['r'] + "}embed") == rId and properties is not None and properties.get("title") == "OCRFigureCaption":
+                                    caption = properties.get("descr") or caption
+                                    pending_ocr_caption = caption
+                                    break
+
 
                             figures.append({
                                 "id": fig_id,
@@ -428,7 +502,7 @@ class DocxImporter(BaseImporter):
                             })
 
                             blk_id = f"blk-{uuid.uuid4().hex[:12]}"
-                            fig_html = f'<figure class="figure-embed" data-fig-id="{fig_id}"><div class="fig-actions" contenteditable="false"><button class="fig-action-btn btn-move" onclick="openMoveFigureModal(\'{fig_id}\')" title="見出し/位置を指定して移動"><i class="fa-solid fa-arrows-up-down-left-right"></i> 移動</button><button class="fig-action-btn btn-delete" onclick="deleteFigure(\'{fig_id}\')" title="画像を削除"><i class="fa-solid fa-trash"></i> 削除</button></div><img src="{saved["file_path"]}" alt="{caption}"><figcaption contenteditable="true" oninput="markDirty()">{caption}</figcaption></figure>'
+                            fig_html = f'<figure class="figure-embed" data-fig-id="{fig_id}"><div class="fig-actions" contenteditable="false"><button class="fig-action-btn btn-move" onclick="openMoveFigureModal(\'{fig_id}\')" title="見出し/位置を指定して移動"><i class="fa-solid fa-arrows-up-down-left-right"></i> 移動</button><button class="fig-action-btn btn-delete" onclick="deleteFigure(\'{fig_id}\')" title="画像を削除"><i class="fa-solid fa-trash"></i> 削除</button></div><img src="{saved["file_path"]}" alt="{html.escape(caption)}"><figcaption contenteditable="true" oninput="markDirty()">{html.escape(caption)}</figcaption></figure>'
                             blocks.append({
                                 "id": blk_id,
                                 "section_id": current_sec_id,
@@ -442,6 +516,10 @@ class DocxImporter(BaseImporter):
 
                 # 2. 段落テキスト・文字修飾・ハイパーリンク・ブックマークの解析
                 plain_text, inner_html, meta = self._parse_paragraph_content(elem, rels_map)
+                if (previous_ocr_caption is not None and meta.get("style_name") == "OCRFigureCaption"
+                        and plain_text == f"🖼️ {previous_ocr_caption}"):
+                    continue  # Already displayed once inside the imported figure.
+
 
                 if not plain_text and not inner_html:
                     continue
@@ -466,7 +544,14 @@ class DocxImporter(BaseImporter):
                     meta["is_list"]
                 )
 
-                if re.match(r'^(?:Heading|見出し|Titre|Title|Header|Headline|H)\s*([1-6])$', style_id, re.IGNORECASE):
+                explicit_level = meta["outline_level"] if meta["outline_level"] is not None else style_info.get("heading_level")
+                effective_outline = meta["outline_level"] if meta["outline_level"] is not None else style_outline_lvl
+                if effective_outline == 10:
+                    is_heading = False
+                elif explicit_level is not None and 1 <= explicit_level <= 9:
+                    is_heading = True
+                    h_level = min(explicit_level, 6)
+                elif re.match(r'^(?:Heading|見出し|Titre|Title|Header|Headline|H)\s*([1-6])$', style_id, re.IGNORECASE):
                     m = re.match(r'^(?:Heading|見出し|Titre|Title|Header|Headline|H)\s*([1-6])$', style_id, re.IGNORECASE)
                     is_heading = True
                     h_level = int(m.group(1))
@@ -545,38 +630,13 @@ class DocxImporter(BaseImporter):
                 t = Table(elem, doc)
                 reading_order += 1
 
-                raw_rows: List[List[str]] = []
-                html_rows: List[List[str]] = []
-
-                for row in t.rows:
-                    row_plain = []
-                    row_html = []
-                    for cell in row.cells:
-                        c_plain_parts = []
-                        c_html_parts = []
-                        for cell_p in cell.paragraphs:
-                            p_txt, h_txt, _ = self._parse_paragraph_content(cell_p._p, rels_map)
-                            if p_txt:
-                                c_plain_parts.append(p_txt)
-                            if h_txt:
-                                c_html_parts.append(h_txt)
-                        row_plain.append(" ".join(c_plain_parts).strip())
-                        row_html.append("<br>".join(c_html_parts) if c_html_parts else "")
-                    raw_rows.append(row_plain)
-                    html_rows.append(row_html)
-
+                grid_data, table_html = parse_docx_table(elem, lambda p: self._parse_paragraph_content(p, rels_map))
+                raw_rows = grid_data['rows']
                 if raw_rows:
-                    row_count = len(raw_rows)
-                    col_count = max(len(r) for r in raw_rows) if raw_rows else 0
-                    headers = raw_rows[0] if raw_rows else []
-                    body_rows = raw_rows[1:] if len(raw_rows) > 1 else raw_rows
-
-                    grid_data = {
-                        "headers": headers,
-                        "rows": raw_rows,
-                        "columns": col_count,
-                        "row_count": row_count
-                    }
+                    row_count = grid_data['row_count']
+                    col_count = grid_data['columns']
+                    headers = raw_rows[0]
+                    body_rows = raw_rows[1:]
 
                     tbl_id = f"tbl-{uuid.uuid4().hex[:12]}"
                     caption = f"表 ({row_count}行 × {col_count}列)"
@@ -591,17 +651,6 @@ class DocxImporter(BaseImporter):
                         "page_number": 1
                     })
 
-                    # 表HTML（各セル内の文字修飾・リンクを保持）
-                    tbl_html_parts = ['<div class="table-embed"><table class="styled-table">']
-                    if html_rows:
-                        tbl_html_parts.append('<thead><tr>' + ''.join(f'<th>{c}</th>' for c in html_rows[0]) + '</tr></thead>')
-                        if len(html_rows) > 1:
-                            tbl_html_parts.append('<tbody>')
-                            for r in html_rows[1:]:
-                                tbl_html_parts.append('<tr>' + ''.join(f'<td>{c}</td>' for c in r) + '</tr>')
-                            tbl_html_parts.append('</tbody>')
-                    tbl_html_parts.append('</table></div>')
-
                     blk_id = f"blk-{uuid.uuid4().hex[:12]}"
                     table_summary = " | ".join(headers) + "\n" + "\n".join([" | ".join(r) for r in body_rows])
                     blocks.append({
@@ -609,7 +658,7 @@ class DocxImporter(BaseImporter):
                         "section_id": current_sec_id,
                         "block_type": "paragraph",
                         "text_content": f"[表: {caption}]\n{table_summary}",
-                        "html_content": "".join(tbl_html_parts),
+                        "html_content": table_html,
                         "reading_order": reading_order,
                         "page_number": 1,
                         "bbox_json": None
@@ -650,7 +699,7 @@ class DocxImporter(BaseImporter):
                 })
 
                 blk_id = f"blk-{uuid.uuid4().hex[:12]}"
-                fig_html = f'<figure class="figure-embed" data-fig-id="{fig_id}"><div class="fig-actions" contenteditable="false"><button class="fig-action-btn btn-move" onclick="openMoveFigureModal(\'{fig_id}\')" title="見出し/位置を指定して移動"><i class="fa-solid fa-arrows-up-down-left-right"></i> 移動</button><button class="fig-action-btn btn-delete" onclick="deleteFigure(\'{fig_id}\')" title="画像を削除"><i class="fa-solid fa-trash"></i> 削除</button></div><img src="{saved["file_path"]}" alt="{caption}"><figcaption contenteditable="true" oninput="markDirty()">{caption}</figcaption></figure>'
+                fig_html = f'<figure class="figure-embed" data-fig-id="{fig_id}"><div class="fig-actions" contenteditable="false"><button class="fig-action-btn btn-move" onclick="openMoveFigureModal(\'{fig_id}\')" title="見出し/位置を指定して移動"><i class="fa-solid fa-arrows-up-down-left-right"></i> 移動</button><button class="fig-action-btn btn-delete" onclick="deleteFigure(\'{fig_id}\')" title="画像を削除"><i class="fa-solid fa-trash"></i> 削除</button></div><img src="{saved["file_path"]}" alt="{html.escape(caption)}"><figcaption contenteditable="true" oninput="markDirty()">{html.escape(caption)}</figcaption></figure>'
                 blocks.append({
                     "id": blk_id,
                     "section_id": current_sec_id,

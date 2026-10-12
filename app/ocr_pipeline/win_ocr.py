@@ -4,6 +4,7 @@ import json
 import subprocess
 import tempfile
 from pathlib import Path
+from app.runtime_paths import windows_powershell
 
 def run_ocr_on_image(image_path: str, lang: str = "ja") -> list:
     ps_file = Path(__file__).parent / "run_win_ocr.ps1"
@@ -11,14 +12,18 @@ def run_ocr_on_image(image_path: str, lang: str = "ja") -> list:
         out_json = tmp.name
     
     try:
+        powershell = windows_powershell()
+        if not powershell:
+            raise RuntimeError("Windows OCRに必要なWindows PowerShellが見つかりません。")
         cmd = [
-            "powershell", "-ExecutionPolicy", "Bypass",
+            powershell, "-NoProfile", "-ExecutionPolicy", "Bypass",
             "-File", str(ps_file),
             "-ImgPath", os.path.abspath(image_path),
             "-OutJsonPath", os.path.abspath(out_json),
             "-Lang", lang
         ]
-        res = subprocess.run(cmd, capture_output=True, timeout=30)
+        res = subprocess.run(cmd, capture_output=True, timeout=30,
+            creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
         if os.path.exists(out_json) and os.path.getsize(out_json) > 0:
             try:
                 with open(out_json, "r", encoding="utf-8-sig") as f:

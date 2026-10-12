@@ -125,6 +125,10 @@ BEGIN
 END;
 
 CREATE TRIGGER IF NOT EXISTS trg_notebook_blocks_au AFTER UPDATE ON content_blocks
+WHEN new.text_content IS NOT old.text_content
+  OR new.section_id IS NOT old.section_id
+  OR new.document_id IS NOT old.document_id
+  OR new.id IS NOT old.id
 BEGIN
     DELETE FROM fts_blocks WHERE block_id = old.id;
     INSERT INTO fts_blocks(block_id, document_id, title, text_content)
@@ -205,6 +209,15 @@ class DBService:
             if str(current_journal_mode).lower() != "wal":
                 conn.execute("PRAGMA journal_mode = WAL;")
             conn.executescript(NOTEBOOK_SCHEMA_SQL)
+
+            # HTML-only formatting changes do not change the search index.
+            # Upgrade existing databases; IF NOT EXISTS alone retains the old trigger.
+            trigger = cur.execute("SELECT sql FROM sqlite_master WHERE type='trigger' AND name='trg_notebook_blocks_au'").fetchone()
+            if trigger and "new.text_content IS NOT old.text_content" not in trigger[0]:
+                cur.execute("BEGIN IMMEDIATE")
+                cur.execute("DROP TRIGGER trg_notebook_blocks_au")
+                trigger_sql = NOTEBOOK_SCHEMA_SQL.split("CREATE TRIGGER IF NOT EXISTS trg_notebook_blocks_au", 1)[1].split("END;", 1)[0]
+                cur.execute("CREATE TRIGGER trg_notebook_blocks_au" + trigger_sql + "END;")
 
             # 既存テーブルへの group_id カラム追加マイグレーション
             try:
@@ -514,6 +527,32 @@ class DBService:
             cur.execute("DELETE FROM tags WHERE id = ?", (tag_id,))
             conn.commit()
             return cur.rowcount > 0
+        finally:
+            conn.close()
+
+    def assign_multiple_tags_to_documents(self, doc_ids: List[str], tag_ids: List[str]) -> int:
+        """Add all chosen tags atomically; preserve existing document tags."""
+        doc_ids = list(dict.fromkeys(doc_ids))
+        tag_ids = list(dict.fromkeys(tag_ids))
+        if not doc_ids or not tag_ids:
+            raise ValueError("ファイルとタグを選択してください。")
+        conn = self.get_connection()
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            for table, ids in (("documents", doc_ids), ("tags", tag_ids)):
+                for item_id in ids:
+                    if not conn.execute(f"SELECT 1 FROM {table} WHERE id=?", (item_id,)).fetchone():
+                        raise ValueError("選択したファイルまたはタグが見つかりません。一覧を更新してください。")
+            count = 0
+            for doc_id in doc_ids:
+                for tag_id in tag_ids:
+                    cur = conn.execute("INSERT OR IGNORE INTO document_tags(document_id,tag_id) VALUES(?,?)", (doc_id, tag_id))
+                    count += cur.rowcount
+            conn.commit()
+            return count
+        except Exception:
+            conn.rollback()
+            raise
         finally:
             conn.close()
 
@@ -839,6 +878,15 @@ class DBService:
                 (doc_id, title, source_type, source_filename, total_pages, metadata_str)
             )
 
+            # Retain source annotations restored after an older editor tab loaded.
+            # Imported notes have no delete action; a stale empty array must not erase them.
+            annotations = list(bundle.get("annotations", []))
+            incoming_ids = {item.get("id") for item in annotations}
+            imported_prefixes = tuple(f"ann-{doc_id}-{kind}-" for kind in ("footnote", "endnote", "comment"))
+            for row in cur.execute("SELECT * FROM annotations WHERE document_id=?", (doc_id,)).fetchall():
+                if row["id"].startswith(imported_prefixes) and row["id"] not in incoming_ids:
+                    annotations.append(dict(row))
+
             cur.execute("DELETE FROM annotations WHERE document_id = ?", (doc_id,))
             cur.execute("DELETE FROM document_tables WHERE document_id = ?", (doc_id,))
             cur.execute("DELETE FROM document_figures WHERE document_id = ?", (doc_id,))
@@ -969,7 +1017,6 @@ class DBService:
                     (f_id, doc_id, sec_id, caption, f_path, f_hash, f_size, w, h, r_order, p_num, is_custom)
                 )
 
-            annotations = bundle.get("annotations", [])
             for idx, ann in enumerate(annotations):
                 a_id = ann.get("id") or f"ann-{uuid.uuid4().hex[:12]}"
                 orig_bid = ann.get("block_id")
@@ -1028,7 +1075,7 @@ class DBService:
         conn = self.get_connection()
         cur = conn.cursor()
         try:
-            q_clean = f'"{query.strip()}"'
+            q_clean = '"' + query.strip().replace('"', '""') + '"'
             rows = cur.execute(
                 """
                 SELECT f.block_id, f.document_id, f.title as section_title,
@@ -1056,3 +1103,53 @@ class DBService:
         finally:
             conn.close()
 
+
+    def search_global(self, query: str, group: str = "all", limit: int = 100):
+        """Literal cross-document search; apply group restriction before limiting hits."""
+        query = query.strip()
+        if not query:
+            return []
+        conn = self.get_connection()
+        try:
+            params = []
+            if len(query) >= 3:
+                condition = "fts_blocks MATCH ?"
+                params.append('"' + query.replace('"', '""') + '"')
+                snippet_sql = "snippet(fts_blocks, 3, '<mark>', '</mark>', '...', 24)"
+                order = "rank, f.document_id, cb.reading_order"
+            else:
+                # Trigram MATCH cannot find one- or two-character queries.
+                condition = "instr(lower(f.text_content), lower(?)) > 0"
+                params.append(query)
+                snippet_sql = "substr(f.text_content, max(1, instr(lower(f.text_content),lower(?))-50), 160)"
+                params.insert(0, query)
+                order = "d.title, cb.reading_order"
+            if group and group != "all":
+                condition += """ AND EXISTS (
+                    SELECT 1 FROM document_tags dt
+                    JOIN tags t ON t.id=dt.tag_id
+                    JOIN tag_groups tg ON tg.id=t.group_id
+                    WHERE dt.document_id=f.document_id AND tg.name=?
+                )"""
+                params.append(group)
+            params.append(max(1, min(int(limit), 200)))
+            rows = conn.execute(f"""
+                SELECT f.document_id AS doc_id, f.block_id, d.title,
+                       cb.reading_order, {snippet_sql} AS snippet,
+                       (SELECT group_concat(DISTINCT tg.name)
+                        FROM document_tags dt JOIN tags t ON t.id=dt.tag_id
+                        JOIN tag_groups tg ON tg.id=t.group_id
+                        WHERE dt.document_id=f.document_id) AS group_name
+                FROM fts_blocks f
+                JOIN content_blocks cb ON cb.id=f.block_id
+                JOIN documents d ON d.id=f.document_id
+                WHERE {condition} ORDER BY {order} LIMIT ?
+            """, params).fetchall()
+            results = []
+            for row in rows:
+                item = dict(row)
+                item['snippet'] = sanitize_fts_snippet(item['snippet']) if len(query)>=3 else html.escape(item['snippet'] or '')
+                results.append(item)
+            return results
+        finally:
+            conn.close()

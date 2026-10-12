@@ -28,6 +28,8 @@ class OdtImporter(BaseImporter):
     }
 
     def _extract_all_text(self, elem: ET.Element) -> str:
+        if elem.tag == "{"+self.NS['office']+"}annotation":
+            return ""
         texts = []
         if elem.text:
             texts.append(elem.text)
@@ -77,6 +79,15 @@ class OdtImporter(BaseImporter):
         with zipfile.ZipFile(str(file_path), "r") as z:
             content_xml = z.read("content.xml")
             root = ET.fromstring(content_xml)
+            for index, note in enumerate(root.iter("{"+self.NS['office']+"}annotation")):
+                content = '\n'.join(self._extract_all_text(p) for p in note.iter("{"+self.NS['text']+"}p")).strip()
+                if not content: continue
+                creator = note.find('{http://purl.org/dc/elements/1.1/}creator')
+                author = creator.text if creator is not None else ''
+                annotations.append({'id':f'ann-{doc_id}-comment-odt-{index}', 'block_id':None,
+                    'kind':'comment', 'anchor_text':f'【コメント{index+1}】',
+                    'target_value':(author+'\n' if author else '')+content})
+
             body = root.find("office:body", self.NS)
             text_body = body.find("office:text", self.NS) if body is not None else None
 

@@ -1,4 +1,12 @@
+# Restore only after the previous process has exited, before any DB is opened.
+from pathlib import Path as _StartupPath
+from app.data_backup import apply_pending_restore
+apply_pending_restore(_StartupPath(__file__).resolve().parent.parent)
+
+from app.ocr_pipeline.line_tilt import decode_page_image, correct_image_request
 import io
+from contextlib import asynccontextmanager
+import logging
 import sys
 import shutil
 import base64
@@ -18,6 +26,7 @@ from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel
 import re
 import fitz
+from app.ocr_pdf_archive import OcrPdfArchive, create_archive_router, serialized
 import cv2
 import numpy as np
 from PIL import Image as PILImage
@@ -29,6 +38,13 @@ if str(NDLOCR_CORE_DIR) not in sys.path:
 
 from app.core.db import get_db_connection, DEFAULT_DB_PATH
 from app.db_service import DBService
+from app.research_catalog import get_research_catalog
+from app.research_threads import create_research_router
+from app.research_search import create_search_router
+from app.research_embeddings import OfflineEmbeddingProvider
+from app.research_index import SemanticIndex
+from app.research_answers import ResearchAnswers, create_answers_router
+from app.research_ai_settings import AISettings
 from app.importers.docx_importer import DocxImporter
 from app.importers.odt_importer import OdtImporter
 from app.importers.pdf_importer import PdfImporter
@@ -36,13 +52,13 @@ from app.importers.ocr_batch_importer import OcrBatchImporter
 from app.export_service import ExportService
 
 from app.ocr_pipeline.layout_engine import (
-    process_page_layout,
     recognize_custom_regions,
     extract_table_cells_and_matrix,
     detect_table_rule_lines,
     format_lines_into_paragraphs
 )
 from app.ocr_pipeline.ndlocr_engine import run_ndlocr_on_image
+from app.ocr_pipeline.region_classifier import split_vertical_heading_regions
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 MEDIA_DIR = BASE_DIR / "data" / "media"
@@ -72,10 +88,20 @@ def is_allowed_origin(origin: Optional[str]) -> bool:
     except Exception:
         return False
 
+@asynccontextmanager
+async def research_lifespan(app):
+    try:
+        yield
+    finally:
+        await research_answers.close()
+        research_index.close()
+
+
 app = FastAPI(
     title="MyNotebookLM & OCR Knowledge Base System",
     description="MyNotebookLM 統合ドキュメントエディタ & OCR-REPOS システム",
-    version="2.0.0"
+    version="2.0.0",
+    lifespan=research_lifespan
 )
 
 # 1. セキュリティ検査ミドルウェア (Host / Sec-Fetch-Site / Origin / Token認証)
@@ -127,12 +153,29 @@ app.add_middleware(
 app.mount("/media", StaticFiles(directory=str(MEDIA_DIR)), name="media")
 
 db_service = DBService()
+app.include_router(create_research_router(BASE_DIR / "data" / "research.db", db_service))
+research_index = SemanticIndex(BASE_DIR / "data" / "research_index.db", db_service, OfflineEmbeddingProvider(BASE_DIR))
+app.include_router(create_search_router(BASE_DIR / "data" / "research.db", db_service, semantic_index=research_index))
+research_answers = ResearchAnswers(BASE_DIR / "data" / "research.db", db_service, AISettings(BASE_DIR / "data" / "research_ai.json"))
+app.include_router(create_answers_router(research_answers, APP_SECURITY_TOKEN))
+
+from app.data_backup import DataBackup, MaintenanceGate, BackupGateMiddleware, create_backup_router
+backup_gate = MaintenanceGate()
+def backup_background_busy():
+    with research_index.lock:
+        indexing = research_index.active_job is not None or bool(research_index.pending)
+    return indexing or any(not task.done() for task in research_answers.tasks.values())
+data_backup = DataBackup(BASE_DIR, backup_gate, backup_background_busy)
+app.include_router(create_backup_router(data_backup, APP_SECURITY_TOKEN))
+app.add_middleware(BackupGateMiddleware, gate=backup_gate)
+
 export_service = ExportService(db_service)
 
 # ==========================================
 # 画面配信 (HTML Routes) とセキュリティトークン注入
 # ==========================================
 EDITOR_HTML_PATH = BASE_DIR / "editor_form.html"
+RESEARCH_HTML_PATH = BASE_DIR / "research_form.html"
 OCR_HTML_PATH = BASE_DIR / "ocr_form1_designer.html"
 OCR_TEST_HTML_PATH = BASE_DIR / "ocr_test_full.html"
 
@@ -176,6 +219,19 @@ def read_root():
 @app.get("/app", response_class=HTMLResponse)
 def get_editor_form():
     return _render_editor()
+
+@app.get("/research_form.html", response_class=HTMLResponse)
+@app.get("/research", response_class=HTMLResponse)
+def get_research_form():
+    if not RESEARCH_HTML_PATH.exists():
+        raise HTTPException(status_code=404, detail="Research screen not found")
+    return HTMLResponse(content=_inject_security_token(RESEARCH_HTML_PATH.read_text(encoding="utf-8")))
+
+
+@app.get("/api/research/catalog")
+def research_catalog_endpoint():
+    return {"status": "success", **get_research_catalog(db_service)}
+
 
 @app.get("/ocr_form1_designer.html", response_class=HTMLResponse)
 @app.get("/ocr_form1_designer", response_class=HTMLResponse)
@@ -347,6 +403,20 @@ def batch_assign_tags_endpoint(req: BatchTagAssignRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+class BatchMultiTagAssignRequest(BaseModel):
+    doc_ids: List[str]
+    tag_ids: List[str]
+
+
+@app.post("/api/documents/tags/batch-assign-many")
+def batch_assign_multiple_tags_endpoint(req: BatchMultiTagAssignRequest):
+    try:
+        count = db_service.assign_multiple_tags_to_documents(req.doc_ids, req.tag_ids)
+        return {"status": "success", "assigned_count": count}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
 @app.post("/api/documents/tags/batch-remove")
 def batch_remove_tags_endpoint(req: BatchTagRemoveRequest):
     """選択した複数ドキュメントからタグを一括解除"""
@@ -391,6 +461,7 @@ def save_editor_document(doc_id: str, req: SaveDocumentRequest):
         saved_id = db_service.save_document_bundle(bundle)
         return {"status": "success", "document_id": saved_id}
     except Exception as e:
+        logging.getLogger(__name__).exception("Editor document save failed: %s", doc_id)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -518,6 +589,12 @@ def _process_single_import(filename: str, content: bytes) -> Dict[str, Any]:
             if bundle["sections"][0].get("level") == 1 and bundle["sections"][0].get("parent_id") is None:
                 bundle["sections"][0]["title"] = expected_title
 
+        import hashlib
+        metadata = bundle["document"].get("doc_metadata_json") or {}
+        if isinstance(metadata, str):
+            metadata = json.loads(metadata)
+        metadata["import_sha256"] = hashlib.sha256(content).hexdigest()
+        bundle["document"]["doc_metadata_json"] = metadata
         doc_id = db_service.save_document_bundle(bundle)
         return {
             "document_id": doc_id,
@@ -534,6 +611,28 @@ def _process_single_import(filename: str, content: bytes) -> Dict[str, Any]:
             temp_path.unlink(missing_ok=True)
         except Exception:
             pass
+
+
+class ImportPreflightFile(BaseModel):
+    name: str
+    sha256: str = ""
+
+
+class ImportPreflightRequest(BaseModel):
+    files: List[ImportPreflightFile]
+
+
+@app.post("/api/editor/import-preflight")
+def preflight_editor_import(request: ImportPreflightRequest):
+    from app.import_duplicates import find_duplicates
+    conn = db_service.get_connection()
+    try:
+        documents = [dict(r) for r in conn.execute(
+            "SELECT id,title,source_filename,doc_metadata_json FROM documents")]
+    finally:
+        conn.close()
+    files = [{"name": f.name, "sha256": f.sha256} for f in request.files]
+    return {"status": "success", "duplicates": find_duplicates(files, documents)}
 
 
 @app.post("/api/editor/import-file")
@@ -682,8 +781,12 @@ def export_document_endpoint(doc_id: str, format: str = Query("md")):
 @app.post("/api/editor/upload-image")
 async def upload_editor_image(file: UploadFile = File(...)):
     """エディタから手動挿入または貼り付けられた画像を保存してURLを返す"""
-    content = await file.read()
-    ext = Path(file.filename or "image.png").suffix or ".png"
+    content = await _read_file_safely(file)
+    from app.editor_image import prepare_editor_image
+    try:
+        content, ext, width, height = await run_in_threadpool(prepare_editor_image, content)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
     importer = DocxImporter(media_dir=MEDIA_DIR)
     saved = importer.save_image_bytes(content, original_ext=ext, prefix="user_upload")
     return {
@@ -691,8 +794,17 @@ async def upload_editor_image(file: UploadFile = File(...)):
         "file_name": saved["file_name"],
         "file_path": saved["file_path"],
         "image_base64": saved.get("image_base64", ""),
-        "file_size_kb": saved["file_size_kb"]
+        "file_size_kb": saved["file_size_kb"],
+        "file_size_bytes": len(content),
+        "file_hash": saved["file_hash"],
+        "width": width, "height": height
     }
+
+
+@app.get("/api/search")
+def search_global_documents(q: str = "", group: str = "all"):
+    results = db_service.search_global(q, group)
+    return {"status": "success", "query": q, "count": len(results), "results": results}
 
 
 @app.get("/api/editor/search")
@@ -707,16 +819,8 @@ def search_editor_blocks(q: str):
 # ==========================================
 OCR_RESULTS_DIR = BASE_DIR / "data" / "ocr_results"
 OCR_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-
-def analyze_pdf_core(doc, filename: str, page_number: int = 1, deck_count: int = 2, orientation: str = "auto", doc_type: str = "japanese"):
-    return process_page_layout(
-        doc=doc,
-        page_number=page_number,
-        deck_count=deck_count,
-        orientation=orientation,
-        doc_type=doc_type,
-        filename=filename
-    )
+ocr_pdf_archive = OcrPdfArchive(OCR_RESULTS_DIR, BASE_DIR / "data" / "ocr_archives", PDF_CACHE_DIR)
+app.include_router(create_archive_router(ocr_pdf_archive))
 
 def save_figure_images_to_disk(pdf_name: str, page_number: int, figures: List[Dict[str, Any]], regions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     doc_dir = OCR_RESULTS_DIR / pdf_name
@@ -774,6 +878,7 @@ def save_figure_images_to_disk(pdf_name: str, page_number: int, figures: List[Di
 
     return updated_figures
 
+@serialized
 def save_ocr_page_to_disk(filename: str, page_number: int, data: Dict[str, Any]) -> bool:
     try:
         pdf_name = Path(filename).stem
@@ -907,29 +1012,36 @@ def _render_page_only_core(content: bytes, filename: str, page_number: int) -> d
     finally:
         doc.close()
 
-def _analyze_pdf_page_core(content: bytes, filename: str, page_number: int, orientation: str, doc_type: str, deck_num: int) -> dict:
+@serialized
+def _recognize_regions_core(content: bytes, filename: str, page_number: int, regions: list, orientation: str, doc_type: str, severe_skew: bool = False, corrected_image: Optional[str] = None) -> dict:
     try:
         doc = fitz.open(stream=content, filetype="pdf")
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"PDFファイルの展開に失敗しました: {str(e)}")
     try:
-        res = analyze_pdf_core(doc, filename=filename, page_number=page_number, deck_count=deck_num, orientation=orientation, doc_type=doc_type)
-        save_ocr_page_to_disk(filename, page_number, res)
-        return res
+        updated_data = recognize_custom_regions(doc=doc, page_number=page_number, regions=regions, orientation=orientation, doc_type=doc_type, filename=filename, severe_skew=severe_skew, image_override=decode_page_image(corrected_image) if corrected_image else None)
+        if corrected_image:
+            updated_data["corrected_image"] = corrected_image
+        save_ocr_page_to_disk(filename, page_number, updated_data)
+        return updated_data
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     finally:
         doc.close()
 
-def _recognize_regions_core(content: bytes, filename: str, page_number: int, regions: list, orientation: str, doc_type: str) -> dict:
+class LineTiltRequest(BaseModel):
+    image_base64: str
+    mode: str = "manual"
+    boundaries: List[Dict[str, float]] = []
+
+
+@app.post("/api/ocr/correct-line-tilt")
+async def correct_line_tilt_endpoint(req: LineTiltRequest):
     try:
-        doc = fitz.open(stream=content, filetype="pdf")
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"PDFファイルの展開に失敗しました: {str(e)}")
-    try:
-        updated_data = recognize_custom_regions(doc=doc, page_number=page_number, regions=regions, orientation=orientation, doc_type=doc_type, filename=filename)
-        save_ocr_page_to_disk(filename, page_number, updated_data)
-        return updated_data
-    finally:
-        doc.close()
+        return await run_in_threadpool(correct_image_request, req.image_base64, req.boundaries, req.mode)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
 
 @app.post("/api/ocr/render-page-only")
 async def render_page_only(
@@ -958,41 +1070,6 @@ async def render_page_only(
     res = await run_in_threadpool(_render_page_only_core, content, target_filename, page_number)
     return res
 
-@app.post("/api/ocr/analyze-pdf-page")
-async def analyze_pdf_page(
-    file: Optional[UploadFile] = File(None),
-    filename: Optional[str] = Form(None),
-    page_number: int = Form(1),
-    orientation: str = Form("auto"),
-    doc_type: str = Form("japanese"),
-    deck: str = Form("2")
-):
-    target_filename = file.filename if (file and file.filename) else filename
-    if not target_filename or not target_filename.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="PDFファイルを指定してください (.pdf)")
-
-    if file and file.filename:
-        content = await file.read()
-        if not content:
-            raise HTTPException(status_code=400, detail="PDFファイルの内容が空です")
-        clean_stem = Path(target_filename).stem
-        try:
-            (PDF_CACHE_DIR / f"{clean_stem}.pdf").write_bytes(content)
-        except Exception:
-            pass
-    else:
-        content = await run_in_threadpool(get_pdf_bytes_sync, target_filename)
-        if not content:
-            raise HTTPException(status_code=404, detail=f"PDFファイル「{target_filename}」がサーバー上に見つかりません。")
-
-    try:
-        deck_num = int(re.sub(r"\D", "", deck)) if re.sub(r"\D", "", deck) else 2
-    except Exception:
-        deck_num = 2
-
-    res = await run_in_threadpool(_analyze_pdf_page_core, content, target_filename, page_number, orientation, doc_type, deck_num)
-    return res
-
 @app.post("/api/ocr/recognize-regions")
 async def recognize_regions_endpoint(
     file: Optional[UploadFile] = File(None),
@@ -1000,8 +1077,17 @@ async def recognize_regions_endpoint(
     page_number: int = Form(1),
     regions_json: str = Form(...),
     orientation: str = Form("auto"),
-    doc_type: str = Form("japanese")
+    doc_type: str = Form("japanese"),
+    severe_skew: bool = Form(False),
+    corrected_image: Optional[str] = Form(None),
+    corrected_image_file: Optional[UploadFile] = File(None)
 ):
+    # A PNG file avoids multipart text-field size limits for full-page scans.
+    if corrected_image_file is not None:
+        corrected_bytes = await _read_file_safely(corrected_image_file)
+        if not corrected_bytes:
+            raise HTTPException(status_code=400, detail="補正画像のファイルが空です。")
+        corrected_image = "data:image/png;base64," + base64.b64encode(corrected_bytes).decode("ascii")
     target_filename = file.filename if (file and file.filename) else filename
     if not target_filename or not target_filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="PDFファイルを指定してください (.pdf)")
@@ -1024,9 +1110,571 @@ async def recognize_regions_endpoint(
         regions = json.loads(regions_json)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid regions JSON: {e}")
+    if not isinstance(regions, list) or not regions:
+        raise HTTPException(status_code=400, detail="OCR対象の領域がありません。先に領域自動判定を実行してください。")
 
-    updated_data = await run_in_threadpool(_recognize_regions_core, content, target_filename, page_number, regions, orientation, doc_type)
+    updated_data = await run_in_threadpool(_recognize_regions_core, content, target_filename, page_number, regions, orientation, doc_type, severe_skew, corrected_image)
     return updated_data
+
+@serialized
+def _detect_regions_only_core(content: bytes, page_number: int, filename: str, line_boxes: Optional[List[Dict[str, Any]]] = None, orientation: str = "auto", deck_count: int = 0, processed_image: Optional[str] = None, corrected_image: Optional[str] = None) -> dict:
+    """Detect coarse text/table regions from page pixels without invoking OCR."""
+    try:
+        doc = fitz.open(stream=content, filetype="pdf")
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"PDFファイルを開けません: {exc}")
+    try:
+        if len(doc) == 0:
+            raise HTTPException(status_code=400, detail="PDF内にページがありません。")
+        pno = max(0, min(int(page_number) - 1, len(doc) - 1))
+        page = doc[pno]
+        pix = page.get_pixmap(matrix=fitz.Matrix(2.0, 2.0), alpha=False)
+        pixels = np.frombuffer(pix.samples, dtype=np.uint8).reshape((pix.height, pix.width, pix.n))
+        image = cv2.cvtColor(pixels, cv2.COLOR_RGB2GRAY) if pix.n == 3 else cv2.cvtColor(pixels, cv2.COLOR_RGBA2GRAY)
+        if corrected_image:
+            try:
+                image = cv2.cvtColor(decode_page_image(corrected_image, image.shape), cv2.COLOR_BGR2GRAY)
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc))
+        if processed_image:
+            try:
+                encoded = processed_image.split(",", 1)[-1]
+                cleaned_bytes = base64.b64decode(encoded, validate=True)
+                erase_mask = cv2.imdecode(np.frombuffer(cleaned_bytes, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
+                if erase_mask is not None:
+                    if erase_mask.ndim == 3 and erase_mask.shape[2] == 4:
+                        opaque = erase_mask[:, :, 3] > 0
+                    elif erase_mask.ndim == 3:
+                        opaque = cv2.cvtColor(erase_mask, cv2.COLOR_BGR2GRAY) < 250
+                    else:
+                        opaque = erase_mask < 250
+                    if opaque.shape != image.shape:
+                        opaque = cv2.resize(
+                            opaque.astype(np.uint8), (image.shape[1], image.shape[0]),
+                            interpolation=cv2.INTER_NEAREST
+                        ) > 0
+                    image[opaque] = 255
+            except (ValueError, TypeError):
+                raise HTTPException(status_code=400, detail="画像処理済みデータを読み取れませんでした。画像処理をリセットして再実行してください。")
+        height, width = image.shape[:2]
+        # In automatic mode, treat a landscape scan as a two-page spread.
+        # Explicit one- or three-column settings remain authoritative.
+        two_page_mode = deck_count == 2 or (deck_count == 0 and width >= height * 1.05)
+        binary = cv2.threshold(image, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]
+
+        def find_center_gutter(mask):
+            """Choose the least-ink X near the fold, tolerant of vertical noise."""
+            # OCR-REPOS uses the summed darkness profile and smooths it before
+            # selecting a split. Unlike a pure-white-gap threshold, this still
+            # works when the scanned fold contains a dark vertical streak.
+            gray = image.astype(np.float32)
+            ink_density = np.maximum(0.0, 240.0 - gray).sum(axis=0)
+            smooth_w = max(5, min(25, (width // 40) | 1))
+            smooth = cv2.GaussianBlur(ink_density.reshape(1, -1), (smooth_w, 1), 5.0).ravel()
+            search_left, search_right = int(width * 0.44), int(width * 0.56)
+            center_band = smooth[search_left:search_right]
+            if center_band.size == 0:
+                split_x = width // 2
+            else:
+                split_x = search_left + int(np.argmin(center_band))
+                # Keep the chosen minimum close to the expected center; wider
+                # tolerance can snap to an interior page margin and merge one
+                # scanned page into the other.
+                if abs(split_x - width // 2) > int(width * 0.025):
+                    split_x = width // 2
+            half_gap = max(4, int(width * 0.006))
+            return max(0, split_x - half_gap), min(width, split_x + half_gap)
+
+        center_gutter = find_center_gutter(binary) if two_page_mode else None
+        # The option is explicit: if a clean white gutter cannot be measured,
+        # still split the two-page scan around the page center.
+        split_gutter = center_gutter or (
+            (max(0, width // 2 - max(4, int(width * 0.006))),
+             min(width, width // 2 + max(4, int(width * 0.006))))
+            if two_page_mode else None
+        )
+
+        # Long horizontal and vertical rules provide table boxes without text recognition.
+        h_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (max(20, width // 25), 1))
+        v_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, max(20, height // 30)))
+        h_lines = cv2.morphologyEx(binary, cv2.MORPH_OPEN, h_kernel)
+        v_lines = cv2.morphologyEx(binary, cv2.MORPH_OPEN, v_kernel)
+        rule_mask = cv2.add(h_lines, v_lines)
+        contours = cv2.findContours(rule_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[0]
+        table_boxes = []
+        for contour in contours:
+            x, y, w, h = cv2.boundingRect(contour)
+            if w < width * 0.12 or h < height * 0.08 or w * h < width * height * 0.003:
+                continue
+            # Scan/page borders can create a huge rectangle that looks like a
+            # table grid. Do not mask most of a page as a table when the box
+            # touches the image edge; that can erase one half of a spread.
+            touches_image_edge = (
+                x <= width * 0.015 or y <= height * 0.015
+                or x + w >= width * 0.985 or y + h >= height * 0.985
+            )
+            if touches_image_edge and (w >= width * 0.45 or h >= height * 0.75):
+                continue
+            # A rectangular border around prose (or a scan seam) is not a
+            # table. Require a real grid with at least three distinct tracks
+            # in each direction: outer borders plus internal separators.
+            hr = np.count_nonzero(h_lines[y:y + h, x:x + w], axis=1) > 0
+            vr = np.count_nonzero(v_lines[y:y + h, x:x + w], axis=0) > 0
+            horizontal_tracks = int(np.count_nonzero(np.diff(np.pad(hr.astype(np.uint8), (1, 1))) == 1))
+            vertical_tracks = int(np.count_nonzero(np.diff(np.pad(vr.astype(np.uint8), (1, 1))) == 1))
+            if horizontal_tracks >= 3 and vertical_tracks >= 3:
+                table_boxes.append((x, y, w, h))
+
+        regions = []
+        for idx, (x, y, w, h) in enumerate(sorted(table_boxes, key=lambda b: (b[1], b[0])), 1):
+            regions.append({
+                "id": f"detect-table-{idx}", "name": f"表候補 {idx}", "type": "table",
+                "x": x, "y": y, "w": w, "h": h, "text": "", "reading_order": idx
+            })
+
+        # When OCR has already populated line coordinates, reuse the same geometry
+        # cues as OCR layout (valid line bounds, table exclusion, and spread split).
+        # Only boxes are accepted here; recognized strings are neither sent nor used.
+        valid_lines = []
+        geometry_exclusion_boxes = []
+        geometry_lines = []
+        for item in line_boxes or []:
+            try:
+                x, y, w, h = [int(item[key]) for key in ("x", "y", "w", "h")]
+            except (KeyError, TypeError, ValueError):
+                continue
+            if w > 8 and h > 8 and x >= 0 and y >= 0 and x + w <= width and y + h <= height:
+                text = str(item.get("text") or "").strip()
+                geometry_lines.append({
+                    "x": x, "y": y, "w": w, "h": h,
+                    "is_vertical": bool(item.get("is_vertical")), "text": text
+                })
+
+        for line in geometry_lines:
+            x, y, w, h = (line[k] for k in ("x", "y", "w", "h"))
+            is_wide_horizontal_block = (
+                orientation != "horizontal" and w >= width * 0.06 and w >= h * 2.0
+            )
+            is_very_small_block = w <= width * 0.08 and h <= height * 0.04
+            if is_wide_horizontal_block:
+                geometry_exclusion_boxes.append((x, y, w, h))
+                continue
+            if is_very_small_block:
+                # A short fragment at the end of a vertical text column is
+                # still body text. Exclude tiny blocks only when no nearby
+                # block continues on the same x track.
+                has_neighbor = False
+                for other in geometry_lines:
+                    if other is line:
+                        continue
+                    overlap_x = min(x + w, other["x"] + other["w"]) - max(x, other["x"])
+                    if overlap_x < min(w, other["w"]) * 0.4:
+                        continue
+                    if other["y"] + other["h"] <= y:
+                        gap = y - (other["y"] + other["h"])
+                    elif y + h <= other["y"]:
+                        gap = other["y"] - (y + h)
+                    else:
+                        gap = 0
+                    if gap <= max(12, int(h * 1.6)):
+                        has_neighbor = True
+                        break
+                if not has_neighbor:
+                    geometry_exclusion_boxes.append((x, y, w, h))
+                    continue
+            valid_lines.append(line)
+
+        # Cached OCR lines can be partial or stale. For a requested spread,
+        # always use pixel geometry for explicit two-page scans. This keeps
+        # page bounds independent of which page happened to have cached OCR.
+        if two_page_mode:
+            valid_lines = []
+
+        if valid_lines:
+            def outside_table(line):
+                cx, cy = line["x"] + line["w"] / 2, line["y"] + line["h"] / 2
+                return not any(tx - 8 <= cx <= tx + tw + 8 and ty - 8 <= cy <= ty + th + 8 for tx, ty, tw, th in table_boxes)
+
+            non_table_lines = [line for line in valid_lines if outside_table(line)] or valid_lines
+            min_x = min(line["x"] for line in valid_lines)
+            max_x = max(line["x"] + line["w"] for line in valid_lines)
+            min_y = min(line["y"] for line in valid_lines)
+            max_y = max(line["y"] + line["h"] for line in valid_lines)
+            total_w, total_h = max_x - min_x, max_y - min_y
+            is_vertical = orientation == "vertical" or (
+                orientation not in ("vertical", "horizontal")
+                and sum(1 for line in valid_lines if line["is_vertical"]) > len(valid_lines) * 0.4
+            )
+            groups = []
+            if split_gutter:
+                gutter_left, gutter_right = split_gutter
+                left = [line for line in valid_lines if line["x"] + line["w"] / 2 < gutter_left]
+                right = [line for line in valid_lines if line["x"] + line["w"] / 2 > gutter_right]
+                left_text = [line for line in non_table_lines if line["x"] + line["w"] / 2 < gutter_left]
+                right_text = [line for line in non_table_lines if line["x"] + line["w"] / 2 > gutter_right]
+                if left and right:
+                    ordered = [("右ページ本文", right_text or right), ("左ページ本文", left_text or left)] if is_vertical else [("左ページ本文", left_text or left), ("右ページ本文", right_text or right)]
+                    groups = [(name, lines) for name, lines in ordered if lines]
+            if not groups:
+                groups = [("本文候補", non_table_lines)]
+
+            for idx, (name, lines) in enumerate(groups, len(regions) + 1):
+                x0 = max(0, min(line["x"] for line in lines) - 8)
+                y0 = max(0, min(line["y"] for line in lines) - 8)
+                x1 = min(width, max(line["x"] + line["w"] for line in lines) + 8)
+                y1 = min(height, max(line["y"] + line["h"] for line in lines) + 8)
+                if x1 > x0 and y1 > y0:
+                    regions.append({
+                        "id": f"detect-body-{idx}", "name": name, "type": "body",
+                        "x": x0, "y": y0, "w": x1 - x0, "h": y1 - y0,
+                        "text": "", "reading_order": len(regions) + 1
+                    })
+            heading_mask = binary.copy()
+            for x, y, w, h in table_boxes + geometry_exclusion_boxes:
+                heading_mask[y:y + h, x:x + w] = 0
+            regions = split_vertical_heading_regions(heading_mask, regions, orientation)
+            return {
+                "success": True, "filename": filename, "current_page": pno + 1,
+                "total_pages": len(doc), "image_width": width, "image_height": height,
+                "regions": regions, "source": "cached_ocr_geometry",
+                "heading_count": sum(r.get("type") == "heading" for r in regions),
+                "requested_deck_count": deck_count,
+                "spread_split": bool(split_gutter and len(groups) == 2),
+                "gutter_source": "smoothed_ink_minimum" if center_gutter else ("center_fallback" if two_page_mode else "not_requested")
+            }
+
+        # Follow OCR layout's valid-line and table-exclusion rules using pixel
+        # geometry as a proxy: ignore tiny noise, page-edge specks, oversized
+        # illustration components, and anything inside a detected table.
+        if two_page_mode and split_gutter:
+            # Threshold each scanned page independently. Global Otsu can be
+            # pulled by the dark center seam or a photo on the opposite page.
+            body_mask = np.zeros_like(binary)
+            gutter_left, gutter_right = split_gutter
+            page_slices = [(0, gutter_left), (gutter_right, width)]
+            for x0, x1 in page_slices:
+                if x1 <= x0:
+                    continue
+                page_gray = image[:, x0:x1]
+                page_binary = cv2.threshold(
+                    page_gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU
+                )[1]
+                body_mask[:, x0:x1] = page_binary
+        else:
+            body_mask = binary.copy()
+        for x, y, w, h in table_boxes:
+            body_mask[y:y + h, x:x + w] = 0
+        # Apply the same shape-only exclusions to image components when OCR
+        # line geometry is available. Pixel-only glyphs are kept intact here;
+        # classifying each glyph as a tiny block would erase ordinary text.
+        for x, y, w, h in geometry_exclusion_boxes:
+            body_mask[y:y + h, x:x + w] = 0
+        count, _, stats, _ = cv2.connectedComponentsWithStats(body_mask, connectivity=8)
+        boxes = []
+        pixel_exclusion_count = 0
+        max_glyph_dim = max(48, int(min(width, height) * 0.08))
+        edge_x = int(width * 0.015)
+        for idx in range(1, count):
+            x, y, w, h, area = [int(v) for v in stats[idx]]
+            if (
+                area >= 12 and w >= 8 and h >= 8
+                and w <= max_glyph_dim and h <= max_glyph_dim
+                and x >= edge_x and x + w <= width - edge_x
+            ):
+                boxes.append((x, y, w, h))
+
+        # OCR-free equivalent of the block-shape filters above. Join glyph
+        # components into same-height rows, then exclude wide horizontal text
+        # blocks and tiny isolated blocks by their geometry, never by page y.
+        spread_pages_split = False
+        if boxes:
+            median_glyph_h = float(np.median([b[3] for b in boxes]))
+            row_tolerance = max(3, int(median_glyph_h * 0.45))
+            component_rows = []
+            if two_page_mode and split_gutter:
+                gutter_left, gutter_right = split_gutter
+                page_box_groups = [
+                    [b for b in boxes if b[0] + b[2] / 2 < gutter_left],
+                    [b for b in boxes if b[0] + b[2] / 2 > gutter_right],
+                ]
+            else:
+                page_box_groups = [boxes]
+            for page_boxes in page_box_groups:
+                page_rows = []
+                for box in sorted(page_boxes, key=lambda b: b[1] + b[3] / 2):
+                    cy = box[1] + box[3] / 2
+                    if not page_rows:
+                        page_rows.append([box])
+                        continue
+                    last_cy = float(np.median([b[1] + b[3] / 2 for b in page_rows[-1]]))
+                    if abs(cy - last_cy) <= row_tolerance:
+                        page_rows[-1].append(box)
+                    else:
+                        page_rows.append([box])
+                # Same Y does not imply the same line block: a running
+                # chapter name on the left and a page number on the right
+                # must not become one page-wide row. Split at actual X gaps.
+                for row in page_rows:
+                    typical_width = float(np.median([b[2] for b in row]))
+                    max_inline_gap = max(8, int(max(typical_width * 1.6, median_glyph_h * 0.9)))
+                    segment = []
+                    right_edge = None
+                    for box in sorted(row, key=lambda b:b[0]):
+                        if right_edge is not None and box[0] - right_edge > max_inline_gap:
+                            component_rows.append(segment)
+                            segment = []
+                        segment.append(box)
+                        right_edge = max(right_edge or 0, box[0] + box[2])
+                    if segment:
+                        component_rows.append(segment)
+
+            blocks_to_remove = set()
+            for row in component_rows:
+                rx0 = min(b[0] for b in row)
+                ry0 = min(b[1] for b in row)
+                rx1 = max(b[0] + b[2] for b in row)
+                ry1 = max(b[1] + b[3] for b in row)
+                rw, rh = rx1 - rx0, ry1 - ry0
+                wide_horizontal = (
+                    orientation != "horizontal"
+                    and rw >= width * 0.06 and rw <= width * (0.40 if two_page_mode else 0.70)
+                    and rw >= rh * 2.0
+                )
+                very_small = rw <= width * 0.08 and rh <= height * 0.04 and len(row) <= 12
+                if not (wide_horizontal or very_small):
+                    continue
+
+                # A short final row in a vertical text column can look tiny.
+                # Keep shape candidates that continue vertically at the same
+                # x; isolated horizontal headings/page-number blocks do not.
+                has_vertical_neighbor = []
+                for x, y, w, h in row:
+                    sx0 = max(0, x + int(w * 0.25))
+                    sx1 = min(width, max(sx0 + 1, x + int(w * 0.75)))
+                    gap = max(1, int(h * 0.10))
+                    reach = max(4, int(h * 1.6))
+                    above_y0 = max(0, y - gap - reach)
+                    above_y1 = max(0, y - gap)
+                    below_y0 = min(height, y + h + gap)
+                    below_y1 = min(height, below_y0 + reach)
+                    above = body_mask[above_y0:above_y1, sx0:sx1]
+                    below = body_mask[below_y0:below_y1, sx0:sx1]
+                    has_vertical_neighbor.append(
+                        bool(np.count_nonzero(above) or np.count_nonzero(below))
+                    )
+                isolated_ratio = 1.0 - sum(has_vertical_neighbor) / max(1, len(row))
+                if isolated_ratio >= 0.70:
+                    blocks_to_remove.update(row)
+
+            if blocks_to_remove:
+                pixel_exclusion_count = len(blocks_to_remove)
+                boxes = [b for b in boxes if b not in blocks_to_remove]
+
+        if boxes:
+            # Build each page's body area from repeated glyph Y coordinates.
+            # A scanned spread can contain an upper and a lower text block on
+            # each page, so page-wide min/max bounds incorrectly bridge the
+            # whitespace between those blocks (and can absorb a running head).
+            page_box_groups = [("本文候補", boxes)]
+            if split_gutter:
+                gutter_left, gutter_right = split_gutter
+                left_boxes = [b for b in boxes if b[0] + b[2] / 2 < gutter_left]
+                right_boxes = [b for b in boxes if b[0] + b[2] / 2 > gutter_right]
+                if left_boxes and right_boxes:
+                    spread_pages_split = True
+                    if orientation == "vertical":
+                        page_box_groups = [("右ページ", right_boxes), ("左ページ", left_boxes)]
+                    else:
+                        page_box_groups = [("左ページ", left_boxes), ("右ページ", right_boxes)]
+
+            box_groups = []
+            typical_glyph_h = max(1, int(np.median([b[3] for b in boxes])))
+            for page_name, page_boxes in page_box_groups:
+                # Also look for a substantial X-coordinate valley inside each
+                # page. A display title at the outer edge can otherwise stretch
+                # the body rectangle and skew the spread split. Keep the title
+                # as its own OCR candidate instead of merging it with body text.
+                spatial_groups = [(page_name, page_boxes)]
+                if two_page_mode and len(page_boxes) >= 12:
+                    page_x0 = min(b[0] for b in page_boxes)
+                    page_x1 = max(b[0] + b[2] for b in page_boxes)
+                    page_span = page_x1 - page_x0
+                    if page_span > 0:
+                        x_counts = np.zeros(width, dtype=np.int32)
+                        for x, _, w, _ in page_boxes:
+                            x_counts[x:min(width, x + w)] += 1
+                        positive = x_counts[page_x0:page_x1]
+                        positive = positive[positive > 0]
+                        typical_x_occupancy = float(np.median(positive)) if positive.size else 0.0
+                        x_active = x_counts >= max(1.0, typical_x_occupancy * 0.10)
+                        min_x_gap = max(
+                            int(np.median([b[2] for b in page_boxes]) * 1.3),
+                            int(width * 0.01), 8
+                        )
+                        min_cluster = max(8, int(len(page_boxes) * 0.08))
+                        candidate_gaps = []
+                        x = page_x0
+                        while x < page_x1:
+                            if x_active[x]:
+                                x += 1
+                                continue
+                            gap_start = x
+                            while x < page_x1 and not x_active[x]:
+                                x += 1
+                            if x - gap_start < min_x_gap:
+                                continue
+                            left_cluster = [b for b in page_boxes if b[0] + b[2] / 2 < gap_start]
+                            right_cluster = [b for b in page_boxes if b[0] + b[2] / 2 >= x]
+                            if min(len(left_cluster), len(right_cluster)) >= min_cluster:
+                                candidate_gaps.append((x - gap_start, gap_start, x, left_cluster, right_cluster))
+                        if candidate_gaps:
+                            _, _, _, left_cluster, right_cluster = max(candidate_gaps, key=lambda item: item[0])
+                            if len(left_cluster) <= len(right_cluster):
+                                spatial_groups = [(f"{page_name}見出し候補", left_cluster), (f"{page_name}本文", right_cluster)]
+                            else:
+                                spatial_groups = [(f"{page_name}本文", left_cluster), (f"{page_name}見出し候補", right_cluster)]
+
+                for spatial_name, spatial_boxes in spatial_groups:
+                    # Count boxes covering each Y coordinate. Repeated
+                    # alignment marks each upper/lower text band independently.
+                    occupancy = np.zeros(height, dtype=np.int32)
+                    for _, y, _, h in spatial_boxes:
+                        occupancy[max(0, y):min(height, y + h)] += 1
+                    smooth_window = max(3, typical_glyph_h)
+                    kernel = np.ones(smooth_window, dtype=np.float32) / smooth_window
+                    smoothed = np.convolve(occupancy, kernel, mode="same")
+                    active = smoothed >= max(1.0, len(spatial_boxes) * 0.0015)
+                    active_y = np.flatnonzero(active)
+                    y_ranges = []
+                    if len(active_y):
+                        run_start = previous = int(active_y[0])
+                        max_gap = max(8, int(typical_glyph_h * 2.5))
+                        for current in map(int, active_y[1:]):
+                            if current - previous > max_gap:
+                                y_ranges.append((run_start, previous + 1))
+                                run_start = current
+                            previous = current
+                        y_ranges.append((run_start, previous + 1))
+
+                    # Retain meaningful bands only; this avoids splitting at
+                    # ordinary line gaps while keeping upper/lower blocks apart.
+                    bands = []
+                    for y0, y1 in y_ranges:
+                        band_boxes = [b for b in spatial_boxes if b[1] + b[3] > y0 and b[1] < y1]
+                        # A few disconnected scan-seam specks must not extend
+                        # the body to a page edge. Demand repeated glyph support
+                        # in each band, relative to this text group (bounded so
+                        # genuine short text bands still survive).
+                        min_band_support = max(3, min(12, int(len(spatial_boxes) * 0.01)))
+                        if len(band_boxes) >= min_band_support:
+                            bands.append((y0, y1, band_boxes))
+                    if deck_count == 1 and bands:
+                        # A fixed single-deck setting must not be overridden by
+                        # automatically detected upper/lower ink bands. Keep
+                        # substantial separated prose in the same body region.
+                        primary = max(bands, key=lambda band: len(band[2]))
+                        primary_boxes = primary[2]
+                        primary_w = max(b[0] + b[2] for b in primary_boxes) - min(b[0] for b in primary_boxes)
+                        body_boxes = []
+                        for band in bands:
+                            band_boxes = band[2]
+                            band_w = max(b[0] + b[2] for b in band_boxes) - min(b[0] for b in band_boxes)
+                            band_h = max(b[1] + b[3] for b in band_boxes) - min(b[1] for b in band_boxes)
+                            # An isolated small horizontal running head/folio
+                            # can contain several rows, so its own rows must
+                            # not count as vertical prose continuation. Use
+                            # its shape/support, never a fixed page margin.
+                            small_horizontal_block = (
+                                orientation != "horizontal" and band is not primary
+                                and band_w >= band_h * 2.0
+                                and band_h <= typical_glyph_h * 3
+                                and band_w <= primary_w * 0.5
+                                and len(band_boxes) <= len(primary_boxes) * 0.10
+                            )
+                            if small_horizontal_block:
+                                pixel_exclusion_count += len(band_boxes)
+                                continue
+                            body_boxes.extend(band_boxes)
+                        box_groups.append((spatial_name, body_boxes))
+                    elif len(bands) >= 2:
+                        for band_index, (_, _, band_boxes) in enumerate(bands, 1):
+                            suffix = '上段' if band_index == 1 else '下段' if band_index == 2 else f'{band_index}段'
+                            box_groups.append((f"{spatial_name}{suffix}", band_boxes))
+                    elif bands:
+                        # Use the one valid band, not all original components:
+                        # the latter reintroduced the discarded edge noise.
+                        box_groups.append((spatial_name, bands[0][2]))
+
+            for name, group_boxes in box_groups:
+                x0 = max(0, min(b[0] for b in group_boxes) - 8)
+                y0 = max(0, min(b[1] for b in group_boxes) - 8)
+                x1 = min(width, max(b[0] + b[2] for b in group_boxes) + 8)
+                y1 = min(height, max(b[1] + b[3] for b in group_boxes) + 8)
+                if x1 > x0 and y1 > y0:
+                    regions.append({
+                        "id": f"detect-body-{len(regions) + 1}", "name": name, "type": "body",
+                        "x": x0, "y": y0, "w": x1 - x0, "h": y1 - y0,
+                        "text": "", "reading_order": len(regions) + 1
+                    })
+
+        regions = split_vertical_heading_regions(body_mask, regions, orientation)
+        return {
+            "success": True, "filename": filename, "current_page": pno + 1,
+            "total_pages": len(doc), "image_width": width, "image_height": height,
+            "regions": regions, "requested_deck_count": deck_count,
+            "heading_count": sum(r.get("type") == "heading" for r in regions),
+            "two_page_mode": two_page_mode,
+            "spread_split": spread_pages_split,
+            "segmentation_source": "two_page_pixel_geometry" if two_page_mode else "pixel_geometry",
+            "excluded_block_count": len(geometry_exclusion_boxes) + pixel_exclusion_count,
+            "gutter_source": "smoothed_ink_minimum" if center_gutter else ("center_fallback" if two_page_mode else "not_requested"),
+            "gutter_x": int((split_gutter[0] + split_gutter[1]) / 2) if split_gutter else None,
+            "image_processing_applied": bool(processed_image or corrected_image),
+            "corrected_image": corrected_image
+        }
+    finally:
+        doc.close()
+
+@app.post("/api/ocr/detect-regions-only")
+async def detect_regions_only_endpoint(
+    file: Optional[UploadFile] = File(None),
+    filename: Optional[str] = Form(None),
+    page_number: int = Form(1),
+    line_boxes_json: Optional[str] = Form(None),
+    orientation: str = Form("auto"),
+    deck_count: int = Form(0),
+    processed_image: Optional[str] = Form(None),
+    corrected_image: Optional[str] = Form(None),
+    corrected_image_file: Optional[UploadFile] = File(None)
+):
+    # A PNG file avoids multipart text-field size limits for full-page scans.
+    if corrected_image_file is not None:
+        corrected_bytes = await _read_file_safely(corrected_image_file)
+        if not corrected_bytes:
+            raise HTTPException(status_code=400, detail="補正画像のファイルが空です。")
+        corrected_image = "data:image/png;base64," + base64.b64encode(corrected_bytes).decode("ascii")
+    target_filename = file.filename if file and file.filename else filename
+    if not target_filename or not target_filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="PDFファイルを指定してください (.pdf)")
+    if file and file.filename:
+        content = await file.read()
+        if not content:
+            raise HTTPException(status_code=400, detail="PDFファイルの内容が空です")
+        try:
+            (PDF_CACHE_DIR / f"{Path(target_filename).stem}.pdf").write_bytes(content)
+        except Exception:
+            pass
+    else:
+        content = await run_in_threadpool(get_pdf_bytes_sync, target_filename)
+        if not content:
+            raise HTTPException(status_code=404, detail="PDFがサーバーのキャッシュにありません。PDFを開き直してください。")
+    line_boxes = []
+    if line_boxes_json:
+        try:
+            line_boxes = json.loads(line_boxes_json)
+        except (TypeError, ValueError):
+            line_boxes = []
+    return await run_in_threadpool(_detect_regions_only_core, content, page_number, target_filename, line_boxes, orientation, deck_count, processed_image, corrected_image)
 
 class ExtractTableGridRequest(BaseModel):
     filename: str
@@ -1088,8 +1736,10 @@ class RecognizeSingleRegionRequest(BaseModel):
     region: Dict[str, Any]
     doc_type: str = "japanese"
     default_orientation: str = "auto"
+    severe_skew: bool = False
 
 @app.post("/api/ocr/recognize-single-region")
+@serialized
 def recognize_single_region_endpoint(req: RecognizeSingleRegionRequest):
     """
     指定された単一領域のみを高精度に再認識・整形する。
@@ -1156,7 +1806,8 @@ def recognize_single_region_endpoint(req: RecognizeSingleRegionRequest):
         
         if crop.shape[0] > 6 and crop.shape[1] > 6:
             # クロップ画像に対して指定の組方向でOCRを実行
-            crop_lines = run_ndlocr_on_image(crop, orientation=reg_orient, doc_type=req.doc_type)
+            crop_lines = run_ndlocr_on_image(crop, orientation=reg_orient, doc_type=req.doc_type,
+                recover_small_text=req.severe_skew, recover_missing_columns=req.severe_skew)
             
             # 行座標をページ全体座標系にシフト
             shifted_lines = []
@@ -1218,6 +1869,27 @@ def save_batch_api(req: BatchSaveRequest):
             saved_count += 1
     return {"status": "success", "saved_count": saved_count}
 
+@app.get("/ocr_footnotes.js")
+def serve_ocr_footnotes_script():
+    return FileResponse(BASE_DIR / "ocr_footnotes.js", media_type="application/javascript")
+
+@app.get("/ocr_pdf_library.js")
+def serve_ocr_pdf_library_script():
+    return FileResponse(BASE_DIR / "ocr_pdf_library.js", media_type="application/javascript")
+
+@app.get("/backup_restore.js")
+def serve_backup_restore_script():
+    return FileResponse(BASE_DIR / "backup_restore.js", media_type="application/javascript")
+
+@app.get("/storage_folders.js")
+def serve_storage_folders_script():
+    return FileResponse(BASE_DIR / "storage_folders.js", media_type="application/javascript")
+
+@app.get("/api/ocr/footnote-catalog")
+def ocr_footnote_catalog(filename: str):
+    from app.ocr_footnotes import build_catalog
+    return {"filename":filename,"pages":build_catalog(OCR_RESULTS_DIR / Path(filename).stem)}
+
 @app.get("/api/batch/load-all-pages")
 def load_all_pages_api(filename: str):
     pdf_name = Path(filename).stem
@@ -1261,39 +1933,23 @@ def load_all_pages_api(filename: str):
 
 class DeleteDiskDataRequest(BaseModel):
     filename: Optional[str] = None
+    archive_id: Optional[str] = None
 
 @app.post("/api/batch/delete-disk-data")
 async def delete_disk_data_api(
     filename: Optional[str] = Form(None),
+    archive_id: Optional[str] = Form(None),
     body: Optional[DeleteDiskDataRequest] = None
 ):
-    target_filename = filename or (body.filename if body else None)
-    if not target_filename:
-        raise HTTPException(status_code=400, detail="Filename is required")
-    
-    pdf_name = Path(target_filename).stem
-    doc_dir = OCR_RESULTS_DIR / pdf_name
-    
-    deleted = False
-    deleted_pages_count = 0
-    if doc_dir.exists() and doc_dir.is_dir():
-        try:
-            if doc_dir.resolve().is_relative_to(OCR_RESULTS_DIR.resolve()):
-                pages = list(doc_dir.glob("page_*"))
-                deleted_pages_count = len(pages)
-                shutil.rmtree(doc_dir)
-                deleted = True
-        except Exception as e:
-            print(f"Error deleting doc_dir {doc_dir}: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
-            
-    return {
-        "status": "success",
-        "deleted": deleted,
-        "filename": target_filename,
-        "deleted_pages_count": deleted_pages_count,
-        "message": f"Successfully deleted OCR raw data for {pdf_name}"
-    }
+    target = filename or (body.filename if body else None)
+    archive = archive_id or (body.archive_id if body else None)
+    if not target or not archive:
+        raise HTTPException(status_code=400, detail="先にOCR付きPDFを保存・検証してください。生データは保持します。")
+    try:
+        return await run_in_threadpool(ocr_pdf_archive.delete_raw, target, archive)
+    except (ValueError, OSError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
 
 class ExportBatchDocxRequest(BaseModel):
     filename: str
@@ -1509,169 +2165,6 @@ def get_batch_figures_list(filename: str, start_page: Optional[int] = None, end_
 
 
 # ==========================================
-# 文書校正 (Proofreading) API エンドポイント (KWJA / ルール / ハイブリッド)
-# ==========================================
-class ProofreadScanRequest(BaseModel):
-    filename: Optional[str] = None
-    pages: Dict[str, Dict[str, Any]]
-    engine: str = "hybrid"  # rule, kwja, hybrid
-
-
-class ProofreadApplyRequest(BaseModel):
-    filename: Optional[str] = None
-    pages: Dict[str, Dict[str, Any]]
-    engine: str = "hybrid"
-
-
-@app.get("/api/proofread/engine-status")
-def get_proofread_engine_status():
-    """校正エンジンの利用可能状態（ルール、KWJA）を取得"""
-    from app.ocr_pipeline.kwja_corrector import is_kwja_available
-    kwja_ok = is_kwja_available()
-    return {
-        "status": "success",
-        "rule_available": True,
-        "kwja_available": kwja_ok,
-        "default_engine": "hybrid" if kwja_ok else "rule"
-    }
-
-
-@app.post("/api/proofread/scan-batch")
-def scan_batch_proofread(req: ProofreadScanRequest):
-    """指定バッチまたは全ページの校正候補を一括抽出"""
-    from app.ocr_pipeline.katakana_corrector import extract_proofread_candidates
-    candidates_by_page = {}
-    total_candidates = 0
-
-    for p_str, p_data in req.pages.items():
-        page_candidates = []
-        p_num = int(p_str) if p_str.isdigit() else 1
-
-        # 1. 本文
-        body_text = p_data.get("body_text", "")
-        if body_text:
-            body_cands = extract_proofread_candidates(body_text, engine=req.engine)
-            for c in body_cands:
-                c["tab"] = "body"
-                c["page"] = p_num
-                page_candidates.append(c)
-
-        # 2. 見出し
-        headings = p_data.get("headings", [])
-        for h_idx, h in enumerate(headings):
-            h_text = h if isinstance(h, str) else h.get("title", "")
-            if h_text:
-                h_cands = extract_proofread_candidates(h_text, engine=req.engine)
-                for c in h_cands:
-                    c["tab"] = "heading"
-                    c["page"] = p_num
-                    c["item_index"] = h_idx
-                    page_candidates.append(c)
-
-        # 3. 注釈文
-        footnotes = p_data.get("footnotes", [])
-        for f_idx, fn in enumerate(footnotes):
-            fn_text = fn if isinstance(fn, str) else fn.get("text", "")
-            if fn_text:
-                fn_cands = extract_proofread_candidates(fn_text, engine=req.engine)
-                for c in fn_cands:
-                    c["tab"] = "footnote"
-                    c["page"] = p_num
-                    c["item_index"] = f_idx
-                    page_candidates.append(c)
-
-        candidates_by_page[p_str] = page_candidates
-        total_candidates += len(page_candidates)
-
-    return {
-        "status": "success",
-        "engine": req.engine,
-        "total_candidates": total_candidates,
-        "candidates_by_page": candidates_by_page
-    }
-
-
-@app.post("/api/proofread/apply-batch")
-def apply_batch_proofread(req: ProofreadApplyRequest):
-    """指定バッチまたは全ページに対して校正を一括適用"""
-    from app.ocr_pipeline.katakana_corrector import correct_japanese_text
-    from app.ocr_pipeline.kwja_corrector import is_kwja_available, correct_text_with_kwja
-
-    corrected_pages = {}
-    modified_count = 0
-
-    for p_str, p_data in req.pages.items():
-        doc = dict(p_data)
-        page_mod = False
-
-        # 本文
-        orig_body = doc.get("body_text", "")
-        if orig_body:
-            if "raw_body_text" not in doc or not doc["raw_body_text"]:
-                doc["raw_body_text"] = orig_body
-
-            corr_body = correct_japanese_text(orig_body)
-            if req.engine in ("kwja", "hybrid") and is_kwja_available():
-                corr_body = correct_text_with_kwja(corr_body)
-
-            if corr_body != orig_body:
-                doc["body_text"] = corr_body
-                page_mod = True
-
-        # 見出し
-        headings = doc.get("headings", [])
-        new_headings = []
-        for h in headings:
-            if isinstance(h, str):
-                c_h = correct_japanese_text(h)
-                new_headings.append(c_h)
-                if c_h != h: page_mod = True
-            elif isinstance(h, dict):
-                nh = dict(h)
-                c_t = correct_japanese_text(nh.get("title", ""))
-                if c_t != nh.get("title", ""):
-                    nh["title"] = c_t
-                    page_mod = True
-                new_headings.append(nh)
-            else:
-                new_headings.append(h)
-        doc["headings"] = new_headings
-
-        # 注釈文
-        footnotes = doc.get("footnotes", [])
-        new_footnotes = []
-        for fn in footnotes:
-            if isinstance(fn, str):
-                c_fn = correct_japanese_text(fn)
-                new_footnotes.append(c_fn)
-                if c_fn != fn: page_mod = True
-            elif isinstance(fn, dict):
-                nfn = dict(fn)
-                c_t = correct_japanese_text(nfn.get("text", ""))
-                if c_t != nfn.get("text", ""):
-                    nfn["text"] = c_t
-                    page_mod = True
-                new_footnotes.append(nfn)
-            else:
-                new_footnotes.append(fn)
-        doc["footnotes"] = new_footnotes
-
-        if page_mod:
-            modified_count += 1
-            doc["is_proofread"] = True
-            doc["proofread_engine"] = req.engine
-
-        corrected_pages[p_str] = doc
-
-    return {
-        "status": "success",
-        "engine": req.engine,
-        "modified_count": modified_count,
-        "corrected_pages": corrected_pages
-    }
-
-
-# ==========================================
 # ユーザー補正辞書 & 縦中横（10〜99）REST API
 # ==========================================
 USER_DICT_PATHS = [
@@ -1730,3 +2223,23 @@ def save_tcy_registry(payload: Dict[str, Any]):
             pass
     return {"status": "success"}
 
+
+
+class ParagraphStyleRequest(BaseModel):
+    style: Dict[str, Any]
+    previous: Optional[Dict[str, Any]] = None
+    scope: str = "database"
+    document_id: Optional[str] = None
+
+@app.get("/api/editor/paragraph-styles")
+def get_paragraph_styles(document_id: Optional[str] = None):
+    from app.editor_paragraph_styles import load_styles
+    return {"styles": load_styles(db_service, document_id)}
+
+@app.post("/api/editor/paragraph-styles")
+def save_paragraph_style(req: ParagraphStyleRequest):
+    from app.editor_paragraph_styles import update_style
+    try:
+        return update_style(db_service, req.style, req.previous, req.scope, req.document_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))

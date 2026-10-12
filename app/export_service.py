@@ -10,6 +10,7 @@ from docx.shared import Inches, Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from PIL import Image as PILImage
 
+from app.ocr_footnotes import WordFootnotes, note_id
 from app.db_service import DBService, BASE_DIR
 from app.ocr_pipeline.katakana_corrector import correct_japanese_text
 
@@ -182,68 +183,8 @@ class ExportService:
         return full_html
 
     def export_docx(self, doc_id: str) -> io.BytesIO:
-        bundle = self.get_bundle(doc_id)
-        doc_info = bundle["document"]
-        title = doc_info.get("title", "Document")
-        blocks = bundle["blocks"]
-        tables_map = {t["id"]: t for t in bundle["tables"]}
-        figures_map = {f["id"]: f for f in bundle["figures"]}
-
-        docx_doc = docx.Document()
-        title_p = docx_doc.add_heading(title, level=0)
-
-        for blk in blocks:
-            b_type = blk.get("block_type")
-            text = blk.get("text_content", "")
-            h_content = blk.get("html_content", "")
-
-            if b_type == "heading":
-                lvl = 1
-                if "<h1>" in h_content: lvl = 1
-                elif "<h2>" in h_content: lvl = 2
-                elif "<h3>" in h_content: lvl = 3
-                docx_doc.add_heading(text, level=lvl)
-
-            elif "data-table-id" in h_content:
-                import re
-                m = re.search(r'data-table-id="([^"]+)"', h_content)
-                if m and m.group(1) in tables_map:
-                    tbl = tables_map[m.group(1)]
-                    grid = tbl.get("grid", {})
-                    rows = grid.get("rows", [])
-                    if rows:
-                        t = docx_doc.add_table(rows=len(rows), cols=len(rows[0]))
-                        t.style = "Table Grid"
-                        for r_idx, row in enumerate(rows):
-                            for c_idx, val in enumerate(row):
-                                t.cell(r_idx, c_idx).text = str(val)
-                else:
-                    docx_doc.add_paragraph(text)
-
-            elif "data-fig-id" in h_content:
-                import re
-                m = re.search(r'data-fig-id="([^"]+)"', h_content)
-                if m and m.group(1) in figures_map:
-                    fig = figures_map[m.group(1)]
-                    fpath = fig.get("file_path", "")
-                    if fpath.startswith("/media/"):
-                        disk_f = BASE_DIR / "data" / "media" / Path(fpath).name
-                        if disk_f.exists():
-                            try:
-                                docx_doc.add_picture(str(disk_f), width=Inches(5.0))
-                                caption_p = docx_doc.add_paragraph(fig.get("caption", ""))
-                                caption_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                            except Exception:
-                                docx_doc.add_paragraph(f"[図版: {fig.get('caption', '')}]")
-                else:
-                    docx_doc.add_paragraph(text)
-            else:
-                docx_doc.add_paragraph(text)
-
-        out_stream = io.BytesIO()
-        docx_doc.save(out_stream)
-        out_stream.seek(0)
-        return out_stream
+        from app.rich_docx import export_rich_docx
+        return export_rich_docx(self.get_bundle(doc_id), BASE_DIR)
 
     def export_odt(self, doc_id: str) -> io.BytesIO:
         """
@@ -416,42 +357,60 @@ class ExportService:
             docx_doc.add_paragraph(empty_msg)
 
         # 3. ページまたぎ結合の準備と各ページ要素の出力
+        word_notes = WordFootnotes(docx_doc, all_pages_data, doc_dir, memory_pages)
         all_footnotes = []
 
         # ページごとの本文段落リスト
         doc_elements = []
 
         for p_num, p_data, p_dir in all_pages_data:
-            # 1. 登録済み見出し辞書の構築 (title -> level)
-            headings_raw = p_data.get("headings", [])
-            headings_map = {}
-            for h in headings_raw:
-                h_title = h.get("title") if isinstance(h, dict) else str(h)
-                if not h_title and isinstance(h, dict):
-                    h_title = h.get("text", "")
-                h_level = h.get("level", 1) if isinstance(h, dict) else 1
-                h_title = re.sub(r"^\[P\d+\]\s*", "", str(h_title)).strip()
-                h_title = re.sub(r"^【(?:大|中|小)?見出し】\s*", "", h_title).strip()
-                if h_title:
-                    clean_title = correct_japanese_text(h_title)
-                    headings_map[clean_title] = h_level
-                    headings_map[h_title] = h_level
+            # 見出しタブの編集を優先。同じ領域の旧 OCR 文字は別見出しにしない。
+            def heading_title(value):
+                value = re.sub(r"^\[P\d+\]\s*", "", str(value or "")).strip()
+                return correct_japanese_text(re.sub(r"^【(?:大|中|小)?見出し】\s*", "", value).strip())
 
+            headings_raw = p_data.get("headings", [])
+            heading_regions = [r for r in p_data.get("regions", []) if r.get("type") == "heading"]
+            region_headings = {}
+            matched_records = set()
+            for index, h in enumerate(headings_raw):
+                title = heading_title((h.get("title") if "title" in h else h.get("text")) if isinstance(h, dict) else h)
+                region_key = h.get("region_id", h.get("id")) if isinstance(h, dict) else None
+                bbox = h.get("bbox") if isinstance(h, dict) else None
+                candidates = [i for i, r in enumerate(heading_regions) if i not in region_headings and (
+                    (region_key is not None and r.get("id") == region_key) or
+                    (region_key is None and bbox is not None and bbox == [r.get("x"), r.get("y"), r.get("x", 0)+r.get("w", 0), r.get("y", 0)+r.get("h", 0)]))]
+                if not candidates and region_key is None:
+                    candidates = [i for i, r in enumerate(heading_regions) if i not in region_headings and heading_title(r.get("text")) == title]
+                if len(candidates) == 1:
+                    region_headings[candidates[0]] = h
+                    matched_records.add(index)
+            # 識別子がない旧データも、残る組が一対だけなら安全に対応できる。
+            remaining_regions = [i for i in range(len(heading_regions)) if i not in region_headings]
+            remaining_records = [i for i in range(len(headings_raw)) if i not in matched_records
+                and (not isinstance(headings_raw[i], dict) or not headings_raw[i].get("region_id", headings_raw[i].get("id")))]
+            if len(remaining_regions) == len(remaining_records) == 1:
+                region_headings[remaining_regions[0]] = headings_raw[remaining_records[0]]
+
+            headings_map, heading_aliases, region_titles = {}, {}, {}
+            for h in headings_raw:
+                title = heading_title((h.get("title") if "title" in h else h.get("text")) if isinstance(h, dict) else h)
+                if title:
+                    headings_map[title] = h.get("level", 1) if isinstance(h, dict) else 1
+            for i, r in enumerate(heading_regions):
+                old = heading_title(r.get("text"))
+                if i in region_headings:
+                    h = region_headings[i]
+                    title = heading_title((h.get("title") if "title" in h else h.get("text")) if isinstance(h, dict) else h)
+                    if old and old != title:
+                        heading_aliases[old] = title
+                else:
+                    title = old
+                    if title:
+                        headings_map.setdefault(title, 2)
+                region_titles[id(r)] = title
             emitted_headings = set()
             page_elements = []
-
-            # regions に type == "heading" があれば見出し辞書に補正登録
-            for r in p_data.get("regions", []):
-                if r.get("type") == "heading":
-                    r_text = r.get("text", "").strip()
-                    r_text = re.sub(r"^\[P\d+\]\s*", "", r_text).strip()
-                    r_text = re.sub(r"^【(?:大|中|小)?見出し】\s*", "", r_text).strip()
-                    if r_text:
-                        clean_r = correct_japanese_text(r_text)
-                        if clean_r not in headings_map:
-                            headings_map[clean_r] = 2
-                        if r_text not in headings_map:
-                            headings_map[r_text] = 2
 
             # 2. 本文テキストの取得: 真実のソース（Source of Truth）はユーザーが編集・保存した body_text
             b_text = p_data.get("body_text", "")
@@ -476,7 +435,9 @@ class ExportService:
                     m_midashi = re.match(r"^【(?:大|中|小)?見出し】\s*(.+)$", ln)
                     if m_midashi:
                         m_title = m_midashi.group(1).strip()
-                        clean_m = correct_japanese_text(m_title)
+                        clean_m = heading_aliases.get(heading_title(m_title), heading_title(m_title))
+                        if not clean_m or clean_m in emitted_headings:
+                            continue
                         h_lvl = headings_map.get(clean_m, headings_map.get(m_title, 2))
                         page_elements.append({
                             "type": "heading",
@@ -490,7 +451,13 @@ class ExportService:
 
                     # 見出し判定 (辞書マッチ)
                     clean_ln = correct_japanese_text(ln)
-                    if (ln in headings_map or clean_ln in headings_map) and (len(ln) < 40) and clean_ln not in emitted_headings:
+                    if heading_title(ln) in heading_aliases:
+                        clean_ln = heading_aliases[heading_title(ln)]
+                        if not clean_ln or clean_ln in emitted_headings:
+                            continue
+                    if clean_ln in headings_map and (len(ln) < 40):
+                        if clean_ln in emitted_headings:
+                            continue
                         h_lvl = headings_map.get(clean_ln, headings_map.get(ln, 2))
                         page_elements.append({
                             "type": "heading",
@@ -521,7 +488,9 @@ class ExportService:
                     if rtype == "heading":
                         clean_h = re.sub(r"^\[P\d+\]\s*", "", rtext).strip()
                         clean_h = re.sub(r"^【(?:大|中|小)?見出し】\s*", "", clean_h).strip()
-                        clean_h = correct_japanese_text(clean_h)
+                        clean_h = region_titles.get(id(r), heading_title(clean_h))
+                        if not clean_h or clean_h in emitted_headings:
+                            continue
                         h_lvl = headings_map.get(clean_h, headings_map.get(rtext, 2))
                         page_elements.append({
                             "type": "heading",
@@ -542,16 +511,115 @@ class ExportService:
                                     "page": p_num
                                 })
 
-            # 未出力の見出しがあれば先頭に挿入
-            for h_title, h_lvl in headings_map.items():
-                if h_title not in emitted_headings:
-                    page_elements.insert(0, {
-                        "type": "heading",
-                        "text": h_title,
-                        "level": h_lvl,
-                        "page": p_num
-                    })
-                    emitted_headings.add(h_title)
+            # 本文にない見出しは、領域の読み順で本文の間に配置する。
+            # 保存時に本文が最初の領域へ集約された旧データは OCR 行で境界を復元。
+            def normalized(value):
+                value = correct_japanese_text(str(value or ""))
+                value = re.sub(r"⟦注:[^⟧]+⟧", "", value)
+                return re.sub(r"\s+", "", value)
+
+            stream = "\n".join(el["text"] for el in page_elements)
+            compact, offsets = [], []
+            token_spans = [m.span() for m in re.finditer(r"⟦注:[^⟧]+⟧", stream)]
+            for pos, char in enumerate(stream):
+                if not char.isspace() and not any(a <= pos < b for a, b in token_spans):
+                    compact.append(char)
+                    offsets.append(pos)
+            compact = "".join(compact)
+
+            def anchor(value, after=False):
+                value = normalized(value)
+                if not value:
+                    return None
+                # 短い一致は複数箇所に現れるため、位置が一意のときだけ使用。
+                for length in (len(value), 24, 16, 10):
+                    if length > len(value):
+                        continue
+                    piece = value[-length:] if after else value[:length]
+                    at = compact.find(piece)
+                    if at >= 0 and compact.find(piece, at + 1) < 0:
+                        return offsets[at + len(piece) - 1] + 1 if after else offsets[at]
+                return None
+
+            def order(region):
+                value = region.get("reading_order")
+                return value if isinstance(value, (int, float)) else 999
+
+            ordered = sorted(p_data.get("regions", []), key=order)
+            body_types = ("body", "paragraph", None)
+
+            def boundary(region, after=False):
+                x, y = region.get("x", 0), region.get("y", 0)
+                w, h = region.get("w", 0), region.get("h", 0)
+                lines = []
+                for line in p_data.get("ocr_lines", []):
+                    cx = line.get("x", 0) + line.get("w", 0) / 2
+                    cy = line.get("y", 0) + line.get("h", 0) / 2
+                    if w > 0 and h > 0 and x <= cx <= x+w and y <= cy <= y+h:
+                        lines.append(line)
+                # OCR 行の本文内位置を使う。行配列の並びには依存しない。
+                matches = [point for line in lines
+                           if (point := anchor(line.get("text"), after)) is not None]
+                if matches:
+                    return max(matches) if after else min(matches)
+                value = region.get("source_text") or region.get("text", "")
+                value = re.sub(r"^=== ページ \d+ ===\s*", "", str(value))
+                # 本文全体を持つ領域は内部の境界を示さない。
+                if normalized(value) == normalized(b_text) and len([
+                    r for r in ordered if r.get("type") in body_types]) > 1:
+                    return None
+                return anchor(value, after)
+
+            insertions = []
+            seen = {correct_japanese_text(title) for title in emitted_headings}
+            for title, level in headings_map.items():
+                title = correct_japanese_text(title)
+                if title in seen:
+                    continue
+                seen.add(title)
+                record = next((h for h in headings_raw if isinstance(h, dict)
+                               and normalized(re.sub(r"^【(?:大|中|小)?見出し】\s*", "",
+                                   re.sub(r"^\[P\d+\]\s*", "", str(h.get("title") or h.get("text") or "")))) == normalized(title)), {})
+                region_index = next((i for i, r in enumerate(ordered)
+                    if r.get("type") == "heading" and (
+                        (record.get("region_id", record.get("id")) is not None and
+                         r.get("id") == record.get("region_id", record.get("id"))) or
+                        normalized(region_titles.get(id(r), r.get("text", ""))) == normalized(title))), None)
+                point = None
+                if region_index is not None:
+                    for r in ordered[region_index+1:]:
+                        if r.get("type") in body_types:
+                            point = boundary(r)
+                            if point is not None:
+                                break
+                    if point is None:
+                        for r in reversed(ordered[:region_index]):
+                            if r.get("type") in body_types:
+                                point = boundary(r, after=True)
+                                if point is not None:
+                                    break
+                if point is None:
+                    point = len(stream) if region_index is not None and any(
+                        r.get("type") in body_types for r in ordered[:region_index]) else 0
+                insertions.append((point, region_index if region_index is not None else 999 + len(insertions),
+                    {"type": "heading", "text": title, "level": level, "page": p_num}))
+
+            # 編集済み本文をそのまま分割する。領域の古い本文で上書きしない。
+            for point, _, heading in sorted(insertions, key=lambda item: (item[0], item[1]), reverse=True):
+                cursor = 0
+                for i, el in enumerate(page_elements):
+                    end = cursor + len(el["text"])
+                    if point <= end:
+                        cut = max(0, point - cursor)
+                        if el["type"] == "para" and 0 < cut < len(el["text"]):
+                            left, right = el["text"][:cut].rstrip(), el["text"][cut:].lstrip()
+                            page_elements[i:i+1] = ([{**el, "text": left}] if left else []) + [heading] + ([{**el, "text": right}] if right else [])
+                        else:
+                            page_elements.insert(i + (1 if cut > 0 else 0), heading)
+                        break
+                    cursor = end + 1
+                else:
+                    page_elements.append(heading)
 
             # ページ内最初と最後の段落にフラグを設定（ページまたぎ結合用）
             para_indices = [idx for idx, el in enumerate(page_elements) if el["type"] == "para"]
@@ -585,7 +653,9 @@ class ExportService:
             if not footnotes:
                 fn_regions = [r for r in p_data.get("regions", []) if r.get("type") == "footnote"]
                 footnotes = [r.get("text", "") for r in fn_regions if r.get("text")]
-            for fn in footnotes:
+            for fn_index, fn in enumerate(footnotes):
+                if (p_num, note_id(fn, fn_index)) in word_notes.bound:
+                    continue
                 if isinstance(fn, dict):
                     fn_str = fn.get("text", "")
                 else:
@@ -626,15 +696,17 @@ class ExportService:
             current_rendered_page = el_page
 
             if el["type"] == "heading":
-                lvl = min(max(el.get("level", 1), 1), 3)
-                hp = docx_doc.add_heading(el["text"], level=lvl)
+                lvl = min(max(el.get("level", 1), 1), 9)
+                hp = docx_doc.add_heading("", level=lvl)
+                word_notes.write(hp, el["text"])
                 hp.paragraph_format.space_before = Pt(12)
                 hp.paragraph_format.space_after = Pt(4)
 
             elif el["type"] == "para":
                 p_text = el["text"].strip()
                 if p_text:
-                    p = docx_doc.add_paragraph(p_text)
+                    p = docx_doc.add_paragraph()
+                    word_notes.write(p, p_text)
                     p.paragraph_format.line_spacing = 1.25
                     p.paragraph_format.space_after = Pt(4)
 
@@ -665,7 +737,7 @@ class ExportService:
 
             elif el["type"] == "figure":
                 fig = el["data"]
-                caption = fig.get("name") or f"図版 (P.{el_page})"
+                caption = fig.get("caption") or fig.get("name") or f"図版 (P.{el_page})"
                 p_dir = el.get("page_dir")
                 img_stream = None
 
@@ -705,11 +777,26 @@ class ExportService:
                 if img_stream:
                     try:
                         docx_doc.add_paragraph().paragraph_format.space_before = Pt(6)
-                        docx_doc.add_picture(img_stream, width=Inches(5.2))
+                        section = docx_doc.sections[-1]
+                        max_width = min(Inches(5.2), section.page_width - section.left_margin - section.right_margin)
+                        max_height = section.page_height - section.top_margin - section.bottom_margin - Inches(0.8)
+                        with PILImage.open(img_stream) as source_image:
+                            pixel_width, pixel_height = source_image.size
+                        if hasattr(img_stream, "seek"):
+                            img_stream.seek(0)
+                        display_width = min(max_width, int(max_height * pixel_width / pixel_height))
+                        picture = docx_doc.add_picture(img_stream, width=display_width)
+                        picture._inline.docPr.set("title", "OCRFigureCaption")
+                        picture._inline.docPr.set("descr", caption)
                         last_p = docx_doc.paragraphs[-1]
                         last_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                        last_p.paragraph_format.keep_with_next = True
                         
-                        cap_p = docx_doc.add_paragraph(f"🖼️ {caption}")
+                        if "OCRFigureCaption" not in docx_doc.styles:
+                            from docx.enum.style import WD_STYLE_TYPE
+                            docx_doc.styles.add_style("OCRFigureCaption", WD_STYLE_TYPE.PARAGRAPH)
+                        cap_p = docx_doc.add_paragraph(f"🖼️ {caption}", style="OCRFigureCaption")
+                        cap_p.paragraph_format.keep_together = True
                         cap_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
                         cap_p.paragraph_format.space_after = Pt(8)
                         if cap_p.runs:

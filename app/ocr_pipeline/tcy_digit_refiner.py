@@ -9,6 +9,7 @@ from typing import List, Dict, Tuple, Optional, Any
 import numpy as np
 import cv2
 from PIL import Image, ImageDraw, ImageFont
+from app.runtime_paths import windows_font_dirs
 
 logger = logging.getLogger(__name__)
 
@@ -41,14 +42,14 @@ class TcyDigitRefiner:
         self._load_disk_templates()
 
     def _load_font_templates(self):
-        font_dir = Path("C:/Windows/Fonts")
+        font_dirs = windows_font_dirs()
         font_files = [
             "msmincho.ttc", "msgothic.ttc", "meiryo.ttc",
             "arial.ttf", "yumin.ttf", "times.ttf"
         ]
         for fname in font_files:
-            fpath = font_dir / fname
-            if not fpath.exists():
+            fpath = next((folder / fname for folder in font_dirs if (folder / fname).is_file()), None)
+            if fpath is None:
                 continue
             for sz in [24, 28, 32, 36, 40]:
                 try:

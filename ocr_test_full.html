@@ -198,8 +198,8 @@
     }
     .bbox-overlay:hover { background-color: transparent !important; }
     .bbox-overlay.selected {
-        outline: 2px solid #2563eb;
-        box-shadow: 0 0 10px rgba(37,99,235,0.5);
+        outline: 2px solid var(--region-color);
+        box-shadow: 0 0 10px var(--region-color);
         z-index: 20;
         background-color: transparent !important;
     }
@@ -465,12 +465,19 @@
     }
     .tab-header-btn:hover { background: #ffffff; color: #1e293b; }
     .tab-header-btn.active { background: #ffffff; color: #1e293b; border-top: 3px solid #1864d7; height: 42px; margin-bottom: -2px; z-index: 2; }
-    .tab-header-btn.tab-body.active { border-top-color: #d946ef; }
-    .tab-header-btn.tab-table.active { border-top-color: #1864d7; }
-    .tab-header-btn.tab-heading.active { border-top-color: #289137; }
-    .tab-header-btn.tab-footnote.active { border-top-color: #15803d; }
-    .tab-header-btn.tab-image.active { border-top-color: #0284c7; }
 
+
+    /* タブと領域枠で共通の区分色 */
+    .tab-header-btn.tab-body { --region-color: #dc2626; color: var(--region-color); border-top: 3px solid var(--region-color); }
+    .tab-header-btn.tab-body:hover, .tab-header-btn.tab-body.active { color: var(--region-color); border-top-color: var(--region-color); }
+    .tab-header-btn.tab-table { --region-color: #1864d7; color: var(--region-color); border-top: 3px solid var(--region-color); }
+    .tab-header-btn.tab-table:hover, .tab-header-btn.tab-table.active { color: var(--region-color); border-top-color: var(--region-color); }
+    .tab-header-btn.tab-heading { --region-color: #16a34a; color: var(--region-color); border-top: 3px solid var(--region-color); }
+    .tab-header-btn.tab-heading:hover, .tab-header-btn.tab-heading.active { color: var(--region-color); border-top-color: var(--region-color); }
+    .tab-header-btn.tab-footnote { --region-color: #92400e; color: var(--region-color); border-top: 3px solid var(--region-color); }
+    .tab-header-btn.tab-footnote:hover, .tab-header-btn.tab-footnote.active { color: var(--region-color); border-top-color: var(--region-color); }
+    .tab-header-btn.tab-image { --region-color: #7c3aed; color: var(--region-color); border-top: 3px solid var(--region-color); }
+    .tab-header-btn.tab-image:hover, .tab-header-btn.tab-image.active { color: var(--region-color); border-top-color: var(--region-color); }
     .tab-content-panel { flex: 1; display: none; flex-direction: column; overflow: hidden; background: #ffffff; }
     .tab-content-panel.active { display: flex; }
 
@@ -537,6 +544,11 @@
         margin-bottom: 10px; border-radius: 0 4px 4px 0; font-size: 13px; line-height: 1.7; color: #334155;
     }
 
+    .footnote-textarea {
+        min-height: 42px; min-width: 0; line-height: 1.65; resize: none;
+        overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; box-sizing: border-box;
+    }
+
     /* 5. 図タブ */
     #pnlFigureGallery {
         flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column;
@@ -573,8 +585,6 @@
     }
     .batch-fig-thumb img { max-width: 100%; max-height: 100%; object-fit: contain; }
 
-    /* 6. 未分類タブ */
-    #unclassifiedBox { flex: 1; padding: 16px 48px 16px 16px; border: none; outline: none; font-size: 14px; line-height: 1.8; }
 
     /* 3. 最下部 実行履歴・ログパネル (Dock=Bottom, 折りたたみ対応) */
     #pnlBottomLog {
@@ -808,6 +818,9 @@
     .badge-type-tcy { background: #ede9fe; color: #6d28d9; border: 1px solid #ddd6fe; }
     .badge-type-kana { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
 
+
+    .ocr-note-reference { color:#16a34a; font-size:0.8em; font-weight:bold; padding:0 2px; cursor:pointer; }
+    .ocr-note-card-number { position:absolute; right:8px; top:5px; color:#16a34a; font-weight:bold; background:#f0fdf4; border-radius:4px; padding:2px 5px; }
 </style>
 </head>
 <body>
@@ -848,6 +861,11 @@
         </select>
         <button class="btn-toolbar" id="btnZoomIn" title="拡大" onclick="zoomAdjust(0.15)">➕</button>
 
+        <!-- 領域自動判定ボタン -->
+        <button class="btn-toolbar" id="btnDetectRegions" title="OCRを行わず領域だけを自動判定" onclick="openAutoLayoutScopeModal()" style="background:#fff7ed; border-color:#f59e0b; font-weight:bold; color:#9a3412; padding:0 10px; width:auto; font-size:12px; gap:5px; display:inline-flex; align-items:center; border-radius:6px;">
+            <span>⚡</span><span>領域自動判定</span>
+        </button>
+
         <!-- OCR実行ボタン -->
         <button class="btn-toolbar" id="btnStartOcr" title="OCR実行 (このページだけ / 修正ページ / バッチ全体)" onclick="openOcrRunModal()" style="background:#2563eb; border-color:#1d4ed8; font-weight:bold; color:#ffffff; padding:0 12px; width:auto; font-size:13px; gap:6px; display:inline-flex; align-items:center; border-radius:6px;">
             <span>🚀</span>
@@ -860,11 +878,6 @@
             <span>文字検索</span>
         </button>
 
-        <!-- 文書校正ツール -->
-        <button class="btn-toolbar" id="btnToolbarProofread" title="文書校正・カタカナ・表記ゆれ修復 (Ctrl+Shift+R)" onclick="openProofreadModal()" style="display:inline-flex; align-items:center; gap:5px; padding:0 10px; font-weight:600; color:#7c2d12; background:#fff7ed; border-color:#fed7aa; height:38px; border-radius:6px; width:auto; font-size:12.5px;">
-            <span style="font-size:14px;">✍️</span>
-            <span>文書校正</span>
-        </button>
 
         <!-- Word範囲出力ツール -->
         <button class="btn-toolbar" id="btnExportWord" title="Word出力 (ページ範囲指定・バッチ・全ページ)" onclick="openWordRangeExportModal()" style="display:inline-flex; align-items:center; gap:6px; padding:0 12px; font-weight:600; color:#1e40af; border-color:#93c5fd; background:#eff6ff; height:38px; border-radius:6px; width:auto; font-size:12.5px;">
@@ -1031,7 +1044,6 @@
                     <button class="tab-header-btn tab-heading" onclick="switchTab('heading')">📑 見出し</button>
                     <button class="tab-header-btn tab-footnote" onclick="switchTab('footnote')">🔖 注釈文</button>
                     <button class="tab-header-btn tab-image" onclick="switchTab('image')">🖼 図</button>
-                    <button class="tab-header-btn tab-unclassified" onclick="switchTab('unclassified')">📁 未分類</button>
                 </div>
 
                 <!-- 1. 本文タブ: richTextBox1 -->
@@ -1120,11 +1132,6 @@
                     <div id="pnlFigureGallery">
                         <div style="color:#94a3b8; padding:20px;">抽出された図版はありません。「⚡ 領域自動判定」で自動抽出されます。</div>
                     </div>
-                </div>
-
-                <!-- 6. 未分類タブ -->
-                <div class="tab-content-panel" id="tabContent-unclassified">
-                    <textarea id="unclassifiedBox" placeholder="未分類のテキストブロックがここに保持されます..."></textarea>
                 </div>
 
             </div>
@@ -1888,126 +1895,21 @@
         </div>
     </div>
 
-    <!-- 文書校正モーダル (ProofreadModal: KWJA / ルール / ハイブリッド / 前後文字選択置換 / 再開対応) -->
-    <div id="proofreadModal" class="modal-overlay" style="display:none; z-index:3620;" onclick="if(event.target === this) closeProofreadModal()">
-        <div class="modal-container" style="width: 920px; max-height: 90vh;" onclick="event.stopPropagation()">
-            <div class="modal-header" style="background:#fffbeb; border-bottom:1px solid #fde68a;">
-                <h3 style="font-size:15px; font-weight:bold; color:#78350f; display:flex; align-items:center; gap:8px;">
-                    <span style="font-size:18px;">✍️</span> OCR文書校正 & 誤字脱字修復 (KWJA / ルール / ハイブリッド)
-                </h3>
-                <button class="modal-close-btn" onclick="closeProofreadModal()" title="閉じる (進行状態は自動保存されます)">✕</button>
-            </div>
-            <div class="modal-body" style="padding: 14px 18px; gap: 12px;">
-                <!-- コントロールバー: エンジン選択・範囲選択・スキャン -->
-                <div style="display:flex; flex-wrap:wrap; gap:10px; font-size:12px; background:#f8fafc; padding:8px 12px; border-radius:6px; border:1px solid #e2e8f0; align-items:center; justify-content:space-between;">
-                    <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                        <span style="font-weight:bold; color:#334155;">校正エンジン:</span>
-                        <select id="cmbProofreadEngine" class="toolbar-num-box" style="height:28px; width:190px; font-size:12px; font-weight:bold; color:#1e40af;" onchange="onProofreadEngineChange()">
-                            <option value="rule">⚡ 高速ルール校正 (即時)</option>
-                            <option value="kwja">🧠 KWJA (京大ローカルAI)</option>
-                            <option value="hybrid" selected>🌟 ハイブリッド校正 (推奨)</option>
-                        </select>
-                        <span style="font-weight:bold; color:#334155; margin-left:6px;">対象範囲:</span>
-                        <select id="cmbProofreadScope" class="toolbar-num-box" style="height:28px; width:180px; font-size:12px;" onchange="runScanProofreadCandidates()">
-                            <option value="current_batch" selected>作業中のバッチ</option>
-                            <option value="all_batches">全バッチ (全ページ)</option>
-                            <option value="current_page">現在のページのみ</option>
-                        </select>
-                        <button class="table-btn" onclick="runScanProofreadCandidates()" style="height:28px; font-weight:bold; background:#eff6ff; color:#1d4ed8; border-color:#93c5fd;">🔍 候補再スキャン</button>
-                    </div>
-                </div>
-
-                <!-- 再開 (Resume) 情報バナー -->
-                <div id="proofreadResumeBanner" style="display:none; align-items:center; justify-content:space-between; background:#fef3c7; border:1px solid #fde68a; padding:6px 12px; border-radius:4px; font-size:12px; color:#92400e;">
-                    <span>📍 <strong>前回の中断位置から再開中:</strong> <span id="lblProofreadResumeInfo">P.1 候補 1/1</span></span>
-                    <button class="table-btn" onclick="restartProofreadFromBeginning()" style="font-size:11px; padding:2px 8px; background:#fff; color:#b45309; border-color:#fcd34d;">🔄 最初から開始</button>
-                </div>
-
-                <!-- メイン2ペイン (左: 候補一覧, 右: 前後文字選択・置換エディタ) -->
-                <div style="display:flex; gap:12px; min-height:360px; max-height:450px;">
-                    <!-- 左ペイン: 候補一覧 -->
-                    <div style="width:340px; display:flex; flex-direction:column; border:1px solid #cbd5e1; border-radius:6px; background:#f8fafc; overflow:hidden;">
-                        <div style="padding:6px 10px; background:#e2e8f0; font-size:12px; font-weight:bold; color:#334155; display:flex; justify-content:space-between; align-items:center;">
-                            <span>校正候補一覧</span>
-                            <span id="lblProofreadCount" style="color:#0284c7;">0件</span>
-                        </div>
-                        <div id="lstProofreadCandidates" style="flex:1; overflow-y:auto; padding:6px; display:flex; flex-direction:column; gap:4px;">
-                            <div style="padding:20px; text-align:center; color:#94a3b8; font-size:12px;">校正候補をスキャン中...</div>
-                        </div>
-                    </div>
-
-                    <!-- 右ペイン: 前後文字選択 & 置換エディタ -->
-                    <div style="flex:1; display:flex; flex-direction:column; border:1px solid #cbd5e1; border-radius:6px; background:#ffffff; padding:12px; gap:10px;">
-                        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #e2e8f0; padding-bottom:6px;">
-                            <div id="lblProofreadSelectedInfo" style="font-weight:bold; color:#1e3a8a; font-size:13px;">候補を選択してください</div>
-                            <span id="lblProofreadEngineBadge" style="font-size:11px; padding:2px 6px; border-radius:3px; background:#eff6ff; color:#1d4ed8; font-weight:600;">Rule</span>
-                        </div>
-
-                        <!-- 文脈スニペット表示 (ターゲット強調) -->
-                        <div style="font-size:11px; font-weight:bold; color:#64748b;">文脈プレビュー:</div>
-                        <div id="pnlProofreadContextBox" style="background:#f8fafc; border:1px solid #e2e8f0; padding:8px 10px; border-radius:4px; font-size:13px; line-height:1.6; font-family:'Yu Gothic UI', sans-serif; min-height:48px; max-height:70px; overflow-y:auto;">
-                            候補を選択すると前後の文脈が表示されます
-                        </div>
-
-                        <!-- 前後文字の選択範囲調整コントローラー -->
-                        <div style="background:#f1f5f9; border:1px solid #e2e8f0; border-radius:4px; padding:8px 10px; display:flex; flex-direction:column; gap:6px;">
-                            <div style="font-size:11.5px; font-weight:bold; color:#334155; display:flex; align-items:center; justify-content:space-between;">
-                                <span>🎚 前後文字の選択範囲調整 (置換対象を周辺へ拡張):</span>
-                                <span id="lblProofreadRangeInfo" style="color:#0284c7; font-size:11px;">前: +0文字 / 後: +0文字</span>
-                            </div>
-                            <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
-                                <span style="font-size:11px; color:#64748b;">前方向:</span>
-                                <button class="table-btn" onclick="adjustProofreadSelection(-1, 0)" title="置換対象を前の文字へ1文字広げる">◀ 1文字拡大</button>
-                                <button class="table-btn" onclick="adjustProofreadSelection(1, 0)" title="前の文字を1文字縮小する">縮小 ▶</button>
-                                <span style="font-size:11px; color:#64748b; margin-left:6px;">後方向:</span>
-                                <button class="table-btn" onclick="adjustProofreadSelection(0, -1)" title="後ろの文字を1文字縮小する">◀ 縮小</button>
-                                <button class="table-btn" onclick="adjustProofreadSelection(0, 1)" title="置換対象を後ろの文字へ1文字広げる">1文字拡大 ▶</button>
-                                
-                                <span style="font-size:11px; color:#94a3b8; margin-left:4px;">|</span>
-                                <button class="table-btn" onclick="setProofreadSelectionPreset(3)" style="font-size:11px;">±3文字</button>
-                                <button class="table-btn" onclick="setProofreadSelectionPreset(5)" style="font-size:11px;">±5文字</button>
-                                <button class="table-btn" onclick="setProofreadSelectionPreset(0)" style="font-size:11px;">単語のみ</button>
-                            </div>
-                        </div>
-
-                        <!-- 置換前 (Before) と 置換後 (After) の入力欄 -->
-                        <div style="display:flex; flex-direction:column; gap:6px;">
-                            <div style="display:flex; align-items:center; gap:6px;">
-                                <span style="width:85px; font-size:12px; font-weight:bold; color:#dc2626;">置換対象(赤):</span>
-                                <input type="text" id="txtProofreadTargetBefore" style="flex:1; height:32px; font-weight:bold; background:#fff1f2; border:1px solid #fca5a5; padding:0 8px; border-radius:4px; font-size:13px; color:#991b1b;" readonly>
-                            </div>
-                            <div style="display:flex; align-items:center; gap:6px;">
-                                <span style="width:85px; font-size:12px; font-weight:bold; color:#16a34a;">置換後(緑):</span>
-                                <input type="text" id="txtProofreadTargetAfter" style="flex:1; height:32px; font-weight:bold; background:#f0fdf4; border:1px solid #86efac; padding:0 8px; border-radius:4px; font-size:13px; color:#166534;" placeholder="置換後のテキストを入力..." onkeydown="if(event.key==='Enter') applyProofreadCandidate()">
-                            </div>
-                        </div>
-
-                        <!-- アクションボタン -->
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:auto; padding-top:6px; border-top:1px solid #e2e8f0;">
-                            <div style="display:flex; gap:6px;">
-                                <button class="table-btn" onclick="navigateProofreadCandidate(-1)" title="前の候補へ移動">▲ 前の候補</button>
-                                <button class="table-btn" onclick="navigateProofreadCandidate(1)" title="次の候補へ移動">▼ 次の候補</button>
-                            </div>
-                            <div style="display:flex; gap:6px;">
-                                <button class="table-btn" onclick="skipProofreadCandidate()" style="padding:0 14px; font-weight:600; color:#64748b;" title="この候補は変更せずスキップ">⏭ スキップ</button>
-                                <button class="btn-opt-ok" onclick="applyProofreadCandidate()" style="padding:0 18px; height:34px; background:#16a34a; border-color:#15803d; font-weight:bold;" title="指定範囲を置換して次の候補へ進む">✅ この範囲で置換適用 (Enter)</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer" style="padding: 10px 18px; justify-content:space-between; background:#f8fafc;">
-                <button class="table-btn" onclick="revertProofreadBatch()" style="color:#b91c1c; border-color:#fca5a5; font-weight:600;" title="校正前の生データに戻す">↩️ 校正前の状態に戻す (Revert)</button>
-                <div style="display:flex; gap:8px;">
-                    <button class="btn-opt-ok" onclick="applyAllProofreadBatch()" style="background:#2563eb; border-color:#1d4ed8; font-weight:bold; padding:0 14px;">⚡ バッチ内を一括適用</button>
-                    <button class="btn-opt-cancel" onclick="closeProofreadModal()">閉じる</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <!-- 領域自動判定 進行状況ダイアログ (ProgressForm 互換) -->
         <!-- 🚀 OCR実行範囲・設定確認ダイアログ (ocrRunModal) -->
+
+    <div id="autoLayoutScopeModal" class="modal-overlay" style="display:none; z-index:3600;" onclick="if(event.target===this) closeAutoLayoutScopeModal()">
+      <div class="modal-window" style="width:480px; max-width:95vw; background:white; border-radius:10px; padding:24px;">
+        <h3 style="margin-top:0;">⚡ 領域自動判定</h3>
+        <p>対象ページを選んでください。文字認識は実行しません。</p>
+        <label style="display:block; margin:16px 0;"><input type="radio" name="autoLayoutScope" value="current" checked onchange="updateAutoLayoutScopeUI()"> このページだけ <span id="autoLayoutCurrentLabel"></span></label>
+        <label style="display:block; margin:16px 0;"><input type="radio" name="autoLayoutScope" value="custom" onchange="updateAutoLayoutScopeUI()"> ページ範囲</label>
+        <div style="margin:0 0 16px 24px;"><input id="autoLayoutStart" type="number" min="1" style="width:80px;" oninput="updateAutoLayoutScopeUI()"> 〜 <input id="autoLayoutEnd" type="number" min="1" style="width:80px;" oninput="updateAutoLayoutScopeUI()"> ページ</div>
+        <label style="display:block; margin:16px 0;"><input type="radio" name="autoLayoutScope" value="batch" onchange="updateAutoLayoutScopeUI()"> 現在のバッチ範囲 <span id="autoLayoutBatchLabel"></span></label>
+        <p id="autoLayoutScopeSummary" aria-live="polite"></p>
+        <div style="display:flex; justify-content:flex-end; gap:12px;"><button onclick="closeAutoLayoutScopeModal()">キャンセル</button><button class="btn-primary" onclick="executeAutoLayoutFromModal()">領域自動判定を実行</button></div>
+      </div>
+    </div>
     <div id="ocrRunModal" class="modal-overlay" style="display:none; z-index:3600;" onclick="if(event.target === this) closeOcrRunModal()">
         <div class="modal-container" style="width: 580px; max-height: 90vh;" onclick="event.stopPropagation()">
             <div class="modal-header" style="background:#eff6ff; border-bottom:1px solid #bfdbfe; padding:12px 18px;">
@@ -2395,6 +2297,7 @@
     }
 
     function applySettingsToUi() {
+        requestAnimationFrame(resizeAllFootnotes);
         const bodyEl = document.getElementById("richTextBox1");
         if (bodyEl) {
             bodyEl.style.fontFamily = appSettings.FontFamilyName;
@@ -2538,20 +2441,11 @@
                 if (typeof closeBatchSearchDialog === "function") {
                     closeBatchSearchDialog();
                 }
-                if (typeof closeProofreadModal === "function") {
-                    closeProofreadModal();
-                }
             }
             if ((e.ctrlKey || e.metaKey) && (e.key === "f" || e.key === "F")) {
                 e.preventDefault();
                 if (typeof openBatchSearchDialog === "function") {
                     openBatchSearchDialog();
-                }
-            }
-            if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "r" || e.key === "R")) {
-                e.preventDefault();
-                if (typeof openProofreadModal === "function") {
-                    openProofreadModal();
                 }
             }
         });
@@ -2692,23 +2586,54 @@
     let isAutoLayoutRunning = false;
     let autoLayoutCancelRequested = false;
 
-    async function runAutoLayout() {
+    function openAutoLayoutScopeModal() {
+        if (!currentPdfFile) { alert("先にPDFファイルを開いてください。"); return; }
+        if (isAutoLayoutRunning) { alert("現在の処理が完了してから実行してください。"); return; }
+        const s = Number(document.getElementById("numPageStart").value) || 1;
+        const e = Number(document.getElementById("numPageEnd").value) || totalPages;
+        document.getElementById("autoLayoutCurrentLabel").textContent = `（P.${currentPage}）`;
+        document.getElementById("autoLayoutBatchLabel").textContent = `（P.${s}〜${e}）`;
+        for (const id of ["autoLayoutStart", "autoLayoutEnd"]) document.getElementById(id).max = totalPages;
+        document.getElementById("autoLayoutStart").value = s;
+        document.getElementById("autoLayoutEnd").value = e;
+        document.querySelector('input[name="autoLayoutScope"][value="current"]').checked = true;
+        updateAutoLayoutScopeUI();
+        document.getElementById("autoLayoutScopeModal").style.display = "flex";
+    }
+    function closeAutoLayoutScopeModal() {
+        document.getElementById("autoLayoutScopeModal").style.display = "none";
+    }
+    function getAutoLayoutTargetRange() {
+        const scope = document.querySelector('input[name="autoLayoutScope"]:checked')?.value || "current";
+        if (scope === "current") return {start:currentPage, end:currentPage};
+        const ids = scope === "batch" ? ["numPageStart", "numPageEnd"] : ["autoLayoutStart", "autoLayoutEnd"];
+        const start = Number(document.getElementById(ids[0]).value);
+        const end = Number(document.getElementById(ids[1]).value);
+        if (!Number.isInteger(start) || !Number.isInteger(end) || start < 1 || end > totalPages || end < start) return null;
+        return {start, end};
+    }
+    function updateAutoLayoutScopeUI() {
+        const custom = document.querySelector('input[name="autoLayoutScope"]:checked')?.value === "custom";
+        for (const id of ["autoLayoutStart", "autoLayoutEnd"]) document.getElementById(id).disabled = !custom;
+        const range = getAutoLayoutTargetRange();
+        document.getElementById("autoLayoutScopeSummary").textContent = range ? `対象：P.${range.start}〜${range.end}（${range.end-range.start+1}ページ）` : "有効なページ範囲を入力してください。";
+    }
+    async function executeAutoLayoutFromModal() {
+        const range = getAutoLayoutTargetRange();
+        if (!range) { alert("開始・終了ページを資料の範囲内で入力してください。"); return; }
+        closeAutoLayoutScopeModal();
+        await runAutoLayout(range.start, range.end);
+    }
+
+    async function runAutoLayout(startPage = currentPage, endPage = currentPage) {
         if (!currentPdfFile) {
             alert("先に上部ツールバーの「📂」ボタンよりPDFファイルを開いてください。");
             return;
         }
         if (isAutoLayoutRunning) return;
 
-        let startPage = parseInt(document.getElementById("numPageStart").value) || 1;
-        let endPage = parseInt(document.getElementById("numPageEnd").value) || totalPages;
-        startPage = Math.max(1, Math.min(totalPages, startPage));
-        endPage = Math.max(startPage, Math.min(totalPages, endPage));
-        
-        // バッチ上限20ページを厳格適用（メモリ安全）
-        if (endPage - startPage + 1 > 20) {
-            endPage = Math.min(totalPages, startPage + 19);
-            document.getElementById("numPageEnd").value = endPage;
-        }
+        const viewPage = currentPage;
+        if (!Number.isInteger(startPage) || !Number.isInteger(endPage) || startPage < 1 || endPage > totalPages || endPage < startPage) return;
         const totalTarget = (endPage - startPage + 1);
 
         const modal = document.getElementById("progressModal");
@@ -2720,11 +2645,11 @@
         const btnCancel = document.getElementById("btnCancelAutoLayout");
         const btnCloseX = document.getElementById("btnProgressClose");
 
-        lblTitle.textContent = `選択バッチ (第${startPage}〜${endPage}ページ / 計${totalTarget}ページ) の領域自動判定を実行しています。`;
+        lblTitle.textContent = `対象範囲 (第${startPage}〜${endPage}ページ / 計${totalTarget}ページ) の領域自動判定を実行しています。`;
         barFill.style.width = "0%";
         lblCount.textContent = `0 / ${totalTarget} ページ (0%)`;
         lblElapsed.textContent = "経過: 00:00";
-        lblStatus.textContent = "準備中...\nNDLOCR-Liteエンジンを起動しています。";
+        lblStatus.textContent = "準備中...\nページ画像を準備しています。";
         if (btnCancel) {
             btnCancel.disabled = false;
             btnCancel.textContent = "⏹️ 中止";
@@ -2747,14 +2672,8 @@
             lblElapsed.textContent = `経過: ${m}:${s}`;
         }, 1000);
 
-        appendLog("バッチ領域自動判定", `PDF: ${currentPdfFile.name} | 対象バッチ: 第${startPage}〜${endPage}ページ (計${totalTarget}P)`);
+        appendLog("バッチ領域自動判定", `PDF: ${currentPdfFile.name} | 対象範囲: 第${startPage}〜${endPage}ページ (計${totalTarget}P)`);
 
-        let deckNum = 1;
-        if (currentDeck.includes("1")) deckNum = 1;
-        else if (currentDeck.includes("2")) deckNum = 2;
-        else if (currentDeck.includes("3")) deckNum = 3;
-        else if (appSettings.DeckCount) deckNum = appSettings.DeckCount;
-        else deckNum = 1;
         const ALLOWED_TYPES = new Set(["body", "table", "heading", "footnote", "image"]);
         let successCount = 0;
         let failureCount = 0;
@@ -2770,7 +2689,7 @@
                 const startPct = totalTarget === 1 ? 50 : Math.round((stepIdx / totalTarget) * 100);
                 barFill.style.width = `${startPct}%`;
                 lblCount.textContent = `${stepIdx} / ${totalTarget} ページ (${startPct}%)`;
-                lblStatus.textContent = `ページ ${p} / ${totalPages} (バッチ内: ${stepIdx + 1}/${totalTarget}) を処理しています...\nNDLOCR-Lite・レイアウト解析を実行しています。`;
+                lblStatus.textContent = `ページ ${p} / ${totalPages} (範囲内: ${stepIdx + 1}/${totalTarget}) を処理しています...\nページ画像から領域枠を判定しています (OCRなし)。`;
 
                 try {
                     const formData = new FormData();
@@ -2780,22 +2699,29 @@
                         formData.append("file", currentPdfFile);
                     }
                     formData.append("page_number", p);
-                    formData.append("orientation", currentOrientation.includes("縦") ? "vertical" : "horizontal");
-                    formData.append("doc_type", currentDocType.includes("和書") ? "japanese" : "western");
-                    formData.append("deck", deckNum);
+                    formData.append("orientation", currentOrientation.includes("縦") ? "vertical" : currentOrientation.includes("横") ? "horizontal" : "auto");
+                    formData.append("deck_count", String(Number(appSettings?.DeckCount ?? 0)));
 
-                    let res = await fetch(`${API_BASE}/api/ocr/analyze-pdf-page`, {
+                    const oldData = p === viewPage ? currentDocData : pageCache[p]?.docData;
+                    const boxes = (oldData?.ocr_lines || []).map(l => ({x:l.x,y:l.y,w:l.w,h:l.h,is_vertical:!!l.is_vertical,text:l.text || ""}));
+                    if (boxes.length) formData.append("line_boxes_json", JSON.stringify(boxes));
+                    if (p === viewPage && typeof getProcessedPageImageDataUrl === "function") {
+                        const processed = getProcessedPageImageDataUrl();
+                        if (processed) formData.append("processed_image", processed);
+                    }
+
+                    let res = await fetch(`${API_BASE}/api/ocr/detect-regions-only`, {
                         method: "POST",
                         body: formData
                     });
                     if (!res.ok && res.status === 404 && currentPdfFile) {
                         const fbData = new FormData();
+                        for (const [key, value] of formData.entries()) if (key !== "filename") fbData.append(key, value);
                         fbData.append("file", currentPdfFile);
                         fbData.append("page_number", p);
-                        fbData.append("orientation", currentOrientation.includes("縦") ? "vertical" : "horizontal");
-                        fbData.append("doc_type", currentDocType.includes("和書") ? "japanese" : "western");
-                        fbData.append("deck", deckNum);
-                        res = await fetch(`${API_BASE}/api/ocr/analyze-pdf-page`, { method: "POST", body: fbData });
+                        fbData.append("orientation", currentOrientation.includes("縦") ? "vertical" : currentOrientation.includes("横") ? "horizontal" : "auto");
+                        fbData.append("deck_count", String(Number(appSettings?.DeckCount ?? 0)));
+                        res = await fetch(`${API_BASE}/api/ocr/detect-regions-only`, { method: "POST", body: fbData });
                     }
                     if (!res.ok) throw new Error("HTTP " + res.status);
                     const data = await res.json();
@@ -2833,7 +2759,7 @@
                     }
 
                     // メモリ抱え込み防止: 非表示ページは画像Base64を保持せず軽量メタデータのみ保持
-                    const docDataCopy = JSON.parse(JSON.stringify(data));
+                    const docDataCopy = JSON.parse(JSON.stringify({...oldData, ...data}));
                     if (p !== currentPage) {
                         delete docDataCopy.image_base64;
                     }
@@ -2841,12 +2767,12 @@
                     pageCache[p] = {
                         docData: docDataCopy,
                         imgInfo: (p === currentPage) ? data : { image_width: data.image_width, image_height: data.image_height, total_pages: data.total_pages, current_page: p },
-                        isModified: false
+                        isModified: true
                     };
-                    modifiedPages.delete(p);
+                    modifiedPages.add(p);
 
                     if (p === currentPage) {
-                        currentDocData = JSON.parse(JSON.stringify(data));
+                        currentDocData = JSON.parse(JSON.stringify(docDataCopy));
                         currentPageImgInfo = data;
                     }
 
@@ -2865,9 +2791,9 @@
                 }
             }
 
-            barFill.style.width = "100%";
-            lblCount.textContent = `${totalTarget} / ${totalTarget} ページ (100%)`;
-            lblStatus.textContent = `========== バッチ判定完了 ==========\n成功: ${successCount}ページ / 失敗: ${failureCount}ページ\n左側の枠を確認し、必要なページだけ領域を補正してください。`;
+            barFill.style.width = `${Math.round((successCount + failureCount) / totalTarget * 100)}%`;
+            lblCount.textContent = `${successCount + failureCount} / ${totalTarget} ページ`;
+            lblStatus.textContent = `${autoLayoutCancelRequested ? "判定中止" : "判定完了"}\n成功: ${successCount}ページ / 失敗: ${failureCount}ページ\n左側の枠を確認し、必要なページだけ領域を補正してください。`;
             
             if (btnCancel) {
                 btnCancel.textContent = "閉じる";
@@ -2885,20 +2811,16 @@
                 // 対象バッチの全ページを右側UIタブへ展開 (OCR-REPOS Form1.OcrWorkflow.cs:472 準拠)
                 loadBatchDataToUi(startPage, endPage);
 
-                // 対象範囲の先頭ページのキャッシュとcurrentDocDataを確実に同期
-                if (pageCache[startPage]) {
-                    currentDocData = JSON.parse(JSON.stringify(pageCache[startPage].docData));
-                    currentPageImgInfo = pageCache[startPage].imgInfo;
+                if (pageCache[viewPage]) {
+                    currentDocData = JSON.parse(JSON.stringify(pageCache[viewPage].docData));
+                    currentPageImgInfo = pageCache[viewPage].imgInfo;
                 }
-
-                // 対象範囲の先頭ページを表示
-                await goToPage(startPage);
-
+                await goToPage(viewPage);
                 if (appSettings.PostOcrZoom && appSettings.PostOcrZoom !== "1.0") {
                     setZoom(appSettings.PostOcrZoom);
                 }
                 switchTab("body");
-                scrollOcrResultToPage(startPage);
+                scrollOcrResultToPage(viewPage);
             } catch (uiErr) {
                 console.warn("[UI Update Warning]", uiErr);
             }
@@ -2992,6 +2914,8 @@
     }
 
     function saveCurrentPageToCache(isUserEdit = false) {
+        normalizeRegionRecordLabels(currentDocData);
+        if (currentDocData?.regions) currentDocData.heading_count = currentDocData.regions.filter(r => r.type === "heading").length;
         if (currentDocData && currentPageImgInfo) {
             if (isUserEdit) markPageModified(currentPage);
             if (currentDocData.body_text) {
@@ -3176,7 +3100,7 @@
             renderFigures(currentDocData.figures || []);
 
             // バッチ切替時、本文エリアが未展開、または対象ページアンカー欠落の場合はバッチデータをUI展開
-            const richText = document.getElementById("richTextBox1")?.innerText?.trim() || "";
+            const richText = ocrReadBodyText().trim();
             const bStartNow = parseInt(document.getElementById("numPageStart").value) || 1;
             const bEndNow = parseInt(document.getElementById("numPageEnd").value) || totalPages;
             const hasTargetAnchor = document.getElementById(`pageAnchor_${target}`) !== null;
@@ -3206,6 +3130,34 @@
     let activeHandle = null;
     let dragStartMouse = { x: 0, y: 0 };
     let dragStartRegion = { x: 0, y: 0, w: 0, h: 0 };
+
+    const REGION_COLORS = {"body": "#dc2626", "table": "#1864d7", "heading": "#16a34a", "footnote": "#92400e", "image": "#7c3aed"};
+    const REGION_LABELS = {body:"本文", table:"表", heading:"見出し", footnote:"注釈文", image:"図"};
+    function getRegionLabel(region) {
+        const label = REGION_LABELS[region.type];
+        const name = region.name || "";
+        if (!label) return name;
+        if (!name) return label;
+        // Keep candidate numbers and custom names, but update the category prefix.
+        if (/^(本文|表|見出し|見だし|注釈文|注釈|図版|図)/.test(name)) {
+            return name.replace(/^(本文|表|見出し|見だし|注釈文|注釈|図版|図)/, label);
+        }
+        return `${label}：${name}`;
+    }
+
+    function normalizeRegionRecordLabels(docData) {
+        if (!docData) return;
+        for (const region of docData.regions || []) region.name = getRegionLabel(region);
+        for (const [key, type] of [["tables", "table"], ["headings", "heading"], ["footnotes", "footnote"], ["figures", "image"]]) {
+            for (const record of docData[key] || []) {
+                if (!record || typeof record !== "object") continue;
+                const region = (docData.regions || []).find(r => r.type === type && (r.id === record.region_id || r.id === record.id));
+                record.name = region ? getRegionLabel(region) : getRegionLabel({...record, type});
+            }
+        }
+    }
+
+    function getRegionColor(region) { return REGION_COLORS[region.type] || REGION_COLORS.body; }
 
     function renderBBoxes(regions) {
         const container = document.getElementById("overlayContainer");
@@ -3238,7 +3190,8 @@
             box.style.top = `${by}px`;
             box.style.width = `${bw}px`;
             box.style.height = `${bh}px`;
-            box.style.borderColor = reg.color || "#1864d7";
+            box.style.borderColor = getRegionColor(reg);
+            box.style.setProperty("--region-color", getRegionColor(reg));
             box.style.backgroundColor = "transparent";
             if (isManualDrawMode) {
                 box.style.pointerEvents = "none";
@@ -3246,7 +3199,7 @@
 
             const orderNum = (reg.reading_order !== undefined && reg.reading_order !== 999) ? reg.reading_order : (isReorderMode ? "-" : (idx + 1));
             box.innerHTML = `
-                <span class="bbox-badge" style="background:${reg.color || "#1864d7"};">${reg.name}</span>
+                <span class="bbox-badge" style="background:${getRegionColor(reg)};">${getRegionLabel(reg)}</span>
                 <span class="bbox-order-badge" title="読み順: ${orderNum}">${orderNum}</span>
             `;
 
@@ -3526,8 +3479,8 @@
             item.innerHTML = `
                 <span style="display:flex; align-items:center; gap:6px; min-width:0; flex:1;">
                     <span style="display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:18px; border-radius:50%; background:#1e293b; color:#ffffff; font-size:10px; font-weight:bold; flex-shrink:0;">${orderNum}</span>
-                    <span style="display:inline-block; width:10px; height:10px; border-radius:2px; background:${reg.color}; flex-shrink:0;"></span>
-                    <strong style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${reg.name}</strong>
+                    <span style="display:inline-block; width:10px; height:10px; border-radius:2px; background:${getRegionColor(reg)}; flex-shrink:0;"></span>
+                    <strong style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${getRegionLabel(reg)}</strong>
                 </span>
                 <span style="color:#64748b; font-size:11px; flex-shrink:0; margin-left:4px;">(${reg.w}x${reg.h})</span>
             `;
@@ -4003,7 +3956,7 @@
             if (!currentDocData) currentDocData = { regions: [], tables: [], headings: [], footnotes: [], figures: [], body_text: "" };
         }
         const newId = `reg-manual-${Date.now().toString().slice(-4)}`;
-        const colors = { body: "#e11d48", table: "#1864d7", heading: "#16a34a", footnote: "#64748b", image: "#0284c7" };
+        const colors = REGION_COLORS;
         const newReg = {
             id: newId,
             name: `${label} (手動)`,
@@ -4045,7 +3998,7 @@
         // タイトル
         const titleEl = document.getElementById("ctxRegionTitle");
         if (titleEl) {
-            titleEl.innerText = `領域区分の変更 (${reg.name || 'R' + reg.id})`;
+            titleEl.innerText = `領域区分の変更 (${getRegionLabel(reg) || 'R' + reg.id})`;
         }
 
         // 領域タイプのチェック状態
@@ -4359,7 +4312,7 @@
     }
 
     function onBodyTextInput() {
-        const fullText = document.getElementById("richTextBox1").innerText;
+        const fullText = ocrReadBodyText();
         const parsed = parseBodyTextByPages(fullText, currentPage);
         if (parsed.hasHeader) {
             Object.entries(parsed.byPage).forEach(([pStr, txt]) => {
@@ -4426,10 +4379,32 @@
 
     function onHeadingInput(idx, val) {
         if (!currentDocData?.headings) return;
-        if (typeof currentDocData.headings[idx] === 'object') {
-            currentDocData.headings[idx].title = val;
+        const heading = currentDocData.headings[idx];
+        if (heading === undefined) return;
+        const oldTitle = typeof heading === 'object' ? (heading.title ?? heading.text ?? '') : heading;
+        const headingRegions = (currentDocData.regions || []).filter(r => r.type === 'heading')
+            .sort((a, b) => (a.reading_order ?? 999) - (b.reading_order ?? 999));
+        const regionId = typeof heading === 'object' ? (heading.region_id ?? heading.id) : null;
+        let region = regionId != null ? headingRegions.find(r => r.id === regionId) : null;
+        if (!region && regionId == null) {
+            const matches = headingRegions.filter(r => r.text === oldTitle);
+            if (matches.length === 1) region = matches[0];
+            else if (headingRegions.length === 1 && currentDocData.headings.length === 1) region = headingRegions[0];
+        }
+        if (typeof heading === 'object') {
+            heading.title = val;
+            heading.text = val;
         } else {
             currentDocData.headings[idx] = val;
+        }
+        const previousTitles = new Set([oldTitle, region?.text].filter(Boolean));
+        if (region) region.text = val;
+        if (currentDocData.body_text && previousTitles.size) {
+            currentDocData.body_text = currentDocData.body_text.split('\n').map(line => {
+                const marker = line.trim().match(/^(【(?:大|中|小)?見出し】\s*)(.*)$/);
+                if (marker && previousTitles.has(marker[2].trim())) return marker[1] + val;
+                return previousTitles.has(line.trim()) ? val : line;
+            }).join('\n');
         }
     }
 
@@ -4456,28 +4431,55 @@
     function renderFootnotes(footnotes) {
         const container = document.getElementById("footnoteContainer");
         if (!container) return;
+        watchFootnoteContainer(container);
         container.innerHTML = "";
         if (!footnotes || footnotes.length === 0) {
             container.innerHTML = "<div style='color:#64748b; padding:15px;'>注釈文はありません (※ページ番号は除外)。</div>";
             return;
         }
+        const curFont = appSettings?.FontFamilyName || "Yu Gothic UI";
+        const curSize = (appSettings?.FontSize || 11.0) + "pt";
+
         footnotes.forEach((fn, idx) => {
             const card = document.createElement("div");
             card.className = "footnote-card";
-            card.style.display = "flex";
-            card.style.alignItems = "center";
-            card.style.gap = "8px";
-            const safeVal = (typeof fn === 'string' ? fn : (fn?.text || "")).replace(/"/g, '&quot;');
+            card.style.fontFamily = curFont;
+            card.style.fontSize = curSize;
+            const safeVal = escapeHtml(typeof fn === 'string' ? fn : (fn?.text || ""));
             card.innerHTML = `
                 <span style="user-select:none; font-size:14px;">🔖</span>
-                <input type="text" class="heading-input" style="flex:1;" value="${safeVal}" 
+                <textarea class="heading-input footnote-textarea" rows="1" style="flex:1; font-family:${curFont}; font-size:${curSize};"
                        title="注釈文を直接編集できます" 
-                       oninput="onFootnoteInput(${idx}, this.value)"
-                       onchange="saveFootnoteChange(${idx}, this.value)">
+                       oninput="onFootnoteInput(${idx}, this.value); resizeFootnoteTextarea(this)"
+                       onchange="saveFootnoteChange(${idx}, this.value)">${safeVal}</textarea>
                 <button class="table-btn" style="height:26px; font-size:11px; color:#dc2626; border-color:#fca5a5;" onclick="deleteFootnote(${idx})" title="この注釈文を削除">🗑 削除</button>
             `;
             container.appendChild(card);
+            resizeFootnoteTextarea(card.querySelector(".footnote-textarea"));
         });
+    }
+
+    function resizeFootnoteTextarea(textarea) {
+        // Hidden tabs have no measurable width. Measure after they are shown.
+        if (!textarea || textarea.clientWidth === 0) return;
+        textarea.style.height = "auto";
+        const style = getComputedStyle(textarea);
+        const borders = (parseFloat(style.borderTopWidth) || 0) + (parseFloat(style.borderBottomWidth) || 0);
+        textarea.style.height = `${Math.max(42, textarea.scrollHeight + borders)}px`;
+    }
+    function resizeAllFootnotes() {
+        document.querySelectorAll("#footnoteContainer .footnote-textarea").forEach(resizeFootnoteTextarea);
+    }
+    let footnoteResizeObserver = null;
+    function watchFootnoteContainer(container) {
+        if (footnoteResizeObserver || typeof ResizeObserver === "undefined") return;
+        let previousWidth = 0;
+        footnoteResizeObserver = new ResizeObserver(entries => {
+            const width = entries[0].contentRect.width;
+            if (width > 0 && width !== previousWidth) requestAnimationFrame(resizeAllFootnotes);
+            previousWidth = width;
+        });
+        footnoteResizeObserver.observe(container);
     }
 
     function onFootnoteInput(idx, val) {
@@ -4508,6 +4510,54 @@
         appendLog("注釈文削除", `注釈文「${name}」を削除しました`, "success");
     }
 
+    function saveFigureTabEdit(fig) {
+        const page = Number(fig.page || currentPage);
+        const doc = page === currentPage ? currentDocData : pageCache[page]?.docData;
+        if (!doc) { alert("この図のページを開いてから編集してください。"); return false; }
+        const target = (doc.figures || []).find(f => f.id === fig.id || f.region_id === fig.id);
+        if (!target) return false;
+        Object.assign(target, {caption: fig.caption || "", rotation: fig.rotation || 0});
+        if (fig.image_base64) target.image_base64 = fig.image_base64;
+        const region = (doc.regions || []).find(r => r.type === "image" && (r.id === target.id || r.id === target.region_id));
+        if (region) {
+            region.caption = target.caption;
+            region.rotation = target.rotation;
+            if (target.image_base64) region.image_base64 = target.image_base64;
+        }
+        markPageModified(page);
+        if (page === currentPage) saveCurrentPageToCache(true);
+        else {
+            pageCache[page].isModified = true;
+            debounceSavePageToDisk(page, doc, 400);
+        }
+        return true;
+    }
+    const rotatingFigures = new WeakSet();
+    async function rotateFigureInTab(fig, degrees) {
+        if (rotatingFigures.has(fig)) return;
+        const page = Number(fig.page || currentPage);
+        const doc = page === currentPage ? currentDocData : pageCache[page]?.docData;
+        if (!doc) { alert("この図のページを開いてから回転してください。"); return; }
+        if (!fig.image_base64) { alert("回転する画像がありません。"); return; }
+        rotatingFigures.add(fig);
+        try {
+            const image = new Image();
+            await new Promise((resolve, reject) => { image.onload = resolve; image.onerror = reject; image.src = fig.image_base64; });
+            const canvas = document.createElement("canvas");
+            canvas.width = image.naturalHeight;
+            canvas.height = image.naturalWidth;
+            const context = canvas.getContext("2d");
+            context.translate(canvas.width / 2, canvas.height / 2);
+            context.rotate(degrees * Math.PI / 180);
+            context.drawImage(image, -image.naturalWidth / 2, -image.naturalHeight / 2);
+            fig.image_base64 = canvas.toDataURL("image/png");
+            fig.rotation = ((Number(fig.rotation || 0) + degrees) % 360 + 360) % 360;
+            if (saveFigureTabEdit(fig)) renderFigures(doc.figures);
+        } catch (error) {
+            appendLog("図の回転失敗", "画像を読み込めませんでした。", "warn");
+        } finally { rotatingFigures.delete(fig); }
+    }
+
     function renderFigures(figures) {
         const gallery = document.getElementById("pnlFigureGallery");
         if (!gallery) return;
@@ -4517,6 +4567,7 @@
             return;
         }
         figures.forEach(fig => {
+            fig.name = getRegionLabel({...fig, type: "image"});
             const card = document.createElement("div");
             card.className = "figure-card";
             const imgSrc = (fig.image_base64 && fig.image_base64.trim()) ? fig.image_base64 : "";
@@ -4537,6 +4588,29 @@
             `;
 
             const actionsContainer = card.querySelector(".figure-actions");
+            const info = card.querySelector(".figure-info");
+            const captionLabel = document.createElement("label");
+            captionLabel.textContent = "キャプション";
+            captionLabel.style.cssText = "display:flex; flex-direction:column; gap:5px; margin:10px 0;";
+            const captionInput = document.createElement("textarea");
+            captionInput.className = "heading-input";
+            captionInput.rows = 2;
+            captionInput.placeholder = "図の説明を入力してください";
+            captionInput.value = fig.caption || "";
+            captionInput.style.cssText = "width:100%; min-width:0; box-sizing:border-box; resize:vertical;";
+            captionInput.oninput = () => { fig.caption = captionInput.value; saveFigureTabEdit(fig); };
+            captionLabel.appendChild(captionInput);
+            info.insertBefore(captionLabel, card.querySelector(".figure-actions"));
+            if (imgSrc) {
+                for (const [title, degrees] of [["↶ 左に90°回転", -90], ["↷ 右に90°回転", 90]]) {
+                    const button = document.createElement("button");
+                    button.className = "table-btn";
+                    button.textContent = title;
+                    button.onclick = () => rotateFigureInTab(fig, degrees);
+                    actionsContainer.appendChild(button);
+                }
+            }
+
             if (imgSrc) {
                 const btnSave = document.createElement("button");
                 btnSave.className = "table-btn";
@@ -4889,6 +4963,7 @@
         if (targetBtn && targetPnl) {
             targetBtn.classList.add("active");
             targetPnl.classList.add("active");
+            if (type === "footnote") requestAnimationFrame(resizeAllFootnotes);
             appendLog("タブ切替", `「${targetBtn.innerText}」タブへ切り替えました`);
         }
     }
@@ -6451,11 +6526,11 @@
 
             // 注釈文 (string または {text: ...} オブジェクトに対応)
             if (data.footnotes && data.footnotes.length > 0) {
-                data.footnotes.forEach(fn => {
+                data.footnotes.forEach((fn, fnIndex) => {
                     const rawText = typeof fn === 'string' ? fn : (fn?.text || "");
                     const cleanFn = rawText.trim();
                     if (cleanFn) {
-                        totalFootnotes.push(cleanFn.startsWith("[P") ? cleanFn : `[P${p}] ${cleanFn}`);
+                        totalFootnotes.push({...((typeof fn === "object") ? fn : {text:fn}), text:cleanFn.startsWith("[P") ? cleanFn : `[P${p}] ${cleanFn}`, _source_page:p, _source_index:fnIndex});
                     }
                 });
             }
@@ -6996,584 +7071,6 @@
         jumpToSearchResult(nextIdx);
     }
 
-    // ==========================================
-    // 文書校正 & 誤字脱字修復 (KWJA / ルール / ハイブリッド / 前後文字選択置換 / 再開対応)
-    // ==========================================
-    let proofreadCandidates = [];
-    let currentProofreadIdx = -1;
-    let proofreadSelectionOffsetBefore = 0;
-    let proofreadSelectionOffsetAfter = 0;
-
-    // ローカルセッション管理キー
-    const PROOFREAD_STORAGE_KEY = "ocr_proofread_session";
-
-    function getProofreadSession() {
-        try {
-            const raw = localStorage.getItem(PROOFREAD_STORAGE_KEY);
-            return raw ? JSON.parse(raw) : null;
-        } catch (e) {
-            return null;
-        }
-    }
-
-    function saveProofreadSession(data) {
-        try {
-            const cur = getProofreadSession() || {};
-            const updated = { ...cur, ...data, updatedAt: Date.now() };
-            localStorage.setItem(PROOFREAD_STORAGE_KEY, JSON.stringify(updated));
-        } catch (e) {
-            console.warn("Failed to save proofread session:", e);
-        }
-    }
-
-    async function openProofreadModal() {
-        const modal = document.getElementById("proofreadModal");
-        if (!modal) return;
-
-        // スコープのオプションテキストを現在のバッチ・ページ情報に合わせて更新
-        const curStart = parseInt(document.getElementById("numPageStart")?.value) || 1;
-        const curEnd = parseInt(document.getElementById("numPageEnd")?.value) || (totalPages || 20);
-        const scopeSelect = document.getElementById("cmbProofreadScope");
-        if (scopeSelect) {
-            scopeSelect.innerHTML = `
-                <option value="current_batch" selected>作業中のバッチ (${curStart}〜${curEnd}P)</option>
-                <option value="all_batches">全バッチ (プロジェクト全体: 1〜${totalPages || 20}P)</option>
-                <option value="current_page">現在のページのみ (P.${currentPage})</option>
-            `;
-        }
-
-        // エンジン状態の確認
-        try {
-            const res = await fetch(`${API_BASE}/api/proofread/engine-status`);
-            if (res.ok) {
-                const statusData = await res.json();
-                const engSelect = document.getElementById("cmbProofreadEngine");
-                if (engSelect) {
-                    const kwjaOpt = engSelect.querySelector("option[value='kwja']");
-                    const hybridOpt = engSelect.querySelector("option[value='hybrid']");
-                    if (!statusData.kwja_available) {
-                        if (kwjaOpt) kwjaOpt.innerText = "🧠 KWJA (未導入 - ルール代替)";
-                        if (hybridOpt) hybridOpt.innerText = "🌟 ハイブリッド校正 (ルール中心)";
-                    }
-                }
-            }
-        } catch (err) {
-            console.warn("Proofread engine status check error:", err);
-        }
-
-        modal.style.display = "flex";
-
-        // 前回の中断位置を確認・表示
-        const session = getProofreadSession();
-        const resumeBanner = document.getElementById("proofreadResumeBanner");
-        if (session && session.filename === (currentPdfFile?.name || "") && session.lastCandidateIdx >= 0) {
-            if (resumeBanner) {
-                resumeBanner.style.display = "flex";
-                document.getElementById("lblProofreadResumeInfo").innerText = `P.${session.lastPage || 1} 候補 [${session.lastCandidateIdx + 1}]`;
-            }
-        } else {
-            if (resumeBanner) resumeBanner.style.display = "none";
-        }
-
-        // 候補スキャンの実行
-        await runScanProofreadCandidates(true);
-    }
-
-    function closeProofreadModal() {
-        const modal = document.getElementById("proofreadModal");
-        if (modal) modal.style.display = "none";
-
-        // セッション位置の保存
-        if (currentProofreadIdx >= 0 && currentPdfFile) {
-            saveProofreadSession({
-                filename: currentPdfFile.name,
-                lastPage: currentPage,
-                lastCandidateIdx: currentProofreadIdx,
-                lastCandidateId: proofreadCandidates[currentProofreadIdx]?.id || null,
-                engine: document.getElementById("cmbProofreadEngine")?.value || "hybrid",
-                scope: document.getElementById("cmbProofreadScope")?.value || "current_batch"
-            });
-        }
-    }
-
-    function restartProofreadFromBeginning() {
-        const session = getProofreadSession() || {};
-        session.lastCandidateIdx = 0;
-        saveProofreadSession(session);
-        const resumeBanner = document.getElementById("proofreadResumeBanner");
-        if (resumeBanner) resumeBanner.style.display = "none";
-        if (proofreadCandidates.length > 0) {
-            selectProofreadCandidate(0);
-        }
-    }
-
-    function onProofreadEngineChange() {
-        runScanProofreadCandidates(false);
-    }
-
-    async function runScanProofreadCandidates(attemptResume = false) {
-        const scope = document.getElementById("cmbProofreadScope")?.value || "current_batch";
-        const engine = document.getElementById("cmbProofreadEngine")?.value || "hybrid";
-
-        let startP = 1;
-        let endP = totalPages || 20;
-        if (scope === "current_batch") {
-            startP = parseInt(document.getElementById("numPageStart")?.value) || 1;
-            endP = parseInt(document.getElementById("numPageEnd")?.value) || (totalPages || 20);
-        } else if (scope === "current_page") {
-            startP = currentPage;
-            endP = currentPage;
-        }
-
-        // スキャン対象ページの収集
-        const pagesPayload = {};
-        for (let p = startP; p <= endP; p++) {
-            const c = pageCache[p];
-            if (c && c.docData) {
-                pagesPayload[p.toString()] = {
-                    body_text: c.docData.body_text || "",
-                    headings: c.docData.headings || [],
-                    footnotes: c.docData.footnotes || []
-                };
-            }
-        }
-
-        const listEl = document.getElementById("lstProofreadCandidates");
-        if (listEl) {
-            listEl.innerHTML = '<div style="padding:20px; text-align:center; color:#64748b; font-size:12px;">校正候補を解析中...</div>';
-        }
-
-        try {
-            const res = await fetch(`${API_BASE}/api/proofread/scan-batch`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    filename: currentPdfFile ? currentPdfFile.name : "doc.pdf",
-                    pages: pagesPayload,
-                    engine: engine
-                })
-            });
-
-            if (!res.ok) throw new Error("スキャンに失敗しました");
-            const data = await res.json();
-
-            // 候補リストのフラット化
-            proofreadCandidates = [];
-            if (data.candidates_by_page) {
-                Object.keys(data.candidates_by_page).sort((a, b) => parseInt(a) - parseInt(b)).forEach(pStr => {
-                    const cands = data.candidates_by_page[pStr];
-                    cands.forEach(c => {
-                        proofreadCandidates.push(c);
-                    });
-                });
-            }
-
-            renderProofreadCandidatesList();
-
-            // 再開位置の適用、または先頭を選択
-            let targetIdx = 0;
-            if (attemptResume) {
-                const session = getProofreadSession();
-                if (session && session.filename === (currentPdfFile?.name || "") && session.lastCandidateIdx > 0 && session.lastCandidateIdx < proofreadCandidates.length) {
-                    targetIdx = session.lastCandidateIdx;
-                }
-            }
-
-            if (proofreadCandidates.length > 0) {
-                selectProofreadCandidate(targetIdx);
-            } else {
-                currentProofreadIdx = -1;
-                resetProofreadEditorUI();
-            }
-
-        } catch (err) {
-            console.error("Scan proofread candidates error:", err);
-            if (listEl) listEl.innerHTML = `<div style="padding:20px; text-align:center; color:#dc2626; font-size:12px;">エラー: ${err.message}</div>`;
-        }
-    }
-
-    function renderProofreadCandidatesList() {
-        const listEl = document.getElementById("lstProofreadCandidates");
-        const countEl = document.getElementById("lblProofreadCount");
-        if (countEl) countEl.innerText = `${proofreadCandidates.length}件`;
-        if (!listEl) return;
-        listEl.innerHTML = "";
-
-        if (proofreadCandidates.length === 0) {
-            listEl.innerHTML = '<div style="padding:30px; text-align:center; color:#94a3b8; font-size:12px;">校正候補はありません (テキストは正常です)</div>';
-            return;
-        }
-
-        proofreadCandidates.forEach((c, idx) => {
-            const card = document.createElement("div");
-            card.id = `proofreadCard_${idx}`;
-            card.className = "proofread-card" + (idx === currentProofreadIdx ? " selected" : "");
-            card.style.cssText = `
-                padding: 7px 10px; border: 1px solid ${idx === currentProofreadIdx ? '#3b82f6' : '#cbd5e1'};
-                border-radius: 4px; background: ${idx === currentProofreadIdx ? '#eff6ff' : '#ffffff'};
-                cursor: pointer; display: flex; flex-direction: column; gap: 3px; font-size: 11.5px;
-                transition: 0.12s;
-            `;
-            card.onmouseover = () => { if (idx !== currentProofreadIdx) card.style.background = "#f1f5f9"; };
-            card.onmouseout = () => { if (idx !== currentProofreadIdx) card.style.background = "#ffffff"; };
-            card.onclick = () => selectProofreadCandidate(idx);
-
-            const tabBadge = c.tab === "body" ? "📝本文" : c.tab === "heading" ? "📑見出" : "🔖注釈";
-            const statusBadge = c.status === "accepted" ? '<span style="color:#16a34a; font-weight:bold;">✅ 適用済</span>' :
-                                c.status === "skipped" ? '<span style="color:#94a3b8; font-weight:bold;">⏭ スキップ</span>' :
-                                '<span style="color:#d97706; font-weight:bold;">⏳ 未処理</span>';
-
-            card.innerHTML = `
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <span style="font-weight:bold; color:#1e40af;">P.${c.page} <span style="font-size:10.5px; color:#64748b;">[${tabBadge}]</span></span>
-                    <span style="font-size:10.5px;">${statusBadge}</span>
-                </div>
-                <div style="display:flex; align-items:center; gap:4px; font-family:'Yu Gothic UI', sans-serif;">
-                    <span style="color:#dc2626; text-decoration:line-through; font-weight:bold; max-width:110px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(c.original)}</span>
-                    <span style="color:#64748b;">➔</span>
-                    <span style="color:#16a34a; font-weight:bold; max-width:110px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(c.suggested)}</span>
-                </div>
-                <div style="font-size:10px; color:#64748b; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
-                    ${escapeHtml(c.reason || '')}
-                </div>
-            `;
-            listEl.appendChild(card);
-        });
-    }
-
-    function selectProofreadCandidate(idx) {
-        if (idx < 0 || idx >= proofreadCandidates.length) return;
-        currentProofreadIdx = idx;
-        proofreadSelectionOffsetBefore = 0;
-        proofreadSelectionOffsetAfter = 0;
-
-        const c = proofreadCandidates[idx];
-
-        // リスト項目のハイライト更新
-        document.querySelectorAll("#lstProofreadCandidates .proofread-card").forEach((el, i) => {
-            if (i === idx) {
-                el.style.borderColor = "#3b82f6";
-                el.style.background = "#eff6ff";
-                if (typeof el.scrollIntoView === "function") {
-                    el.scrollIntoView({ block: "nearest", behavior: "smooth" });
-                }
-            } else {
-                el.style.borderColor = "#cbd5e1";
-                el.style.background = "#ffffff";
-            }
-        });
-
-        // ページ移動 (必要であれば該当ページへ表示切り替え)
-        if (c.page !== currentPage) {
-            goToPage(c.page);
-        }
-        if (c.tab) {
-            switchTab(c.tab);
-        }
-
-        // 右ペインの更新
-        const titleEl = document.getElementById("lblProofreadSelectedInfo");
-        if (titleEl) {
-            titleEl.innerText = `[${idx + 1}/${proofreadCandidates.length}] P.${c.page} (${c.tab === 'body' ? '本文' : c.tab === 'heading' ? '見出し' : '注釈'}) - ${c.reason}`;
-        }
-        const badgeEl = document.getElementById("lblProofreadEngineBadge");
-        if (badgeEl) {
-            badgeEl.innerText = c.engine === "kwja" ? "KWJA" : "Rule";
-            badgeEl.style.background = c.engine === "kwja" ? "#fdf2f8" : "#eff6ff";
-            badgeEl.style.color = c.engine === "kwja" ? "#9d174d" : "#1d4ed8";
-        }
-
-        // 新規候補選択時は isNewCandidate = true として置換後文字を c.suggested に初期化
-        updateProofreadSelectionUI(true);
-    }
-
-    function updateProofreadSelectionUI(isNewCandidate = false) {
-        if (currentProofreadIdx < 0 || currentProofreadIdx >= proofreadCandidates.length) return;
-        const c = proofreadCandidates[currentProofreadIdx];
-
-        const cb = c.context_before || "";
-        const ca = c.context_after || "";
-
-        // 前後拡張オフセットの計算
-        const beforeCharsToInclude = cb.substring(Math.max(0, cb.length - proofreadSelectionOffsetBefore));
-        const afterCharsToInclude = ca.substring(0, Math.min(ca.length, proofreadSelectionOffsetAfter));
-
-        const targetBefore = beforeCharsToInclude + c.original + afterCharsToInclude;
-
-        // コンテキストプレビューのHTML生成 (ターゲット+拡張部分を強調)
-        const prefixBefore = cb.substring(0, Math.max(0, cb.length - proofreadSelectionOffsetBefore));
-        const suffixAfter = ca.substring(Math.min(ca.length, proofreadSelectionOffsetAfter));
-
-        const contextBox = document.getElementById("pnlProofreadContextBox");
-        if (contextBox) {
-            contextBox.innerHTML = `
-                ${escapeHtml(prefixBefore)}<span style="background:#fee2e2; border:1px solid #fca5a5; color:#991b1b; padding:1px 4px; border-radius:3px; font-weight:bold;"><span style="color:#b91c1c;">${escapeHtml(beforeCharsToInclude)}</span><span style="background:#fecaca; text-decoration:underline;">${escapeHtml(c.original)}</span><span style="color:#b91c1c;">${escapeHtml(afterCharsToInclude)}</span></span>${escapeHtml(suffixAfter)}
-            `;
-        }
-
-        // 置換対象 (Before) の更新（選択範囲に合わせて拡大）
-        const txtBefore = document.getElementById("txtProofreadTargetBefore");
-        if (txtBefore) txtBefore.value = targetBefore;
-
-        // 置換後 (After) の更新: 新規候補選択時のみ c.suggested をセットし、範囲拡大時はユーザー入力/候補値をそのまま維持（自動変更しない）
-        const txtAfter = document.getElementById("txtProofreadTargetAfter");
-        if (txtAfter) {
-            if (isNewCandidate || !txtAfter.value) {
-                txtAfter.value = c.suggested;
-            }
-            txtAfter.focus();
-            txtAfter.select();
-        }
-
-        const rangeInfo = document.getElementById("lblProofreadRangeInfo");
-        if (rangeInfo) {
-            rangeInfo.innerText = `前: +${proofreadSelectionOffsetBefore}文字 / 後: +${proofreadSelectionOffsetAfter}文字 (置換長: ${targetBefore.length}文字)`;
-        }
-    }
-
-    function adjustProofreadSelection(deltaBefore, deltaAfter) {
-        if (currentProofreadIdx < 0 || currentProofreadIdx >= proofreadCandidates.length) return;
-        const c = proofreadCandidates[currentProofreadIdx];
-
-        const maxBefore = (c.context_before || "").length;
-        const maxAfter = (c.context_after || "").length;
-
-        proofreadSelectionOffsetBefore = Math.max(0, Math.min(maxBefore, proofreadSelectionOffsetBefore - deltaBefore));
-        proofreadSelectionOffsetAfter = Math.max(0, Math.min(maxAfter, proofreadSelectionOffsetAfter + deltaAfter));
-
-        updateProofreadSelectionUI(false);
-    }
-
-    function setProofreadSelectionPreset(chars) {
-        if (currentProofreadIdx < 0 || currentProofreadIdx >= proofreadCandidates.length) return;
-        const c = proofreadCandidates[currentProofreadIdx];
-
-        const maxBefore = (c.context_before || "").length;
-        const maxAfter = (c.context_after || "").length;
-
-        proofreadSelectionOffsetBefore = Math.min(maxBefore, chars);
-        proofreadSelectionOffsetAfter = Math.min(maxAfter, chars);
-
-        updateProofreadSelectionUI(false);
-    }
-
-    function applyProofreadCandidate() {
-        if (currentProofreadIdx < 0 || currentProofreadIdx >= proofreadCandidates.length) return;
-        const c = proofreadCandidates[currentProofreadIdx];
-
-        const txtBefore = document.getElementById("txtProofreadTargetBefore")?.value || c.original;
-        const txtAfter = document.getElementById("txtProofreadTargetAfter")?.value || c.suggested;
-
-        if (!txtBefore) return;
-
-        // ページキャッシュデータの更新
-        const pNum = c.page;
-        const pageDoc = pageCache[pNum]?.docData;
-        if (pageDoc) {
-            // raw_body_text の自動退避
-            if (!pageDoc.raw_body_text && pageDoc.body_text) {
-                pageDoc.raw_body_text = pageDoc.body_text;
-            }
-
-            let applied = false;
-            if (c.tab === "body" && pageDoc.body_text) {
-                if (pageDoc.body_text.includes(txtBefore)) {
-                    pageDoc.body_text = pageDoc.body_text.replace(txtBefore, txtAfter);
-                    applied = true;
-                }
-            } else if (c.tab === "heading" && pageDoc.headings) {
-                if (c.item_index !== undefined && pageDoc.headings[c.item_index]) {
-                    const h = pageDoc.headings[c.item_index];
-                    if (typeof h === "string") {
-                        pageDoc.headings[c.item_index] = h.replace(txtBefore, txtAfter);
-                    } else if (h.title) {
-                        h.title = h.title.replace(txtBefore, txtAfter);
-                    }
-                    applied = true;
-                }
-            } else if (c.tab === "footnote" && pageDoc.footnotes) {
-                if (c.item_index !== undefined && pageDoc.footnotes[c.item_index]) {
-                    const fn = pageDoc.footnotes[c.item_index];
-                    if (typeof fn === "string") {
-                        pageDoc.footnotes[c.item_index] = fn.replace(txtBefore, txtAfter);
-                    } else if (fn.text) {
-                        fn.text = fn.text.replace(txtBefore, txtAfter);
-                    }
-                    applied = true;
-                }
-            }
-
-            if (applied) {
-                markPageModified(pNum);
-                saveCurrentPageToCache(true);
-                updateBatchDashboardForPage(pNum);
-
-                // UI更新
-                if (pNum === currentPage) {
-                    renderBodyText(pageDoc.body_text, pageDoc.headings, pageDoc.footnotes);
-                    renderHeadings(pageDoc.headings);
-                    renderFootnotes(pageDoc.footnotes);
-                }
-                appendLog("文書校正適用", `P.${pNum}「${txtBefore}」➔「${txtAfter}」に置換しました`, "success");
-            }
-        }
-
-        c.status = "accepted";
-        renderProofreadCandidatesList();
-
-        // 次の未処理候補へ自動進行
-        navigateProofreadCandidate(1);
-    }
-
-    function skipProofreadCandidate() {
-        if (currentProofreadIdx < 0 || currentProofreadIdx >= proofreadCandidates.length) return;
-        const c = proofreadCandidates[currentProofreadIdx];
-        c.status = "skipped";
-        renderProofreadCandidatesList();
-        navigateProofreadCandidate(1);
-    }
-
-    function navigateProofreadCandidate(delta) {
-        if (proofreadCandidates.length === 0) return;
-        let nextIdx = currentProofreadIdx + delta;
-        if (nextIdx < 0) nextIdx = 0;
-        if (nextIdx >= proofreadCandidates.length) {
-            alert("すべての校正候補の確認が完了しました！");
-            nextIdx = proofreadCandidates.length - 1;
-        }
-        selectProofreadCandidate(nextIdx);
-    }
-
-    async function applyAllProofreadBatch() {
-        const scope = document.getElementById("cmbProofreadScope")?.value || "current_batch";
-        const engine = document.getElementById("cmbProofreadEngine")?.value || "hybrid";
-
-        let startP = 1;
-        let endP = totalPages || 20;
-        if (scope === "current_batch") {
-            startP = parseInt(document.getElementById("numPageStart")?.value) || 1;
-            endP = parseInt(document.getElementById("numPageEnd")?.value) || (totalPages || 20);
-        } else if (scope === "current_page") {
-            startP = currentPage;
-            endP = currentPage;
-        }
-
-        const confirmApply = confirm(`【バッチ一括置換】\n\nP.${startP} 〜 P.${endP} の全校正候補を一括適用します。\n（※いつでも「校正前に戻す」で元データに復元可能です）\n\n実行しますか？`);
-        if (!confirmApply) return;
-
-        const pagesPayload = {};
-        for (let p = startP; p <= endP; p++) {
-            const c = pageCache[p];
-            if (c && c.docData) {
-                pagesPayload[p.toString()] = {
-                    body_text: c.docData.body_text || "",
-                    headings: c.docData.headings || [],
-                    footnotes: c.docData.footnotes || []
-                };
-            }
-        }
-
-        try {
-            const res = await fetch(`${API_BASE}/api/proofread/apply-batch`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    filename: currentPdfFile ? currentPdfFile.name : "doc.pdf",
-                    pages: pagesPayload,
-                    engine: engine
-                })
-            });
-
-            if (!res.ok) throw new Error("一括適用に失敗しました");
-            const data = await res.json();
-
-            // キャッシュへの展開
-            if (data.corrected_pages) {
-                Object.entries(data.corrected_pages).forEach(([pStr, doc]) => {
-                    const pNum = parseInt(pStr);
-                    if (pageCache[pNum] && pageCache[pNum].docData) {
-                        pageCache[pNum].docData.body_text = doc.body_text;
-                        pageCache[pNum].docData.headings = doc.headings;
-                        pageCache[pNum].docData.footnotes = doc.footnotes;
-                        pageCache[pNum].docData.raw_body_text = doc.raw_body_text;
-                        markPageModified(pNum);
-                        saveCurrentPageToCache(true);
-                        updateBatchDashboardForPage(pNum);
-                    }
-                });
-            }
-
-            // 現在表示ページの再描画
-            if (currentPage >= startP && currentPage <= endP && pageCache[currentPage]?.docData) {
-                const cur = pageCache[currentPage].docData;
-                renderBodyText(cur.body_text, cur.headings, cur.footnotes);
-                renderHeadings(cur.headings);
-                renderFootnotes(cur.footnotes);
-            }
-
-            appendLog("バッチ一括校正", `P.${startP}〜P.${endP} (${data.modified_count}ページ) の校正を一括適用しました`, "success");
-            alert(`P.${startP}〜P.${endP} の一括校正が完了しました (${data.modified_count}ページ修正)。`);
-
-            // 候補一覧の再スキャン
-            await runScanProofreadCandidates(false);
-
-        } catch (err) {
-            console.error("Apply all proofread batch error:", err);
-            alert("一括適用エラー: " + err.message);
-        }
-    }
-
-    function revertProofreadBatch() {
-        const scope = document.getElementById("cmbProofreadScope")?.value || "current_batch";
-        let startP = 1;
-        let endP = totalPages || 20;
-        if (scope === "current_batch") {
-            startP = parseInt(document.getElementById("numPageStart")?.value) || 1;
-            endP = parseInt(document.getElementById("numPageEnd")?.value) || (totalPages || 20);
-        } else if (scope === "current_page") {
-            startP = currentPage;
-            endP = currentPage;
-        }
-
-        const confirmRevert = confirm(`【校正前の生データに戻す】\n\nP.${startP} 〜 P.${endP} のテキストを校正前のオリジナル生データに復元します。\n本当に元に戻しますか？`);
-        if (!confirmRevert) return;
-
-        let revertedCount = 0;
-        for (let p = startP; p <= endP; p++) {
-            const c = pageCache[p];
-            if (c && c.docData && c.docData.raw_body_text) {
-                c.docData.body_text = c.docData.raw_body_text;
-                markPageModified(p);
-                saveCurrentPageToCache(true);
-                updateBatchDashboardForPage(p);
-                revertedCount++;
-            }
-        }
-
-        if (currentPage >= startP && currentPage <= endP && pageCache[currentPage]?.docData) {
-            const cur = pageCache[currentPage].docData;
-            renderBodyText(cur.body_text, cur.headings, cur.footnotes);
-        }
-
-        appendLog("校正生データ復元", `P.${startP}〜P.${endP} (${revertedCount}ページ) を校正前の生データに復元しました`, "info");
-        alert(`P.${startP}〜P.${endP} を校正前の生データに復元しました (${revertedCount}ページ)。`);
-
-        runScanProofreadCandidates(false);
-    }
-
-    function resetProofreadEditorUI() {
-        const titleEl = document.getElementById("lblProofreadSelectedInfo");
-        if (titleEl) titleEl.innerText = "候補はありません";
-        const contextBox = document.getElementById("pnlProofreadContextBox");
-        if (contextBox) contextBox.innerHTML = "校正候補はありません";
-        const txtBefore = document.getElementById("txtProofreadTargetBefore");
-        if (txtBefore) txtBefore.value = "";
-        const txtAfter = document.getElementById("txtProofreadTargetAfter");
-        if (txtAfter) txtAfter.value = "";
-        const rangeInfo = document.getElementById("lblProofreadRangeInfo");
-        if (rangeInfo) rangeInfo.innerText = "前: +0文字 / 後: +0文字";
-    }
-
     // 初期起動時に保存設定を適用
     document.addEventListener("DOMContentLoaded", () => {
         loadSavedAppSettings();
@@ -7769,8 +7266,10 @@
 
         const reg = currentDocData?.regions?.find(r => r.id === selectedRegionId);
         if (!reg) return;
+        if (!REGION_LABELS[newType]) return;
         reg.type = newType;
-        const colors = { body: "#e11d48", table: "#1864d7", heading: "#16a34a", footnote: "#64748b", image: "#0284c7" };
+        reg.name = getRegionLabel(reg);
+        const colors = REGION_COLORS;
         if (colors[newType]) {
             reg.color = colors[newType];
         }
@@ -8140,5 +7639,6 @@
             </div>
         </div>
     </div>
+<script src="/ocr_footnotes.js"></script>
 </body>
 </html>

@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>リサーチ | MyNotebookLM</title>
+<style>
+:root{color-scheme:light;--ink:#253b3b;--muted:#718080;--line:#e1e8e5;--green:#246b5d;--soft:#eef6f1;--paper:#fff;--bg:#f5f6f2;--accent:#bc7844}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:"Yu Gothic UI","Meiryo",sans-serif;font-size:14px}button,input,textarea{font:inherit}button,a,input,textarea{outline-offset:3px}button{cursor:pointer}button:disabled{cursor:default}button:focus-visible,a:focus-visible{outline:2px solid var(--green)}button{color:inherit}svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}.icon-defs{position:absolute;width:0;height:0;overflow:hidden}.app{height:100dvh;display:flex;flex-direction:column}
+.topbar{display:flex;align-items:center;gap:22px;padding:18px 26px;background:var(--paper);border-bottom:1px solid var(--line)}.back{display:inline-flex;align-items:center;gap:7px;color:var(--ink);text-decoration:none;font-weight:600;font-size:13px;white-space:nowrap;padding:9px 11px;border:1px solid var(--line);border-radius:8px}.back:hover{background:var(--soft)}.brand{display:flex;align-items:center;gap:11px}.brand-icon{display:grid;place-items:center;width:38px;height:38px;border-radius:12px;background:var(--green);color:#fff}.brand h1{font-size:19px;margin:0;letter-spacing:.04em}.brand p{margin:3px 0 0;font-size:11px;color:var(--muted)}.top-note{margin-left:auto;display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted)}.dot{width:6px;height:6px;background:#78a793;border-radius:50%}
+.workspace{display:grid;grid-template-columns:290px minmax(360px,1fr) minmax(265px,530px);gap:16px;padding:20px;min-height:0;flex:1;max-width:1900px;width:100%;margin:0 auto}.panel{background:var(--paper);border:1px solid var(--line);border-radius:14px;min-height:0;display:flex;flex-direction:column;overflow:hidden}.panel-title{display:flex;align-items:center;justify-content:space-between;padding:19px 20px 15px}.panel-title h2{display:flex;align-items:center;gap:8px;font-size:14px;margin:0}.kicker{text-transform:uppercase;letter-spacing:.15em;font-size:10px;color:var(--muted);font-weight:700}.count{display:inline-grid;place-items:center;min-width:23px;min-height:23px;border-radius:6px;background:var(--soft);color:var(--green);font-size:12px;font-variant-numeric:tabular-nums}.scroll{overflow:auto;min-height:0;scrollbar-width:thin}.sources-body{flex:1;padding:0 18px 18px}.help{font-size:12px;line-height:1.8;color:var(--muted);margin:0 0 14px}.section-label{font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:space-between;margin:18px 0 9px}.text-button{border:0;background:none;color:var(--green);font-size:11px;padding:4px}.text-button:hover{text-decoration:underline}.text-button:disabled{color:var(--muted);text-decoration:none}.group-picker{position:relative}.group-picker summary{display:flex;align-items:center;gap:10px;list-style:none;cursor:pointer;padding:11px 12px;border:1px solid #cbdad1;border-radius:8px;background:#fff;font-size:12px;min-height:42px}.group-picker summary::-webkit-details-marker{display:none}.group-picker summary:focus-visible{outline:2px solid var(--green);outline-offset:3px}.group-picker[open] summary{border-color:#7ba997;background:#f8fbf8}.group-picker-label{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.group-picker-arrow{color:var(--green);transition:transform .15s}.group-picker[open] .group-picker-arrow{transform:rotate(180deg)}.group-list{position:absolute;top:calc(100% + 6px);left:0;right:0;z-index:30;display:flex;flex-direction:column;gap:4px;max-height:290px;overflow:auto;padding:7px;border:1px solid var(--line);border-radius:9px;background:#fff;box-shadow:0 8px 24px #253b3b20}.group-picker:not([open]) .group-list{display:none}.group-row{display:flex;align-items:center;gap:9px;padding:10px;border:1px solid var(--line);border-radius:8px;cursor:pointer}.group-row:has(input:checked){background:var(--soft);border-color:#b5d1c4}.group-row:hover{border-color:#b5d1c4}input[type=checkbox]{accent-color:var(--green);width:15px;height:15px;flex-shrink:0;margin:0}.group-name{flex:1;overflow-wrap:anywhere;font-size:12px;font-weight:600}.group-number{font-size:11px;color:var(--muted);white-space:nowrap}.tag-group-heading{font-size:11px;font-weight:700;color:var(--muted);padding:7px 4px 3px}.tag-help{font-size:11px;color:var(--muted);line-height:1.8;margin:11px 0 0}.empty-small{padding:16px 6px;font-size:12px;line-height:1.8;color:var(--muted);text-align:center}.scope-footer{border-top:1px solid var(--line);padding:13px 18px;margin-top:auto;background:#fbfcf9;font-size:11px;color:var(--muted);line-height:1.7}.scope-footer strong{color:var(--green);font-weight:600}.error{border:1px solid #edd2c6;background:#fff7f2;border-radius:8px;padding:13px;color:#8c4c31;font-size:12px;line-height:1.7;margin:0 0 12px}.error button{display:block;margin-top:7px;border:1px solid #e2bcaa;background:#fff;border-radius:5px;font-size:12px;padding:4px 12px}
+.conversation{position:relative}.conversation-head{padding:19px 24px 15px;display:flex;align-items:center;gap:15px;border-bottom:1px solid var(--line)}.title-area{flex:1;min-width:0}.research-title{width:100%;border:0;background:none;padding:4px 0;color:var(--ink);font-size:17px;font-weight:600}.research-title:focus{outline:0;box-shadow:0 1px var(--green)}.save-status{font-size:10px;color:var(--muted);white-space:nowrap}.conversation-main{flex:1;display:flex;align-items:center;justify-content:center;overflow:auto;padding:30px 28px}.welcome{max-width:580px;width:100%;text-align:center}.welcome-icon{display:inline-grid;place-items:center;width:64px;height:64px;background:var(--soft);border:1px solid #dcebe2;border-radius:20px;color:var(--green);margin-bottom:22px}.welcome-icon svg{width:29px;height:29px}.welcome .kicker{color:var(--accent)}.welcome h2{font-size:clamp(21px,2vw,29px);line-height:1.65;font-weight:600;letter-spacing:.03em;margin:12px 0}.welcome p{font-size:12px;line-height:1.9;color:var(--muted);margin:0 auto 24px;max-width:410px}.prompt-list{display:flex;flex-direction:column;gap:8px;max-width:450px;margin:0 auto}.prompt-chip{text-align:left;display:flex;align-items:center;gap:11px;width:100%;background:#fff;border:1px solid var(--line);border-radius:9px;padding:12px 15px;font-size:12px;line-height:1.6}.prompt-chip svg{color:var(--accent);width:17px;height:17px}.prompt-chip:hover{background:#f8faf7;border-color:#bdd0c5}.composer-wrap{padding:18px 24px 17px}.scope-summary{display:flex;gap:8px;align-items:center;font-size:11px;color:var(--muted);margin-bottom:9px}.scope-summary svg{width:15px;height:15px;color:var(--green)}.composer{border:1px solid #cbdad1;border-radius:12px;padding:13px;background:#fff;box-shadow:0 4px 18px #253b3b05}.composer:focus-within{border-color:#7ba997;box-shadow:0 0 0 2px #246b5d0b}.composer textarea{width:100%;resize:vertical;min-height:73px;max-height:220px;display:block;padding:2px 3px;border:0;outline:none;font-size:13px;line-height:1.8;color:var(--ink);background:transparent}.composer textarea::placeholder{color:#98a19e}.composer-bottom{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:8px}.char-count{font-size:10px;color:var(--muted)}.prepare-button{display:flex;align-items:center;gap:7px;background:#e7efea;color:#688478;border:0;border-radius:7px;padding:10px 13px;font-size:11px;font-weight:600}.prepare-button svg{width:14px;height:14px}.stage-note{font-size:10px;line-height:1.7;margin:9px 2px 0;color:var(--muted)}
+.evidence-body{padding:18px 20px;flex:1;display:flex;flex-direction:column}.evidence-empty{margin:auto 0;text-align:center;padding:20px 0}.evidence-mark{display:grid;place-items:center;width:48px;height:55px;margin:0 auto 16px;border-radius:8px;border:1px dashed #c4d2ca;color:#9bab9f;background:#fafcf9}.evidence-mark svg{width:23px;height:23px}.evidence-empty h3{font-size:12px;font-weight:600;margin:0 0 10px}.evidence-empty p{font-size:11px;color:var(--muted);line-height:1.9;margin:0}.evidence-note{border-top:1px solid var(--line);padding-top:16px;margin-top:20px;font-size:11px;line-height:1.9;color:var(--muted)}[hidden]{display:none!important}
+@media(min-width:1600px){.workspace{grid-template-columns:320px minmax(360px,1fr) 580px;gap:20px;padding:24px}.conversation-main{padding:45px}}
+@media(max-width:1140px){.workspace{grid-template-columns:270px minmax(340px,1fr);overflow:auto}.evidence{grid-column:2;min-height:160px}.evidence-body{flex-direction:row;gap:24px;padding-top:0}.evidence-empty{display:flex;align-items:center;gap:16px;text-align:left;padding:0}.evidence-mark{margin:0;flex-shrink:0}.evidence-note{flex:1;margin:0;border:0;border-left:1px solid var(--line);padding:0 0 0 18px}.sources{grid-row:1 / span 2}.conversation{min-height:580px}.topbar{padding:14px 20px}}
+@media(max-width:720px){.app{height:auto;min-height:100dvh}.topbar{flex-wrap:wrap;gap:12px;padding:12px 15px}.top-note{display:none}.brand p{display:none}.workspace{display:flex;flex-direction:column;padding:12px;gap:12px;overflow:visible}.sources-body{max-height:400px}.conversation{min-height:650px}.conversation-head{padding:16px}.conversation-main{padding:28px 18px}.composer-wrap{padding:14px}.evidence-body{flex-direction:column}.evidence-note{border:0;border-top:1px solid var(--line);padding:12px 0 0}.save-status{max-width:100px;white-space:normal}.panel-title{padding:16px 18px}}
+.threads-section{margin-top:22px;padding-top:2px;border-top:1px solid var(--line)}.new-thread{display:block;width:100%;padding:11px 12px;margin:0 0 12px;text-align:left;border:1px solid #b5d1c4;background:var(--soft);color:var(--green);border-radius:8px;font-weight:600;font-size:12px}.new-thread:hover{background:#e0efe5}.new-thread:disabled{opacity:.55}.thread-list{display:flex;flex-direction:column;gap:6px}.thread-row{display:flex;align-items:center;border:1px solid transparent;border-radius:8px;min-width:0}.thread-row:hover{background:#f6f8f4}.thread-row.active{background:var(--soft);border-color:#c8ddd0}.thread-open{display:flex;flex:1;min-width:0;flex-direction:column;gap:5px;text-align:left;background:none;border:0;padding:11px 9px}.thread-name{font-size:12px;font-weight:600;line-height:1.6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}.thread-tags{color:var(--muted);font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}.thread-options{border:0;background:none;align-self:flex-start;padding:8px;font-size:20px;color:var(--muted);border-radius:6px}.thread-options:hover{background:#dcebe2;color:var(--green)}.deleted-notice{padding:9px;margin:10px 0;font-size:11px;line-height:1.8;background:var(--soft);border-radius:7px}.thread-settings{border:1px solid var(--line);border-radius:14px;padding:25px;width:510px;max-width:calc(100vw - 32px);max-height:calc(100dvh - 40px);color:var(--ink);background:#fff;box-shadow:0 20px 80px #20352d30;overflow:auto}.thread-settings::backdrop{background:#20352d55}.thread-settings h2{font-size:17px;margin:0 0 20px}.setting-label{display:block;font-size:12px;font-weight:600;margin:16px 0 8px}#threadName{width:100%;border:1px solid #cbdad1;border-radius:7px;padding:10px;color:var(--ink)}.thread-tag-settings{max-height:280px;overflow:auto;padding:0 6px 4px 0;display:flex;flex-direction:column;gap:5px}.settings-actions{display:flex;align-items:center;gap:8px;margin-top:22px}.settings-actions button{border:1px solid var(--line);border-radius:7px;padding:9px 13px;background:#fff;font-size:12px}.settings-actions .delete-thread{margin-right:auto;color:#ae4b36;border-color:#e9cfc7}.settings-actions .save-settings{background:var(--green);color:#fff;border-color:var(--green)}.research-title:disabled{color:var(--muted);opacity:1}.composer textarea:disabled{background:transparent}
+
+.delete-confirm{margin-top:20px;padding:12px;border:1px solid #e9cfc7;border-radius:8px;background:#fff7f2;font-size:12px;line-height:1.8}.delete-confirm p{margin:0 0 10px}.delete-confirm button{padding:7px 12px;margin-right:8px;border:1px solid #dfc5bc;background:#fff;border-radius:6px}#confirmThreadDelete{color:#a4412c}
+.prepare-button:not(:disabled){background:var(--green);color:white;cursor:pointer}.prepare-button:disabled{cursor:default;opacity:.65}
+.conversation-main.has-history{display:block;padding:22px;scroll-behavior:smooth}.search-history{width:100%;max-width:760px;margin:0 auto}.search-turn{margin-bottom:22px;border-bottom:1px solid var(--line);padding-bottom:20px}.search-date{font-size:10px;color:var(--muted);margin:0 0 7px}.search-question{border:0;text-align:left;white-space:pre-wrap;overflow-wrap:anywhere;width:100%;padding:12px 14px;background:#eaf1eb;color:var(--ink);border-radius:9px;font-size:13px;line-height:1.8}.search-question[aria-pressed=true]{box-shadow:inset 3px 0 var(--green)}.search-summary{font-size:13px;line-height:1.8}.search-meta{font-size:11px;color:var(--muted);white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.8;margin:8px 0}.search-scope-note{font-size:11px;color:#916c26;line-height:1.8}.citation-link{display:block;border:0;background:transparent;color:var(--green);font-size:12px;text-align:left;line-height:1.7;padding:5px 0}.evidence-body{overflow-y:auto;min-height:0;display:block}.citation-card{border:1px solid var(--line);border-radius:9px;padding:15px;margin:12px 0;background:#fff;scroll-margin:10px;overflow-wrap:anywhere}.citation-card:focus{outline:2px solid #86ad9b}.citation-title{font-size:13px;line-height:1.7;margin:0}.citation-summary{font-size:11px;color:var(--green);cursor:pointer;padding:6px 0}.citation-quote{font-size:12px;line-height:1.95;white-space:pre-wrap;margin:8px 0;padding:0 0 0 12px;border-left:2px solid #c2d8ca;color:var(--ink)}.citation-open{font-size:11px;border:1px solid #cbdad1;border-radius:6px;background:#f7faf7;color:var(--green);padding:7px 10px;margin-top:8px}.evidence-empty{margin-top:30%}@media(max-width:1140px){.evidence-body{display:block;max-height:550px}.evidence-empty{margin-top:15px}.evidence-note{border:0;padding:0}.conversation-main.has-history{padding:18px}}@media(max-width:720px){.evidence-body{max-height:600px}}
+
+.semantic-status{font-size:10px;line-height:1.7;margin:7px 2px 0;color:var(--muted);display:flex;flex-wrap:wrap;gap:5px 8px;align-items:center}.semantic-actions{display:flex;gap:7px;align-items:center}.semantic-actions progress{width:70px;height:5px;accent-color:var(--green)}.semantic-actions button{font-size:10px;border:1px solid var(--line);border-radius:5px;padding:2px 7px;background:#fff;color:var(--green)}.search-method{font-size:10px;color:var(--green);margin:5px 0}
+.ai-settings-button{margin-left:auto;border:1px solid var(--line);border-radius:7px;background:white;padding:8px 12px;font-size:12px;white-space:nowrap}.top-note{margin-left:0}.composer-bottom{flex-wrap:wrap;gap:7px}.composer-buttons{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap}.composer-buttons #searchSources{background:#f1f5f1;color:var(--green);border:1px solid #d9e4dc;padding:8px 10px}.composer-buttons #createAnswer{padding:9px 12px}.followup-control{display:flex;align-items:center;gap:6px;font-size:11px;line-height:1.7;color:var(--green);margin:8px 2px}.followup-control[hidden]{display:none}.answer-block{font-size:13px;line-height:1.95;white-space:pre-wrap;overflow-wrap:anywhere;margin:12px 0}.answer-heading{font-size:12px;font-weight:700;color:var(--green);margin:16px 0 6px}.answer-reference{display:inline;border:0;background:#eef6f1;border-radius:4px;padding:1px 4px;margin:0 3px;color:var(--green);font-size:11px}.answer-actions{display:flex;gap:8px;flex-wrap:wrap;margin:9px 0}.answer-actions button,.pending-answer-button{border:1px solid #cfddd3;background:white;border-radius:6px;padding:6px 9px;font-size:11px;color:var(--green)}.answer-progress{font-size:12px;line-height:1.8;color:var(--green);padding:10px 0}.answer-error{color:#984b31;font-size:12px;line-height:1.8}.answer-source-used{font-size:10px;color:var(--green);background:var(--soft);padding:3px 7px;border-radius:4px;display:inline-block;margin:7px 0 0}.ai-settings-note{font-size:12px;line-height:1.8;color:var(--muted)}.ai-consent{display:flex;align-items:flex-start;gap:8px;font-size:12px;line-height:1.8;margin:15px 0}.ai-consent input{margin-top:4px}.ai-settings input[type=password],.ai-settings input[type=text]{box-sizing:border-box;width:100%;padding:9px;border:1px solid #cbdad1;border-radius:7px;background:white;color:var(--ink)}.ai-settings .settings-actions{justify-content:flex-end}.ai-settings label.setting-label{display:block;margin:15px 0 7px}.ai-status{font-size:11px;color:var(--muted);line-height:1.7;margin:8px 2px}.ai-settings .error[hidden]{display:none}.ai-links{font-size:11px;color:var(--green);line-height:1.8}.answer-details{margin:10px 0}.answer-details>summary{font-size:11px;color:var(--muted);cursor:pointer}.answer-usage{font-size:10px;color:var(--muted);line-height:1.8}.answer-proof{display:block;font-size:11px;color:var(--muted);line-height:1.8;white-space:pre-wrap;margin:5px 0;padding-left:10px;border-left:2px solid #c2d8ca}@media(max-width:850px){.top-note{display:none}}
+
+.evidence-heading{flex-wrap:wrap;gap:12px}.source-font-option{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--muted)}.source-font-option select{font:inherit;color:var(--ink);background:#fff;border:1px solid #cbdad1;border-radius:6px;padding:5px 7px;max-width:130px}.source-font-option select:focus-visible{outline:2px solid var(--green)}.evidence .citation-quote,.answer-proof{font-size:var(--source-font-size,12px)}.evidence .citation-title{font-size:calc(var(--source-font-size,12px) + 1px)}.evidence .citation-summary,.evidence .search-meta,.evidence .citation-open,.evidence .search-method,.evidence .answer-source-used,.evidence-note,.evidence-empty p{font-size:calc(var(--source-font-size,12px) - 1px)}.evidence-empty h3{font-size:var(--source-font-size,12px)}
+.answer-section-title {font-size:1em;margin:20px 0 8px;line-height:1.6;}
+.conversation .research-title,.conversation .search-question,.conversation .search-summary,
+.conversation .answer-block,.conversation .answer-heading,.conversation .answer-section-title,
+.conversation .composer textarea,.conversation .welcome p,.conversation .prompt-chip{font-size:18px}
+</style>
+</head>
+<body>
+<svg class="icon-defs" aria-hidden="true"><defs>
+<symbol id="i-arrow" viewBox="0 0 24 24"><path d="M19 12H5m6-6-6 6 6 6"/></symbol>
+<symbol id="i-book" viewBox="0 0 24 24"><path d="M12 5v15M3 4c3-1 6 0 9 2 3-2 6-3 9-2v15c-3-1-6 0-9 2-3-2-6-3-9-2z"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></symbol>
+<symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H5v18h14V8zM14 3v5h5M8 12h8M8 16h6"/></symbol>
+<symbol id="i-chat" viewBox="0 0 24 24"><path d="M21 4H3v14h5v4l5-4h8zM7 9h10M7 13h6"/></symbol>
+<symbol id="i-quote" viewBox="0 0 24 24"><path d="M4 13h5v6H3v-7c0-4 2-6 5-7M15 13h5v6h-6v-7c0-4 2-6 5-7"/></symbol>
+<symbol id="i-send" viewBox="0 0 24 24"><path d="m3 3 18 9-18 9 4-9zM7 12h14"/></symbol>
+</defs></svg>
+<div class="app">
+<header class="topbar">
+ <a class="back" href="/editor_form.html" id="returnEditor"><svg aria-hidden="true"><use href="#i-arrow"/></svg>エディタへ戻る</a>
+ <div class="brand"><div class="brand-icon"><svg aria-hidden="true"><use href="#i-search"/></svg></div><div><h1>リサーチ</h1><p>MyNotebookLM · 資料から考える</p></div></div>
+ <button class="ai-settings-button" id="openAISettings" type="button">AI設定</button>
+ <div class="top-note"><span class="dot"></span>スレッドと下書きをアプリに保存します</div>
+</header>
+<main class="workspace">
+ <aside class="panel sources" aria-labelledby="sourceHeading">
+  <div class="panel-title"><h2 id="sourceHeading"><svg aria-hidden="true"><use href="#i-book"/></svg>調べる資料</h2><span class="count" id="selectedCount">0</span></div>
+  <div class="sources-body scroll">
+   <p class="help">グループを選び、その中のタグで<br>リサーチする範囲を指定します。</p>
+   <div id="catalogError" class="error" role="alert" hidden><span id="errorMessage"></span><button type="button" id="retryCatalog">再読み込み</button></div>
+   <div class="section-label">タググループ<span class="kicker">複数選択可</span></div>
+   <details class="group-picker" id="groupPicker">
+    <summary id="groupPickerSummary"><span class="group-picker-label" id="groupSelection">タググループを選択</span><span class="group-picker-arrow" aria-hidden="true">▾</span></summary>
+    <div class="group-list" id="groupList" aria-busy="true"><div class="empty-small">資料を読み込んでいます…</div></div>
+   </details>
+   <div class="section-label">タグ<span class="kicker">複数選択可</span></div>
+   <details class="group-picker" id="tagPicker">
+    <summary id="tagPickerSummary"><span class="group-picker-label" id="tagSelection">タグを選択</span><span class="group-picker-arrow" aria-hidden="true">▾</span></summary>
+    <div class="group-list" id="tagList" aria-busy="true"><div class="empty-small">先にタググループを選んでください。</div></div>
+   </details>
+   <p class="tag-help">選んだタグのいずれかが付いた資料を使います。</p>
+   <section class="threads-section" aria-labelledby="threadsHeading">
+    <div class="section-label" id="threadsHeading">質問スレッド</div>
+    <button type="button" id="newThread" class="new-thread" disabled>＋ 新しいスレッド</button>
+    <div id="threadError" class="error" role="alert" hidden><span id="threadErrorMessage"></span><button type="button" id="retryThreads">再試行</button><button type="button" id="saveThreadCopy">下書きを別スレッドに保存</button></div>
+    <div id="deletedNotice" class="deleted-notice" role="status" hidden><span id="deletedMessage"></span><button type="button" id="undoThreadDelete" class="text-button">元に戻す</button></div>
+    <div id="threadList" class="thread-list"><div class="empty-small">スレッドを読み込んでいます…</div></div>
+   </section>
+
+  </div>
+  <div class="scope-footer" id="scopeFooter" aria-live="polite">グループとタグを選択してください</div>
+ </aside>
+ <section class="panel conversation" aria-labelledby="conversationHeading">
+  <div class="conversation-head"><div class="title-area"><div class="kicker" id="conversationHeading">RESEARCH NOTE</div><input id="researchTitle" class="research-title" aria-label="リサーチのタイトル" maxlength="100" value="新しいリサーチ"></div><span class="save-status" id="saveStatus" role="status">スレッドを読み込み中</span></div>
+  <div class="conversation-main"><div class="welcome">
+   <div class="welcome-icon"><svg aria-hidden="true"><use href="#i-chat"/></svg></div>
+   <div class="kicker">START WITH A QUESTION</div>
+   <h2>資料を選んで、<br>問いを深める。</h2>
+   <p>複数の文書を横断して、知りたいことを整理する場所です。<br>資料を選び、知りたいことや語句を入力してください。</p>
+   <div class="prompt-list" aria-label="質問の下書き例">
+    <button class="prompt-chip" type="button" data-prompt="選択した資料の中心的な論点を、出典とともに整理してください。"><svg aria-hidden="true"><use href="#i-file"/></svg>中心的な論点を整理する</button>
+    <button class="prompt-chip" type="button" data-prompt="選択した資料で、共通する見解と異なる見解を出典とともに比較してください。"><svg aria-hidden="true"><use href="#i-book"/></svg>資料ごとの見解を比較する</button>
+    <button class="prompt-chip" type="button" data-prompt="この問いに関係する記述を、引用箇所とページを付けて集めてください："><svg aria-hidden="true"><use href="#i-quote"/></svg>問いに関係する記述を集める</button>
+   </div>
+  </div></div>
+  <div class="composer-wrap">
+   <div class="scope-summary"><svg aria-hidden="true"><use href="#i-book"/></svg><span id="composerScope">タグを選ぶと、リサーチする範囲がここに表示されます</span></div>
+   <div class="composer"><textarea id="questionDraft" aria-label="質問の下書き" placeholder="選んだ資料について、何を知りたいですか？" maxlength="12000"></textarea><div class="composer-bottom"><span class="char-count" id="charCount">0 / 12,000</span><div class="composer-buttons"><button type="button" class="prepare-button" id="searchSources" disabled aria-describedby="stageNote"><svg aria-hidden="true"><use href="#i-send"/></svg>資料を検索</button><button type="button" class="prepare-button" id="createAnswer" disabled>回答を作成</button></div></div></div>
+   <label class="followup-control" id="followupControl" hidden><input type="checkbox" id="usePreviousAnswer"> <span id="followupLabel">選んだ回答に続けて質問する</span></label>
+   <p class="stage-note" id="stageNote">「資料を検索」はPC内で検索。「回答を作成」は質問と引用抜粋をGeminiへ送ります。</p>
+   <div class="semantic-status" aria-live="polite"><span id="semanticStatus">意味検索の準備状況を確認しています…</span><span class="semantic-actions"><progress id="semanticProgress" hidden aria-label="意味検索の準備済み文書"></progress><button id="toggleSemanticIndex" type="button" hidden>停止</button></span></div>
+  </div>
+ </section>
+ <aside class="panel evidence" aria-labelledby="evidenceHeading"><div class="panel-title evidence-heading"><h2 id="evidenceHeading"><svg aria-hidden="true"><use href="#i-quote"/></svg>回答の出典</h2><label class="source-font-option" for="sourceFontSize">文字サイズ<select id="sourceFontSize"><option value="12">12 px（標準）</option><option value="14">14 px</option><option value="16">16 px</option><option value="18">18 px</option><option value="20">20 px</option><option value="24">24 px</option></select></label></div><div class="evidence-body"><div class="evidence-empty"><div class="evidence-mark"><svg aria-hidden="true"><use href="#i-file"/></svg></div><div><h3>根拠を、たどれる形に。</h3><p>検索で見つかった引用文と<br>文書名・ページをここに表示します。</p></div></div><div class="evidence-note">検索結果から元の文書をエディタで確認できます。</div></div></aside>
+</main>
+</div>
+<dialog id="threadSettings" class="thread-settings" aria-labelledby="threadSettingsHeading">
+ <form id="threadSettingsForm">
+  <h2 id="threadSettingsHeading">スレッドの設定</h2>
+  <p id="threadSettingsError" class="error" role="alert" hidden></p>
+  <label class="setting-label" for="threadName">名前</label>
+  <input type="text" id="threadName" maxlength="100" required autocomplete="off">
+  <div class="setting-label">タグ</div>
+  <p class="help">このスレッドでリサーチする資料のタグを選びます。複数選択できます。</p>
+  <div id="threadTagSettings" class="thread-tag-settings"></div>
+  <div id="deleteThreadConfirm" class="delete-confirm" hidden><p>このスレッドを削除しますか？ 削除後に「元に戻す」で取り消せます。</p><button type="button" id="cancelThreadDelete">削除しない</button><button type="button" id="confirmThreadDelete">削除する</button></div>
+  <div class="settings-actions"><button type="button" id="deleteThread" class="delete-thread">削除</button><button type="button" id="cancelThreadSettings">キャンセル</button><button type="submit" id="saveThreadSettings" class="save-settings">保存</button></div>
+ </form>
+</dialog>
+
+<dialog id="aiSettings" class="thread-settings ai-settings" aria-labelledby="aiSettingsHeading">
+ <form id="aiSettingsForm">
+  <h2 id="aiSettingsHeading">AI回答の設定</h2>
+  <p id="aiSettingsError" class="error" role="alert" hidden></p>
+  <p class="ai-settings-note">回答はGemini APIで作成します。文書全文をまとめて送信せず、質問と検索で得た前後関係を含む引用抜粋（最大24件・合計6万文字まで）、続きの質問では必要な前の会話を送ります。利用量に応じて料金や利用上限が適用されます。</p>
+  <label class="setting-label" for="geminiApiKey">APIキー</label>
+  <input id="geminiApiKey" type="password" autocomplete="off" spellcheck="false" maxlength="300" placeholder="APIキーを入力">
+  <p class="ai-settings-note" id="aiKeyStatus">キーはこのWindowsユーザーだけが復号できる形で保存します。</p>
+  <label class="ai-consent"><input id="forgetAIKey" type="checkbox">保存したキーを削除する</label>
+  <label class="setting-label" for="geminiModel">モデル</label>
+  <input id="geminiModel" type="text" maxlength="90" list="geminiModels" value="gemini-3.8-flash" autocomplete="off">
+  <datalist id="geminiModels"><option value="gemini-3.8-flash"></option><option value="gemini-3.5-flash-lite"></option></datalist>
+  <label class="ai-consent"><input id="enableGemini" type="checkbox">Geminiを利用し、質問・引用抜粋・必要な前の会話の送信を許可する</label>
+  <p class="ai-settings-note">「資料を検索」はAI設定に関係なくPC内で使えます。キーを入力しただけでは送信しません。「回答を作成」を押すと送信します。</p>
+  <p class="ai-settings-note">APIキーはGoogle AI Studioで取得できます。</p>
+  <div class="settings-actions"><button id="cancelAISettings" type="button">閉じる</button><button id="saveAISettings" class="save-settings" type="submit">保存</button></div>
+ </form>
+</dialog>
+
+<script>
+// Resolve scope from explicit tags; groups only limit the available tags.
+function researchScope(documents, tags, groupIds, tagIds) {
+    const groups = new Set(groupIds);
+    const requested = new Set(tagIds);
+    const selected = new Set(tags.filter(tag => groups.has(tag.group_id) && requested.has(tag.id)).map(tag => tag.id));
+    if (!selected.size) return {included: []};
+    return {included: documents.filter(doc => (doc.tag_ids || []).some(id => selected.has(id)))};
+}
+
+(() => {
+    'use strict';
+    const $ = id => document.getElementById(id);
+    const CACHE_KEY = 'mynotebook.research.pending.v1';
+    const ACTIVE_KEY = 'mynotebook.research.activeThread';
+    let catalog = {groups: [], tags: [], documents: []};
+    let loaded = false, requestSequence = 0, saveTimer;
+    let threads = [], activeId = null, busy = false, bootReady = false;
+    let editVersion = 0, savedVersion = 0, conflicted = false, questionEditVersion = 0;
+    let saveChain = Promise.resolve(), settingsId = null, deletedId = null;
+    const state = {groupIds: [], tagIds: [], title: '新しいリサーチ', question: ''};
+    const ids = value => Array.isArray(value) ? [...new Set(value.filter(v => typeof v === 'string'))] : [];
+    function readLocal(key) {try {return JSON.parse(localStorage.getItem(key) || 'null');} catch (_) {return null;}}
+    function putLocal(key, value) {try {localStorage.setItem(key, JSON.stringify(value));} catch (_) { /* Server storage remains available. */ }}
+    const sourceFontKey='mynotebook.research.sourceFontSize.v1';
+    const sourceFontSizes=[12,14,16,18,20,24];
+    function applySourceFontSize(value) {
+        const size=sourceFontSizes.includes(Number(value)) ? Number(value) : 12;
+        document.documentElement.style.setProperty('--source-font-size',size+'px');
+        $('sourceFontSize').value=String(size);
+        return size;
+    }
+    applySourceFontSize(readLocal(sourceFontKey));
+    $('sourceFontSize').addEventListener('change',()=>putLocal(sourceFontKey,applySourceFontSize($('sourceFontSize').value)));
+    const legacy = readLocal('mynotebook.research.draft.v2') || readLocal('mynotebook.research.draft.v1');
+    function snapshot() {return {title:state.title, question:state.question, groupIds:[...state.groupIds], tagIds:[...state.tagIds]};}
+    function current() {return threads.find(t => t.id === activeId);}
+    function cacheDraft() {
+        if (activeId) putLocal(CACHE_KEY, {id:activeId, revision:current()?.revision, state:snapshot(), dirty:editVersion>savedVersion});
+    }
+    function notice(message) {$('threadErrorMessage').textContent = message; $('threadError').hidden = !message; $('threadSettingsError').textContent = message; $('threadSettingsError').hidden = !message;}
+    async function api(path='', method='GET', body=null, root='/api/research/threads') {
+        const controller = new AbortController();
+        const slowRequest = method==='POST' && /\/(searches|answers)$/.test(path);
+        const timeout = setTimeout(() => controller.abort(), slowRequest ? 120000 : 30000);
+        try {
+            const response = await fetch(root + path, {
+                method, signal:controller.signal, cache:'no-store',
+                headers:{'Content-Type':'application/json','X-Requested-With':'XMLHttpRequest','X-App-Token':window.__APP_SECURITY_TOKEN__ || ''},
+                ...(body ? {body:JSON.stringify(body)} : {})
+            });
+            const data = await response.json();
+            if (!response.ok) {
+                const error = new Error(typeof data.detail === 'string' ? data.detail : 'スレッドを保存できませんでした。');
+                error.status = response.status; throw error;
+            }
+            return data;
+        } catch(error) {
+            if(controller.signal.aborted) {
+                throw new Error(slowRequest
+                    ? '検索または回答の受付結果を受け取るまでに時間がかかっています。少し待ってから履歴を確認してください。'
+                    : 'アプリとの通信が時間内に完了しませんでした。少し待ってから再度操作してください。');
+            }
+            throw error;
+        } finally {clearTimeout(timeout);}
+    }
+    function controls() {
+        searchControls();
+        answerControls();
+        $('toggleSemanticIndex').disabled=busy;
+        $('newThread').disabled = busy || !bootReady;
+        $('questionDraft').disabled = busy || !activeId;
+        $('researchTitle').disabled = busy || !activeId;
+        $('groupPicker').inert = busy; $('tagPicker').inert = busy;
+        $('saveThreadSettings').disabled = busy; $('deleteThread').disabled = busy; $('confirmThreadDelete').disabled = busy;
+        document.querySelectorAll('.thread-open,.thread-options,[data-prompt]').forEach(button => button.disabled = busy || !bootReady);
+    }
+    function renderThreads() {
+        const list = $('threadList'); list.replaceChildren();
+        if (!threads.length) {empty(list, bootReady ? '「新しいスレッド」から質問を始められます。' : 'スレッドを読み込んでいます…'); return;}
+        for (const thread of threads) {
+            const data = thread.id === activeId ? {...thread,...state} : thread;
+            const row = document.createElement('div'); row.className = 'thread-row';
+            if (thread.id === activeId) row.classList.add('active');
+            const button = document.createElement('button'); button.type = 'button'; button.className = 'thread-open';
+            button.setAttribute('aria-current', thread.id === activeId ? 'true' : 'false');
+            const title = document.createElement('span'); title.className = 'thread-name'; title.textContent = data.title.trim() || '新しいリサーチ';
+            const tags = document.createElement('span'); tags.className = 'thread-tags';
+            tags.textContent = catalog.tags.filter(t => data.tagIds.includes(t.id)).map(t => t.name).join('・') || 'タグ未設定';
+            button.append(title,tags); button.addEventListener('click', () => switchThread(thread.id));
+            const menu = document.createElement('button'); menu.type = 'button'; menu.className = 'thread-options'; menu.textContent = '⋯';
+            menu.setAttribute('aria-label', `${title.textContent}の設定`); menu.title = '名前・タグの変更、削除';
+            menu.addEventListener('click', () => openSettings(thread.id));
+            row.append(button,menu); list.append(row);
+        }
+        controls();
+    }
+    function setActive(thread) {
+        clearTimeout(saveTimer); activeId = thread?.id || null;
+        editVersion = 0; savedVersion = 0; conflicted = false;
+        Object.assign(state, thread ? {title:thread.title, question:thread.question, groupIds:[...thread.groupIds], tagIds:[...thread.tagIds]} : {title:'新しいリサーチ',question:'',groupIds:[],tagIds:[]});
+        const before = JSON.stringify([state.groupIds,state.tagIds]);
+        if (loaded) {
+            state.groupIds = state.groupIds.filter(id => catalog.groups.some(g => g.id === id));
+            reconcileTags();
+        }
+        $('researchTitle').value = state.title; $('questionDraft').value = state.question;
+        updateQuestion(); renderGroups(); renderTags(); renderScope(); renderThreads(); controls();
+        $('saveStatus').textContent = activeId ? '保存済み' : 'スレッドを作成してください';
+        putLocal(ACTIVE_KEY, activeId);
+        loadSearchHistory();
+        loadAnswers();
+        if (activeId && before !== JSON.stringify([state.groupIds,state.tagIds])) saveSoon();
+    }
+    function saveSoon() {
+        if (!activeId) return;
+        editVersion++; cacheDraft(); renderThreads();
+        $('saveStatus').textContent = '保存中…';
+        clearTimeout(saveTimer); saveTimer = setTimeout(saveCurrent, 350);
+    }
+    function saveCurrent() {
+        clearTimeout(saveTimer);
+        if (!activeId || editVersion <= savedVersion) return Promise.resolve(true);
+        const id = activeId, version = editVersion, draft = snapshot();
+        cacheDraft();
+        const operation = async () => {
+            if (version <= savedVersion && id === activeId) return true;
+            if (conflicted) {notice('別の画面で更新されています。「下書きを別スレッドに保存」を選んでください。'); return false;}
+            try {
+                const thread = threads.find(t => t.id === id);
+                if (!thread) return false;
+                const result = await api('/'+encodeURIComponent(id),'PATCH',{...draft,revision:thread.revision});
+                Object.assign(thread,result.thread);
+                if (id === activeId) {
+                    savedVersion = version; cacheDraft();
+                    $('saveStatus').textContent = editVersion === savedVersion ? '保存済み' : '保存中…';
+                }
+                notice(''); renderThreads(); return true;
+            } catch (error) {
+                conflicted = error.status === 409 || error.status === 404;
+                $('saveStatus').textContent = '保存できませんでした';
+                notice(error.message || 'アプリに接続できません。下書きはこのブラウザーに保持しています。'); return false;
+            }
+        };
+        saveChain = saveChain.then(operation,operation); return saveChain;
+    }
+    async function flush() {
+        while (activeId && editVersion>savedVersion) if (!await saveCurrent()) return false;
+        return true;
+    }
+    async function perform(action) {
+        if (busy) return;
+        busy = true; controls();
+        try {await action();} catch(error) {notice(error.message || 'アプリに接続できませんでした。再試行してください。');}
+        finally {busy = false; controls(); renderThreads();}
+    }
+    function switchThread(id) {
+        if (id === activeId) return;
+        perform(async () => {if (await flush()) {setActive(threads.find(t => t.id === id)); cacheDraft();}});
+    }
+    function newThread(copy=false) {
+        return perform(async () => {
+            if (!copy && !await flush()) return;
+            const payload = {id:crypto.randomUUID(),title:copy ? (state.title+'（下書き）').slice(0,100) : '新しいリサーチ',question:copy ? state.question : '',groupIds:[...state.groupIds],tagIds:[...state.tagIds]};
+            const result = await api('','POST',payload);
+            threads.unshift(result.thread); setActive(result.thread); cacheDraft(); notice('');
+            $('questionDraft').focus();
+        });
+    }
+    async function bootThreads() {
+        if (!loaded) {notice('資料一覧の読み込み後に、スレッドを再読み込みしてください。'); return;}
+        busy = true; controls();
+        const pending = readLocal(CACHE_KEY);
+        try {
+            threads = (await api()).threads;
+            if (legacy && !readLocal('mynotebook.research.migrated.v3')) {
+                if (!threads.length || legacy.question?.trim() || legacy.tagIds?.length || (legacy.title && legacy.title !== '新しいリサーチ')) {
+                    const id = readLocal('mynotebook.research.migrationId') || crypto.randomUUID();
+                    putLocal('mynotebook.research.migrationId',id);
+                    const groupIds = ids(legacy.groupIds).filter(id => catalog.groups.some(g => g.id === id));
+                    const tagIds = ids(legacy.tagIds).filter(id => catalog.tags.some(t => t.id === id && groupIds.includes(t.group_id)));
+                    const result = await api('','POST',{id,title:String(legacy.title||'新しいリサーチ').slice(0,100),question:String(legacy.question||'').slice(0,12000),groupIds,tagIds});
+                    threads = [result.thread,...threads.filter(t => t.id !== result.thread.id)];
+                }
+                putLocal('mynotebook.research.migrated.v3',true);
+            }
+            bootReady = true;
+            const preferred = pending?.dirty ? pending.id : readLocal(ACTIVE_KEY);
+            setActive(threads.find(t => t.id === preferred) || threads[0]);
+            if (pending?.dirty) {
+                const thread = threads.find(t => t.id === pending.id);
+                if (thread || !activeId) {
+                    if (thread) setActive(thread);
+                    Object.assign(state,{title:pending.state.title,question:pending.state.question,groupIds:ids(pending.state.groupIds),tagIds:ids(pending.state.tagIds)});
+                    state.groupIds = state.groupIds.filter(id => catalog.groups.some(g => g.id === id)); reconcileTags();
+                    $('researchTitle').value=state.title; $('questionDraft').value=state.question;
+                    editVersion=1; conflicted=!thread || thread.revision!==pending.revision;
+                    updateQuestion(); renderGroups(); renderTags(); renderScope(); renderThreads();
+                    if (conflicted) notice('前回の未保存の下書きがあります。「下書きを別スレッドに保存」から保存できます。');
+                    else saveSoon();
+                } else notice('前回の下書きはブラウザーに残っています。削除済みのスレッドのため自動保存はしていません。');
+            } else {cacheDraft(); notice('');}
+        } catch(error) {notice(error.message || 'スレッドを読み込めませんでした。再読み込みしてください。');}
+        finally {busy=false; controls(); renderThreads();}
+    }
+    async function openSettings(id) {
+        await perform(async () => {
+            if (!await flush()) return;
+            const thread = threads.find(t => t.id===id); if (!thread) return;
+            settingsId=id; $('threadName').value=thread.title;
+            const list=$('threadTagSettings'); list.replaceChildren();
+            for (const group of catalog.groups) {
+                const heading=document.createElement('div'); heading.className='tag-group-heading'; heading.textContent=group.name; list.append(heading);
+                for (const tag of catalog.tags.filter(t=>t.group_id===group.id)) {
+                    const row=document.createElement('label'); row.className='group-row';
+                    const input=document.createElement('input'); input.type='checkbox'; input.value=tag.id; input.checked=thread.tagIds.includes(tag.id);
+                    input.setAttribute('aria-label', `${group.name}：${tag.name}`);
+                    const name=document.createElement('span'); name.className='group-name'; name.textContent=tag.name;
+                    row.append(input,name); list.append(row);
+                }
+            }
+            notice(''); $('deleteThreadConfirm').hidden=true; $('threadSettings').showModal(); $('threadName').focus();
+        });
+    }
+    $('threadSettingsForm').addEventListener('submit',event=> {
+        event.preventDefault();
+        const id=settingsId, title=$('threadName').value.trim();
+        if (!title) {$('threadName').focus(); return;}
+        const tagIds=[...$('threadTagSettings').querySelectorAll('input:checked')].map(input=>input.value);
+        const target=threads.find(t=>t.id===id);
+        const sameTags=target && tagIds.length===target.tagIds.length && tagIds.every(id=>target.tagIds.includes(id));
+        const groupIds=sameTags ? [...target.groupIds] : [...new Set(catalog.tags.filter(t=>tagIds.includes(t.id)).map(t=>t.group_id))];
+        perform(async()=> {
+            if (!await flush()) return;
+            const thread=threads.find(t=>t.id===id); if(!thread)return;
+            const result=await api('/'+encodeURIComponent(id),'PATCH',{title,question:thread.question,groupIds,tagIds,revision:thread.revision});
+            Object.assign(thread,result.thread);
+            if(id===activeId){setActive(thread);cacheDraft();}
+            $('threadSettings').close();notice('');renderThreads();
+        });
+    });
+    $('deleteThread').addEventListener('click',()=> {
+        $('deleteThreadConfirm').hidden=false; $('confirmThreadDelete').focus();
+    });
+    $('cancelThreadDelete').addEventListener('click',()=> {$('deleteThreadConfirm').hidden=true; $('deleteThread').focus();});
+    $('confirmThreadDelete').addEventListener('click',()=> {
+        const id=settingsId, thread=threads.find(t=>t.id===id);
+        if (!thread) return;
+        perform(async()=> {
+            if (!await flush()) return;
+            const latest=threads.find(t=>t.id===id);
+            await api('/'+encodeURIComponent(id)+'?revision='+latest.revision,'DELETE');
+            threads=threads.filter(t=>t.id!==id); deletedId=id;
+            if(activeId===id){setActive(threads[0]);cacheDraft();}
+            $('threadSettings').close();$('deletedNotice').hidden=false;
+            $('deletedMessage').textContent=`「${latest.title}」を削除しました。`;renderThreads();
+        });
+    });
+    $('undoThreadDelete').addEventListener('click',()=>perform(async()=> {
+        if(!deletedId || !await flush())return;
+        const result=await api('/'+encodeURIComponent(deletedId)+'/restore','POST');
+        threads.unshift(result.thread);setActive(result.thread);cacheDraft();deletedId=null;$('deletedNotice').hidden=true;
+    }));
+    $('cancelThreadSettings').addEventListener('click',()=> $('threadSettings').close());
+    $('newThread').addEventListener('click',()=>newThread());
+    $('saveThreadCopy').addEventListener('click',()=>newThread(true));
+    $('retryThreads').addEventListener('click',async()=> {
+        if(!bootReady){await bootThreads();return;}
+        if(await saveCurrent())notice('');
+    });
+
+    function empty(target, message) {
+        const text = document.createElement('div');
+        text.className = 'empty-small'; text.textContent = message;
+        target.replaceChildren(text);
+    }
+    function reconcileTags() {
+        const groups = new Set(state.groupIds);
+        const allowed = new Set(catalog.tags.filter(tag => groups.has(tag.group_id)).map(tag => tag.id));
+        state.tagIds = state.tagIds.filter(id => allowed.has(id));
+    }
+    function renderGroups() {
+        $('groupList').replaceChildren();
+        if (!catalog.groups.length) empty($('groupList'), 'タググループがありません。エディタのタグ管理で作成してください。');
+        for (const group of catalog.groups) {
+            const row = document.createElement('label'); row.className = 'group-row';
+            const checkbox = document.createElement('input'); checkbox.type = 'checkbox';
+            checkbox.checked = state.groupIds.includes(group.id);
+            checkbox.addEventListener('change', () => {
+                state.groupIds = checkbox.checked ? [...state.groupIds, group.id] : state.groupIds.filter(id => id !== group.id);
+                reconcileTags(); renderTags(); renderScope(); saveSoon();
+            });
+            const name = document.createElement('span'); name.className = 'group-name'; name.textContent = group.name;
+            const count = document.createElement('span'); count.className = 'group-number'; count.textContent = `${group.tag_count} タグ`;
+            row.append(checkbox, name, count); $('groupList').append(row);
+        }
+    }
+    function renderTags() {
+        const list = $('tagList'); list.replaceChildren();
+        if (!loaded) {empty(list, '資料を読み込んでいます…'); return;}
+        if (!state.groupIds.length) {empty(list, '先にタググループを選んでください。'); return;}
+        for (const group of catalog.groups.filter(g => state.groupIds.includes(g.id))) {
+            const heading = document.createElement('div'); heading.className = 'tag-group-heading'; heading.textContent = group.name;
+            list.append(heading);
+            const tags = catalog.tags.filter(t => t.group_id === group.id);
+            if (!tags.length) {
+                const text = document.createElement('div'); text.className = 'empty-small'; text.textContent = 'このグループにはタグがありません。'; list.append(text);
+            }
+            for (const tag of tags) {
+                const row = document.createElement('label'); row.className = 'group-row tag-row';
+                const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.checked = state.tagIds.includes(tag.id);
+                checkbox.setAttribute('aria-label', `${group.name}：${tag.name}`);
+                checkbox.addEventListener('change', () => {
+                    state.tagIds = checkbox.checked ? [...state.tagIds, tag.id] : state.tagIds.filter(id => id !== tag.id);
+                    renderScope(); saveSoon();
+                });
+                const name = document.createElement('span'); name.className = 'group-name'; name.textContent = tag.name;
+                const count = document.createElement('span'); count.className = 'group-number'; count.textContent = `${tag.document_count} 文書`;
+                row.append(checkbox, name, count); list.append(row);
+            }
+        }
+    }
+    function renderScope() {
+        scheduleIndex();
+        searchControls(); if(searchRun) renderHistory();
+        const names = catalog.groups.filter(g => state.groupIds.includes(g.id)).map(g => g.name);
+        const tags = catalog.tags.filter(t => state.groupIds.includes(t.group_id) && state.tagIds.includes(t.id));
+        const tagNames = tags.map(t => t.name);
+        const scope = researchScope(catalog.documents, catalog.tags, state.groupIds, state.tagIds);
+        const count = scope.included.length;
+        $('selectedCount').textContent = count;
+        $('groupSelection').textContent = names.length ? names.join('、') : 'タググループを選択';
+        $('groupPickerSummary').title = names.length ? names.join('、') : '複数のタググループを選択できます';
+        $('tagSelection').textContent = tagNames.length ? tagNames.join('、') : 'タグを選択';
+        $('tagPickerSummary').title = tagNames.length ? tags.map(t => `${catalog.groups.find(g => g.id === t.group_id)?.name}：${t.name}`).join('、') : '選んだグループ内のタグを複数選択できます';
+        $('composerScope').textContent = tagNames.length ? `${tagNames.join('・')} / ${count} 文書を対象にする` : 'タグを選ぶと、リサーチする範囲がここに表示されます';
+        $('scopeFooter').textContent = !loaded ? '資料を読み込んでいます…' : tagNames.length ? `${tagNames.length} タグ · ${count} 文書を使用` : names.length ? 'タグを選んでリサーチする範囲を指定してください' : 'グループとタグを選択してください';
+    }
+    async function loadCatalog() {
+        const sequence = ++requestSequence;
+        for (const id of ['groupList', 'tagList']) $(id).setAttribute('aria-busy', 'true');
+        $('retryCatalog').disabled = true;
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 20000);
+        try {
+            const response = await fetch('/api/research/catalog', {signal: controller.signal, cache: 'no-store', headers: {'X-Requested-With': 'XMLHttpRequest'}});
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const result = await response.json();
+            if (!Array.isArray(result.groups) || !Array.isArray(result.tags) || !Array.isArray(result.documents)) throw new Error('Invalid catalog');
+            if (sequence !== requestSequence) return;
+            catalog = result; loaded = true;
+            const knownGroups = new Set(catalog.groups.map(g => g.id));
+            state.groupIds = state.groupIds.filter(id => knownGroups.has(id));
+            reconcileTags();
+            $('catalogError').hidden = true;
+            renderGroups(); renderTags(); renderScope(); renderThreads(); if (activeId) saveSoon();
+        } catch (_) {
+            if (sequence !== requestSequence) return;
+            $('catalogError').hidden = false;
+            $('errorMessage').textContent = loaded ? '資料一覧を更新できませんでした。前回読み込んだ一覧を表示しています。' : '資料一覧を読み込めませんでした。アプリが起動していることを確認して、再読み込みしてください。';
+            if (!loaded) {
+                empty($('groupList'), '資料一覧を取得できませんでした。');
+                empty($('tagList'), '再読み込み後にタグが表示されます。');
+                $('scopeFooter').textContent = '資料一覧の読み込みに失敗しました';
+            }
+        } finally {
+            clearTimeout(timeout);
+            if (sequence === requestSequence) {
+                for (const id of ['groupList', 'tagList']) $(id).setAttribute('aria-busy', 'false');
+                $('retryCatalog').disabled = false;
+            }
+        }
+    }
+    function updateQuestion() {
+        if (state.question !== $('questionDraft').value) questionEditVersion++;
+        state.question = $('questionDraft').value;
+        searchControls();
+        $('charCount').textContent = `${state.question.length.toLocaleString('ja')} / 12,000`;
+    }
+    $('questionDraft').addEventListener('input', () => {updateQuestion(); saveSoon();});
+    $('researchTitle').addEventListener('input', () => {state.title = $('researchTitle').value; saveSoon();});
+    document.querySelectorAll('[data-prompt]').forEach(button => button.addEventListener('click', async () => {
+        if (!activeId) {await newThread(); if (!activeId) return;}
+        const field = $('questionDraft');
+        const prefix = field.value.trimEnd();
+        field.value = ((prefix ? `${prefix}\n\n` : '') + button.dataset.prompt).slice(0, 12000);
+        updateQuestion(); saveSoon(); field.focus(); field.setSelectionRange(field.value.length, field.value.length);
+    }));
+    $('retryCatalog').addEventListener('click', loadCatalog);
+    for (const pickerId of ['groupPicker', 'tagPicker']) {
+        const picker = $(pickerId);
+        picker.addEventListener('toggle', () => {
+            if (picker.open) {
+                for (const other of ['groupPicker', 'tagPicker']) if (other !== pickerId) $(other).open = false;
+            }
+        });
+        document.addEventListener('click', event => {if (!picker.contains(event.target)) picker.open = false;});
+        picker.addEventListener('keydown', event => {
+            if (event.key === 'Escape' && picker.open) {
+                event.preventDefault(); event.stopPropagation();
+                picker.open = false; picker.querySelector('summary').focus();
+            }
+        });
+    }
+    $('returnEditor').addEventListener('click', async event => {
+        event.preventDefault();
+        if (!await flush()) return;
+        cacheDraft();
+        if (window.parent !== window) window.parent.postMessage({type:'mynotebook:research:return'},window.location.origin);
+        else window.location.href='/editor_form.html';
+    });
+    window.addEventListener('message', event => {
+        if (window.parent !== window && event.source === window.parent && event.origin === window.location.origin && event.data?.type === 'mynotebook:research:refresh') loadCatalog();
+    });
+    window.addEventListener('pagehide', cacheDraft);
+    document.addEventListener('visibilitychange', () => {if (document.visibilityState === 'hidden') {cacheDraft(); saveCurrent();}});
+    let historySequence = 0, searchRun = null, searches = [];
+    const welcome = document.querySelector('.welcome');
+    const history = document.createElement('div'); history.id='searchHistory'; history.className='search-history'; history.hidden=true;
+    welcome.parentElement.append(history);
+    const evidenceBody=document.querySelector('.evidence-body');
+    const evidenceEmpty=evidenceBody.cloneNode(true);
+    function element(tag, className, text) {
+        const item=document.createElement(tag); if(className) item.className=className;
+        if(text!==undefined) item.textContent=text; return item;
+    }
+    function searchControls() {
+        $('searchSources').disabled=busy || !activeId || !loaded || !state.question.trim() || !state.tagIds.length;
+    }
+    function emptyEvidence() {evidenceBody.replaceChildren(...Array.from(evidenceEmpty.childNodes).map(n=>n.cloneNode(true)));}
+    function renderHistory() {
+        history.replaceChildren(); history.hidden=!searches.length; welcome.hidden=!!searches.length;
+        welcome.parentElement.classList.toggle('has-history',!!searches.length);
+        for(const run of [...searches].reverse()) {
+            const card=element('article','search-turn');
+            const question=element('button','search-question',run.question); question.type='button';
+            question.setAttribute('aria-pressed',String(searchRun?.id===run.id));
+            question.addEventListener('click',()=>selectSearch(run.id));
+            card.append(element('div','search-date',new Date(run.created_at).toLocaleString('ja-JP')),question);
+            renderAnswersForRun(run,card);
+            const info=element('div','search-info');
+            if(searchRun?.id===run.id) {
+                const result=searchRun;
+                info.append(element('p','search-summary',`${result.document_count} 文書から関連する候補を ${result.citations.length} 件表示しています。`));
+                info.append(element('p','search-meta',`検索語：${result.terms.join('・')}\n検索時のタグ：${result.tag_names.join('・')}`));
+                info.append(element('p','search-meta',result.retrieval.startsWith('local-hybrid-') ? (result.cross_language_search ? `検索方式：本文検索＋日英の意味検索（英文候補 ${result.english_candidates || 0} 件）` : '検索方式：本文検索＋意味検索') : '検索方式：本文検索'));
+                if(result.semantic && result.semantic.ready_documents<result.semantic.total_documents) info.append(element('p','search-scope-note',`検索時に意味検索の準備が済んでいた文書：${result.semantic.ready_documents} / ${result.semantic.total_documents}。残りは本文検索で調べています。`));
+                if(result.query_truncated) info.append(element('p','search-scope-note','長い質問のため、意味検索には冒頭の範囲を使用しました。'));
+                if(result.english_query_expansion?.state==='unavailable') info.append(element('p','search-scope-note','英語の検索語を作成できなかったため、今回はPC内の本文検索・意味検索で調べました。再度「回答を作成」で英語検索語の作成を試せます。'));
+                const different=JSON.stringify([...result.tagIds].sort())!==JSON.stringify([...state.tagIds].sort());
+                if(different) info.append(element('p','search-scope-note','現在のタグ設定とは異なる、検索時の資料範囲の結果です。'));
+                if(!result.citations.length) info.append(element('p','search-meta','一致する本文が見つかりませんでした。言い換えたり、語句を「 」で囲んで検索してください。'));
+                for(const source of result.citations.slice(0,4)) {
+                    const link=element('button','citation-link',`[${source.id}] ${source.title}`); link.type='button';
+                    link.addEventListener('click',()=>{const target=$('citation-'+source.id);target?.scrollIntoView({block:'nearest',behavior:'smooth'});target?.focus({preventScroll:true});});
+                    info.append(link);
+                }
+                info.append(element('p','search-meta','検索候補を表示しています。全資料を網羅した調査ではありません。'));
+            }
+            if(info.childElementCount) {
+                if(answers.some(a=>a.run_id===run.id && a.status==='completed')) {
+                    const details=element('details','answer-details');details.append(element('summary','','検索候補と検索条件'),info);card.append(details);
+                } else card.append(info);
+            }
+            history.append(card);
+        }
+    }
+    function renderEvidence() {
+        if(!searchRun) {emptyEvidence();return;}
+        evidenceBody.replaceChildren();
+        evidenceBody.append(element('p','search-meta',`検索時の本文を引用しています。最大 ${searchRun.limit} 件。ページは保存本文の情報で、書籍の印刷ページと一致しない場合があります。`));
+        if(!searchRun.citations.length) evidenceBody.append(element('p','search-meta','該当する引用はありません。'));
+        for(const source of searchRun.citations) {
+            const card=element('article','citation-card'); card.id='citation-'+source.id;card.tabIndex=-1;
+            card.append(element('h3','citation-title',`[${source.id}] ${source.title}`));
+            if(usedSourceIds().has(source.id)) card.append(element('p','answer-source-used','回答の根拠に使用'));
+            card.append(element('p','search-method',(source.search_methods || ['keyword']).map(method=>method==='semantic' ? '意味が近い候補' : '本文一致').join(' · ')));
+            card.append(element('p','search-meta',`${source.page_number>0 ? '保存本文のページ '+source.page_number : 'ページ情報なし'}${source.section_title ? ' · '+source.section_title : ''}`));
+            const details=document.createElement('details');details.open=Number(source.id)<=3;
+            details.append(element('summary','citation-summary','引用文を確認'));
+            details.append(element('blockquote','citation-quote',((source.has_prefix ?? (source.start>0))?'…':'')+source.quote+((source.has_suffix ?? (source.truncated && source.end-source.start>=1000))?'…':'')));
+            card.append(details);
+            const status=element('p','search-meta');status.hidden=true;status.setAttribute('role','status');
+            const open=element('button','citation-open','本文で開く');open.type='button';
+            open.addEventListener('click',async()=>{
+                open.disabled=true;status.hidden=false;status.textContent='出典を確認しています…';
+                try {
+                    const threadId=activeId,runId=searchRun.id;
+                    const result=await api('/'+encodeURIComponent(threadId)+'/searches/'+encodeURIComponent(runId)+'/sources/'+source.id);
+                    status.textContent=result.message;
+                    if(result.state==='deleted') return;
+                    if(!await flush()) return;
+                    const target={threadId,runId,citationId:source.id};
+                    if(window.parent!==window) window.parent.postMessage({type:'mynotebook:research:source',...target},location.origin);
+                    else location.href='/editor_form.html?'+new URLSearchParams({researchThread:threadId,researchRun:runId,researchCitation:source.id});
+                } catch(error) {status.textContent=error.message || '元文書を確認できませんでした。';}
+                finally {open.disabled=false;}
+            });
+            card.append(open,status);evidenceBody.append(card);
+        }
+        evidenceBody.scrollTop=0;
+    }
+    async function selectSearch(id, scroll=false) {
+        const threadId=activeId,sequence=++historySequence;
+        try {
+            const result=await api('/'+encodeURIComponent(threadId)+'/searches/'+encodeURIComponent(id));
+            if(sequence!==historySequence || threadId!==activeId)return;
+            searchRun=result.search;renderHistory();renderEvidence();answerControls();
+            if(scroll) history.lastElementChild?.scrollIntoView({block:'nearest'});
+        }catch(error) {if(sequence===historySequence) notice(error.message || '検索結果を読み込めませんでした。');}
+    }
+    async function loadSearchHistory() {
+        const threadId=activeId,sequence=++historySequence;
+        searches=[];searchRun=null;renderHistory();emptyEvidence();
+        if(!threadId)return;
+        try {
+            const result=await api('/'+encodeURIComponent(threadId)+'/searches');
+            if(sequence!==historySequence || threadId!==activeId)return;
+            searches=result.searches;clearAnsweredDraft();renderHistory();
+            if(searches.length) await selectSearch(searches[0].id,true);
+        }catch(error) {if(sequence===historySequence) notice(error.message || '検索履歴を読み込めませんでした。');}
+    }
+    $('searchSources').addEventListener('click',()=>perform(async()=>{
+        if(!await flush())return;
+        $('stageNote').textContent='選択したタグ内の本文を検索しています…';
+        try {
+            const result=await api('/'+encodeURIComponent(activeId)+'/searches','POST',{id:crypto.randomUUID(),revision:current().revision,question:state.question,context_answer_id:selectedContext()});
+            historySequence++;searchRun=result.search;searches.unshift({id:searchRun.id,question:searchRun.question,created_at:searchRun.created_at});
+            renderHistory();renderEvidence();answerControls();history.lastElementChild?.scrollIntoView({block:'nearest'});notice('');
+        }finally {$('stageNote').textContent='「資料を検索」はPC内で検索。「回答を作成」は質問と引用抜粋をGeminiへ送ります。';}
+    }));
+    window.addEventListener('message',event=>{
+        if(event.source===parent && event.origin===location.origin && event.data?.type==='mynotebook:research:source:error') notice(event.data.message);
+    });
+
+    let indexScopeKey='',indexSequence=0,indexTimer=null,indexPoll=null,indexState=null;
+    function pausedKey() {return 'mynotebook.research.semantic.paused.v1.'+activeId;}
+    function renderIndex(status) {
+        indexState=status;
+        const button=$('toggleSemanticIndex'),progress=$('semanticProgress');
+        button.hidden=true;progress.hidden=true;
+        if(!activeId || !state.tagIds.length) {$('semanticStatus').textContent='タグを選ぶと、意味検索の準備を始めます。';return;}
+        if(!status) {$('semanticStatus').textContent='意味検索の準備状況を確認しています…';return;}
+        if(!status.total_documents) {$('semanticStatus').textContent='このタグには検索できる文書がありません。';return;}
+        if(status.state==='ready') {$('semanticStatus').textContent=`意味検索の準備完了 · ${status.ready_documents} 文書`;return;}
+        if(status.state==='building') {
+            $('semanticStatus').textContent=`意味検索を準備中：${status.ready_documents} / ${status.total_documents} 文書${status.total_chunks ? ` · 文章 ${status.completed_chunks} / ${status.total_chunks}` : ''}`;
+            progress.hidden=false;progress.max=status.total_documents;progress.value=status.ready_documents;
+            button.textContent='停止';button.hidden=false;
+        } else {
+            $('semanticStatus').textContent=status.state==='paused' ? '意味検索の準備を停止しています。本文検索は使えます。' : status.state==='error' ? '意味検索を準備できませんでした。本文検索は使えます。' : '意味検索を準備できます。本文検索は使えます。';
+            button.textContent=status.state==='error' ? '再試行' : '準備を再開';button.hidden=false;
+        }
+        button.disabled=busy;
+    }
+    function scheduleIndex() {
+        const key=activeId+'|'+[...state.tagIds].sort().join(',');
+        if(key!==indexScopeKey) {indexScopeKey=key;indexSequence++;clearTimeout(indexPoll);renderIndex(null);}
+        clearTimeout(indexTimer);
+        if(activeId && loaded && state.tagIds.length) indexTimer=setTimeout(()=>prepareIndex(false),750);
+        else renderIndex(null);
+    }
+    async function pollIndex(sequence,threadId) {
+        if(sequence!==indexSequence || threadId!==activeId)return;
+        try {
+            const result=await api('/'+encodeURIComponent(threadId)+'/index');
+            if(sequence!==indexSequence || threadId!==activeId)return;
+            renderIndex(result.index);
+            if(result.index.state==='building') indexPoll=setTimeout(()=>pollIndex(sequence,threadId),2500);
+            if(result.index.state==='missing' && !readLocal(pausedKey())) indexTimer=setTimeout(()=>prepareIndex(false),2500);
+        }catch(error) {if(sequence===indexSequence) renderIndex({state:'error',total_documents:1,ready_documents:0});}
+    }
+    async function prepareIndex(retry=false) {
+        clearTimeout(indexTimer);clearTimeout(indexPoll);
+        if(!activeId || !state.tagIds.length)return;
+        if(busy) {indexTimer=setTimeout(()=>prepareIndex(retry),1000);return;}
+        const threadId=activeId,sequence=++indexSequence;
+        if(readLocal(pausedKey()) && !retry) {await pollIndex(sequence,threadId);return;}
+        try {
+            if(!await flush())return;
+            if(sequence!==indexSequence || threadId!==activeId)return;
+            const result=await api('/'+encodeURIComponent(threadId)+'/index','POST',{revision:current().revision,retry});
+            if(sequence!==indexSequence || threadId!==activeId)return;
+            renderIndex(result.index);
+            if(result.index.state==='building' || result.index.state==='missing') indexPoll=setTimeout(()=>pollIndex(sequence,threadId),1500);
+        }catch(error) {if(sequence===indexSequence) renderIndex({state:'error',total_documents:1,ready_documents:0});}
+    }
+    $('toggleSemanticIndex').addEventListener('click',async()=>{
+        const threadId=activeId;
+        if(!threadId || busy)return;
+        if(indexState?.state!=='building') {putLocal(pausedKey(),false);await prepareIndex(true);return;}
+        putLocal(pausedKey(),true);clearTimeout(indexTimer);clearTimeout(indexPoll);
+        const sequence=++indexSequence;$('toggleSemanticIndex').disabled=true;
+        try {
+            if(!await flush())return;
+            const result=await api('/'+encodeURIComponent(threadId)+'/index','DELETE');
+            if(sequence===indexSequence && threadId===activeId) renderIndex(result.index);
+        }catch(error) {if(sequence===indexSequence) renderIndex({state:'error',total_documents:1,ready_documents:0});}
+        finally {$('toggleSemanticIndex').disabled=busy;}
+    });
+
+    let answers=[],answerSequence=0,answerPoll=null,aiSettings=null,contextAnswerId=null;
+    const answerDrafts=new Map();
+    const aiPath='/api/research/ai';
+    const jobActive=job=>['queued','generating','validating'].includes(job.status);
+    const pendingKey=()=> 'mynotebook.research.answer.pending.v1.'+activeId;
+    function selectedContext() {return $('usePreviousAnswer').checked ? contextAnswerId : null;}
+    function currentAnswer() {return answers.find(a=>a.run_id===searchRun?.id && a.status==='completed');}
+    function usedSourceIds() {return new Set((currentAnswer()?.answer?.paragraphs || []).flatMap(p=>p.evidence.map(e=>e.source_id)));}
+    function answerControls() {
+        const pending=activeId && readLocal(pendingKey());
+        $('createAnswer').disabled=busy || !activeId || !loaded || !state.question.trim() || !state.tagIds.length || answers.some(jobActive) || !!pending;
+        const completed=currentAnswer();
+        const sameScope=searchRun && JSON.stringify([...searchRun.tagIds].sort())===JSON.stringify([...state.tagIds].sort());
+        if(completed && sameScope && !selectedContext()) contextAnswerId=completed.id;
+        $('followupControl').hidden=!contextAnswerId || !sameScope;
+        if(!sameScope) {$('usePreviousAnswer').checked=false;contextAnswerId=null;}
+        $('usePreviousAnswer').disabled=busy || answers.some(jobActive);
+        const status=$('aiStatus');
+        status.replaceChildren();
+        if(pending) {
+            status.append(document.createTextNode('回答の受付を確認できていません。'));
+            const retry=element('button','pending-answer-button','作成を再試行');retry.type='button';retry.disabled=busy;
+            retry.addEventListener('click',()=>perform(async()=>postAnswer(pending)));status.append(retry);
+        } else status.textContent=aiSettings?.enabled && aiSettings.has_key ? `AI回答：${aiSettings.model}` : 'AI回答を使うには、上部の「AI設定」でAPIキーを登録してください。';
+    }
+    const aiStatus=element('div','ai-status');aiStatus.id='aiStatus';aiStatus.setAttribute('role','status');
+    $('stageNote').after(aiStatus);
+
+    function referenceButton(proof,run) {
+        const button=element('button','answer-reference',`[${proof.source_id}]`);button.type='button';button.title=proof.quote;
+        button.setAttribute('aria-label',`出典 ${proof.source_id} を確認`);
+        button.addEventListener('click',async()=>{
+            if(searchRun?.id!==run.id)await selectSearch(run.id);
+            if(searchRun?.id!==run.id)return;
+            const target=$('citation-'+proof.source_id);
+            if(target) {const details=target.querySelector('details');if(details)details.open=true;target.scrollIntoView({block:'nearest',behavior:'smooth'});target.focus({preventScroll:true});}
+        });return button;
+    }
+    function renderAnswersForRun(run,card) {
+        for(const job of answers.filter(a=>a.run_id===run.id).reverse()) {
+            card.append(element('div','answer-heading',job.status==='completed' && job.finish_reason==='NO_EVIDENCE' ? '根拠の確認' : 'AI回答'));
+            if(job.status==='completed') {
+                if(job.answer.status==='insufficient')card.append(element('p','answer-block','この資料範囲では回答の根拠が足りません。'));
+                for(const paragraph of job.answer.paragraphs) {
+                    if(paragraph.heading)card.append(element('h3','answer-section-title',paragraph.heading));
+                    const body=element('p','answer-block',paragraph.text);
+                    for(const proof of paragraph.evidence) body.append(referenceButton(proof,run));
+                    card.append(body);
+                    const details=element('details','answer-details');details.append(element('summary','','この段落の根拠'));
+                    for(const proof of paragraph.evidence)details.append(element('blockquote','answer-proof',`[${proof.source_id}] ${proof.quote}`));
+                    card.append(details);
+                }
+                if(job.answer.limitations)card.append(element('p','search-scope-note',job.answer.limitations));
+                const meta=element('details','answer-details');meta.append(element('summary','','作成情報'));
+                const usage=job.usage;
+                meta.append(element('p','answer-usage',`${job.finish_reason==='NO_EVIDENCE' ? '外部送信なし' : 'Gemini · '+job.model}\n引用抜粋：${job.sent.excerpts} 件 · ${job.sent.quote_characters} 文字${job.sent.with_context ? '\n前の回答の文脈を使用' : ''}${usage.totalTokenCount!==undefined ? '\n使用トークン：'+usage.totalTokenCount : ''}\n終了：${job.finish_reason}`));
+                if(job.sent.question_truncated)meta.append(element('p','search-scope-note','長い質問のため、AIには冒頭4000文字を送信しました。'));
+                card.append(meta);
+                if(job.answer.status==='answered')card.append(element('p','search-meta','AIが引用をもとに作成した回答です。出典番号から本文を確認できます。'));
+                const action=element('div','answer-actions'),follow=element('button','','この回答に続けて質問');follow.type='button';
+                follow.disabled=busy || run.id!==searchRun?.id || JSON.stringify([...searchRun.tagIds].sort())!==JSON.stringify([...state.tagIds].sort());
+                follow.addEventListener('click',async()=>{
+                    if(searchRun?.id!==run.id)await selectSearch(run.id);
+                    contextAnswerId=job.id;$('usePreviousAnswer').checked=true;state.question='';$('questionDraft').value='';updateQuestion();saveSoon();answerControls();$('questionDraft').focus();
+                });action.append(follow);card.append(action);
+            } else if(jobActive(job)) {
+                card.append(element('p','answer-progress',job.status==='queued' ? '回答作成の順番を待っています…' : job.status==='generating' ? 'Geminiが回答を作成しています…' : '引用と出典を確認しています…'));
+                const action=element('div','answer-actions'),stop=element('button','','回答の作成を停止');stop.type='button';
+                stop.addEventListener('click',async()=>{
+                    stop.disabled=true;
+                    try{const result=await api('/'+encodeURIComponent(activeId)+'/answers/'+encodeURIComponent(job.id),'DELETE');upsertAnswer(result.answer);renderHistory();answerControls();}
+                    catch(error){notice(error.message || '停止できませんでした。もう一度お試しください。');stop.disabled=false;}
+                });action.append(stop);card.append(action);
+            } else {
+                card.append(element('p','answer-error',job.error || '回答の作成が中断しました。'));
+                if(Object.keys(job.usage).length)card.append(element('p','answer-usage',`報告された使用トークン：${job.usage.totalTokenCount ?? '不明'}`));
+                const action=element('div','answer-actions'),retry=element('button','','回答を再試行');retry.type='button';
+                retry.disabled=busy || answers.some(jobActive);retry.addEventListener('click',()=>perform(async()=>{
+                    if(!await flush())return;
+                    await startAnswerForRun(job.run_id,job.parent_id);
+                }));action.append(retry);card.append(action);
+            }
+        }
+    }
+    function rememberAnswerDraft(id,threadId=activeId) {
+        if(!answerDrafts.has(id)) answerDrafts.set(id,{threadId,question:$('questionDraft').value,version:questionEditVersion});
+    }
+    function clearAnsweredDraft() {
+        for(const job of answers.filter(a=>a.status==='completed')) {
+            const draft=answerDrafts.get(job.id);
+            if(!draft)continue;
+            if(draft.threadId!==activeId || draft.version!==questionEditVersion || draft.question!==$('questionDraft').value) {
+                answerDrafts.delete(job.id);continue;
+            }
+            const run=searches.find(run=>run.id===job.run_id) || (searchRun?.id===job.run_id ? searchRun : null);
+            if(!run)continue;
+            answerDrafts.delete(job.id);
+            if(draft.question.trim()!==run.question.trim())continue;
+            $('questionDraft').value='';updateQuestion();saveSoon();
+        }
+    }
+    function receiveAnswers(jobs) {
+        for(const job of jobs) {
+            if(jobActive(job))rememberAnswerDraft(job.id);
+            else if(job.status!=='completed')answerDrafts.delete(job.id);
+        }
+        answers=jobs;clearAnsweredDraft();
+    }
+    function upsertAnswer(job) {receiveAnswers([job,...answers.filter(a=>a.id!==job.id)].sort((a,b)=>b.created_at.localeCompare(a.created_at)));}
+    async function loadAnswers() {
+        clearTimeout(answerPoll);const threadId=activeId,sequence=++answerSequence;
+        answers=[];answerDrafts.clear();contextAnswerId=null;$('usePreviousAnswer').checked=false;answerControls();
+        if(!threadId)return;
+        try {
+            const result=await api('/'+encodeURIComponent(threadId)+'/answers');
+            if(sequence!==answerSequence || threadId!==activeId)return;
+            const pending=readLocal(pendingKey());
+            if(pending && result.answers.some(a=>a.id===pending.id))rememberAnswerDraft(pending.id,threadId);
+            receiveAnswers(result.answers);
+            if(pending && answers.some(a=>a.id===pending.id))putLocal(pendingKey(),null);
+            renderHistory();renderEvidence();answerControls();
+            if(answers.some(jobActive))answerPoll=setTimeout(()=>pollAnswers(sequence,threadId),1500);
+        }catch(error){if(sequence===answerSequence)notice(error.message || '回答履歴を読み込めませんでした。');}
+    }
+    async function pollAnswers(sequence,threadId) {
+        if(sequence!==answerSequence || threadId!==activeId)return;
+        try {
+            const result=await api('/'+encodeURIComponent(threadId)+'/answers');
+            if(sequence!==answerSequence || threadId!==activeId)return;
+            const changed=JSON.stringify(answers)!==JSON.stringify(result.answers);receiveAnswers(result.answers);
+            if(changed){renderHistory();renderEvidence();answerControls();}
+            if(answers.some(jobActive))answerPoll=setTimeout(()=>pollAnswers(sequence,threadId),1800);
+        }catch(error){if(sequence===answerSequence)answerPoll=setTimeout(()=>pollAnswers(sequence,threadId),5000);}
+    }
+    async function postAnswer(payload) {
+        const threadId=activeId;
+        rememberAnswerDraft(payload.id,threadId);
+        try {
+            const result=await api('/'+encodeURIComponent(threadId)+'/answers','POST',payload);
+            if(threadId!==activeId)return;
+            putLocal(pendingKey(),null);upsertAnswer(result.answer);renderHistory();renderEvidence();answerControls();notice('');
+            clearTimeout(answerPoll);answerPoll=setTimeout(()=>pollAnswers(answerSequence,threadId),500);
+        }catch(error){if(error.status && error.status<500)putLocal(pendingKey(),null);answerControls();throw error;}
+    }
+    async function startAnswerForRun(runId,parentId=null) {
+        const payload={id:crypto.randomUUID(),run_id:runId,parent_id:parentId,revision:current().revision};
+        putLocal(pendingKey(),payload);answerControls();await postAnswer(payload);
+    }
+    function reusableSearch(run, parentId) {
+        const sameIds=(one,two)=>JSON.stringify([...(one || [])].sort())===JSON.stringify([...(two || [])].sort());
+        return !!run && ['local-hybrid-multilingual-v1'].includes(run.retrieval)
+            && run.answer_preparation===true && run.english_query_expansion?.state==='ready'
+            && !(indexState?.ready_documents > (run.semantic?.ready_documents || 0))
+            && run.thread_id===activeId && run.question===state.question.trim()
+            && (run.context_answer_id || null)===(parentId || null)
+            && sameIds(run.groupIds,state.groupIds) && sameIds(run.tagIds,state.tagIds);
+    }
+    $('createAnswer').addEventListener('click',()=>{
+        if(!aiSettings?.enabled || !aiSettings.has_key){openAISettings();return;}
+        perform(async()=>{
+            if(!await flush())return;
+            const parentId=selectedContext();
+            $('stageNote').textContent='日英の資料から回答の根拠を検索しています…';
+            try {
+                if(!reusableSearch(searchRun,parentId)) {
+                    const result=await api('/'+encodeURIComponent(activeId)+'/searches','POST',{id:crypto.randomUUID(),revision:current().revision,question:state.question,context_answer_id:parentId,answer_preparation:true});
+                    historySequence++;searchRun=result.search;searches.unshift({id:searchRun.id,question:searchRun.question,created_at:searchRun.created_at});
+                    renderHistory();renderEvidence();history.lastElementChild?.scrollIntoView({block:'nearest'});
+                }
+                await startAnswerForRun(searchRun.id,parentId);
+            }finally{$('stageNote').textContent='「資料を検索」はPC内で検索。「回答を作成」は質問と引用抜粋をGeminiへ送ります。';}
+        });
+    });
+    $('usePreviousAnswer').addEventListener('change',()=>answerControls());
+    async function loadAISettings() {
+        try {aiSettings=(await api('/settings','GET',null,aiPath)).settings;answerControls();}
+        catch(_){$('aiStatus').textContent='AI設定を読み込めません。「AI設定」から再確認できます。';}
+    }
+    async function openAISettings() {
+        $('geminiApiKey').value='';$('forgetAIKey').checked=false;$('aiSettingsError').hidden=true;
+        $('aiSettings').showModal();$('saveAISettings').disabled=true;
+        try {
+            aiSettings=(await api('/settings','GET',null,aiPath)).settings;
+            $('geminiModel').value=aiSettings.model;$('enableGemini').checked=aiSettings.enabled;
+            $('aiKeyStatus').textContent=aiSettings.key_needs_registration ? 'PC移行などにより保存済みAPIキーを読み込めません。このPCでAPIキーを登録し直してください。' : aiSettings.has_key ? 'APIキーは登録済みです。変更する場合だけ入力してください。キーの値は画面に戻しません。' : 'キーはこのWindowsユーザーだけが復号できる形で保存します。';
+            $('saveAISettings').disabled=false;
+        }catch(error){$('aiSettingsError').textContent=error.message || '設定を読み込めません。';$('aiSettingsError').hidden=false;}
+    }
+    $('openAISettings').addEventListener('click',openAISettings);
+    $('cancelAISettings').addEventListener('click',()=>{$('geminiApiKey').value='';$('aiSettings').close();});
+    $('aiSettings').addEventListener('close',()=>{$('geminiApiKey').value='';});
+    $('aiSettingsForm').addEventListener('submit',async event=>{
+        event.preventDefault();$('saveAISettings').disabled=true;$('aiSettingsError').hidden=true;
+        const payload={model:$('geminiModel').value.trim(),enabled:$('enableGemini').checked,api_key:$('geminiApiKey').value,forget_key:$('forgetAIKey').checked,version:aiSettings.version};
+        $('geminiApiKey').value='';
+        try {aiSettings=(await api('/settings','PUT',payload,aiPath)).settings;$('aiSettings').close();answerControls();}
+        catch(error){$('aiSettingsError').textContent=error.message || '設定を保存できません。';$('aiSettingsError').hidden=false;}
+        finally {payload.api_key='';$('saveAISettings').disabled=false;}
+    });
+
+    loadAISettings();
+    updateQuestion(); renderTags(); renderScope(); controls();
+    (async()=>{await loadCatalog(); await bootThreads();})();
+})();
+</script>
+</body>
+</html>

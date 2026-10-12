@@ -57,6 +57,17 @@ class PdfImporter(BaseImporter):
         for pno in range(total_pages):
             page_num = pno + 1
             page = doc[pno]
+            for note in page.annots() or []:
+                content = note.info.get('content', '').strip()
+                if not content: continue
+                author = note.info.get('title', '')
+                annotations.append({
+                    'id': f'ann-{doc_id}-comment-pdf-{note.xref}',
+                    'block_id': None, 'kind': 'comment',
+                    'anchor_text': f'【P.{page_num} コメント】',
+                    'target_value': (author+'\n' if author else '')+content
+                })
+
             rect = page.rect
             page_w = rect.width
             page_h = rect.height

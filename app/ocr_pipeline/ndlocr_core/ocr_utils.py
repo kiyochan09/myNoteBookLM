@@ -7,19 +7,28 @@ import re
 from pathlib import Path
 
 
-def clean_runaway_repetition(text: str) -> str:
+def _preserve_numeric_repeat(match):
+    """Numeric values can legitimately repeat; collapse only nonnumeric runs."""
+    return match.group(0) if any(char.isnumeric() for char in match.group(1)) else match.group(1)
+
+
+def clean_runaway_repetition(text: str, preserve_numeric_edges: bool = False) -> str:
     if not text:
         return text
-    # 3回以上連続する同一文字（サササ、根根根、00000、......等）を1文字に縮約
-    text = re.sub(r'([一-龥ぁ-んァ-ヶ])\1{2,}', r'\1', text)
-    # 5回以上連続する同一文字（00000, 11111, ......, ------等）以降の暴走出力を除去
-    text = re.sub(r'([^\s])\1{4,}.*$', '', text).strip()
+    # 数字・漢数字を保持し、数値以外の同一文字の反復を縮約
+    text = re.sub(r'([一-龥ぁ-んァ-ヶ])\1{2,}', _preserve_numeric_repeat, text)
+    # 数値の連続を保持し、数値以外の5回以上の反復以降を除去
+    for repeated in re.finditer(r'([^\s])\1{4,}', text):
+        if not repeated.group(1).isnumeric():
+            text = text[:repeated.start()]
+            break
+    text = text.strip()
     # 繰り返しフレーズの暴走（例: 「どうしようもないと言うようもないと言うように」->「どうしようもないと言うように」）
-    text = re.sub(r'(.{2,12}?)\1{2,}', r'\1', text)
+    text = re.sub(r'(.{2,12}?)\1{2,}', _preserve_numeric_repeat, text)
     text = re.sub(r'だがプーチンは、だがプーチンは、', 'だがプーチンは、', text)
     text = re.sub(r'どうしようもないと言うようもないと言うように', 'どうしようもないと言うように', text)
     # 繰り返し単語の暴走（the the the the 等）を除去
-    text = re.sub(r'(\b\w+\b\s+)\1{3,}.*$', '', text).strip()
+    text = re.sub(r'(\b\w+\b\s+)\1{3,}.*$', lambda match: match.group(0) if any(char.isnumeric() for char in match.group(1)) else '', text).strip()
     # 年号直後の括弧誤認識 (例: 2005al. -> 2005a]., 1997l. -> 1997].)
     text = re.sub(r'(\b\d{4}[a-z]?)l\.', r'\1].', text)
     text = re.sub(r'(\b\d{4}[a-z]?)1\.', r'\1].', text)
@@ -33,9 +42,15 @@ def clean_runaway_repetition(text: str) -> str:
     if re.search(r'(?:[\(\)\-\s]{3,}\d?){4,}', text):
         return ""
     # 行頭・行末に残った浮動小数点・記号ゴミの掃除
-    text = re.sub(r'^\s*[\d.,\-]+(?=[^\d\s])', '', text)
-    text = re.sub(r'(?<=[^\d\s])[\d.,\-]+\s*$', '', text)
-    text = re.sub(r'^\s*[\-–—]+\s*', '', text)
+    # Short integers followed by a closing bracket can start a line.
+    # Image-verified integers also remain valid at either edge without brackets.
+    if not preserve_numeric_edges:
+        bracketed_integer_prefix = bool(re.match(r'^\s*[-−―–—－]?\d{2,3}\s*[>〉＞)）]', text))
+        if not bracketed_integer_prefix:
+            text = re.sub(r'^\s*[\d.,\-]+(?=[^\d\s])', '', text)
+        text = re.sub(r'(?<=[^\d\s])[\d.,\-]+\s*$', '', text)
+        if not bracketed_integer_prefix:
+            text = re.sub(r'^\s*[\-–—]+\s*', '', text)
     # 連続ピリオドを整理
     text = re.sub(r'\.{2,}', '。', text)
 
