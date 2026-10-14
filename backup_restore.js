@@ -82,6 +82,8 @@ async function runDataBackup() {
 async function refreshDataBackup() {
     try {
         const result = await dataBackupApi('status');
+        const location = dataBackupElement('dataBackupPath');
+        if (dataBackupMode === 'backup' && location && !location.value && !location.disabled) location.value = result.default_backup_directory || '';
         const job = result.jobs[result.jobs.length - 1];
         const running = job?.state === 'running';
         dataBackupElement('dataBackupRun').disabled = running || result.pending;

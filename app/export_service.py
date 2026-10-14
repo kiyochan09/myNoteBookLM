@@ -11,7 +11,9 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from PIL import Image as PILImage
 
 from app.ocr_footnotes import WordFootnotes, note_id
-from app.db_service import DBService, BASE_DIR
+from app.db_service import DBService
+from app.paths import APP_PATHS
+BASE_DIR = APP_PATHS.root
 from app.ocr_pipeline.katakana_corrector import correct_japanese_text
 
 
@@ -266,10 +268,10 @@ class ExportService:
 
         # 1. フォルダとページデータの収集
         clean_stem = Path(pdf_stem).stem
-        doc_dir = BASE_DIR / "data" / "ocr_results" / clean_stem
+        doc_dir = APP_PATHS.ocr_results / clean_stem
         if not doc_dir.exists():
             # 拡張子なし/ありの両方を探索
-            doc_dir = BASE_DIR / "data" / "ocr_results" / pdf_stem
+            doc_dir = APP_PATHS.ocr_results / pdf_stem
 
         # メモリ上のページ辞書 (page_number -> data)
         mem_map = {}

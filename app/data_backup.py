@@ -12,6 +12,7 @@ import subprocess
 import threading
 import time
 import uuid
+from app.paths import AppPaths
 
 DATABASES = ('my_notebook.db', 'knowledge.db', 'research.db', 'research_index.db')
 DIRECTORIES = ('media', 'ocr_archives', 'tcy_templates')
@@ -181,7 +182,7 @@ class BackupGateMiddleware:
 
 class DataBackup:
     def __init__(self, root, gate=None, busy=None):
-        self.root=Path(root).resolve(); self.data=self.root/'data'; self.state=self.root/'.backup_restore'
+        self.root=Path(root).resolve(); self.paths=AppPaths(self.root); self.data=self.paths.data; self.state=self.root/'.backup_restore'
         self.gate=gate or MaintenanceGate(); self.busy=busy or (lambda:False)
         self.jobs={}; self.lock=threading.Lock(); self.operation=threading.Lock()
         if (self.state/'pending.json').exists(): self.gate.reason='復元の準備が完了しています。アプリを終了して再起動してください。'
@@ -205,7 +206,7 @@ class DataBackup:
             try: result=json.loads(path.read_text(encoding='utf-8'))
             except (OSError,ValueError): pass
         with self.lock: jobs=[dict(job) for job in self.jobs.values()]
-        return {'jobs':jobs,'pending':(self.state/'pending.json').exists(),'last_restore':result}
+        return {'default_backup_directory':str(self.paths.backup_directory),'jobs':jobs,'pending':(self.state/'pending.json').exists(),'last_restore':result}
 
     def preview(self, value):
         folder=self.path(value,allow_history=True); manifest=read_manifest(folder)

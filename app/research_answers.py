@@ -22,7 +22,7 @@ def plain(text):return ''.join(text.split())
 def answer_sources(citations):
     selected=[];characters=0
     for source in citations:
-        if len(selected)==24:break
+        if len(selected)==32:break
         if characters+len(source['quote'])>60000:continue
         selected.append(source);characters+=len(source['quote'])
     return selected

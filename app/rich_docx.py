@@ -5,6 +5,7 @@ import re
 import difflib
 from collections import defaultdict
 from pathlib import Path
+from app.paths import AppPaths
 
 import docx
 from lxml import etree, html
@@ -322,8 +323,9 @@ class RichDocx:
             figure = wrapper.xpath('.//*[@data-fig-id]')
             if figure:
                 fig = figures.get(figure[0].get('data-fig-id'), {})
-                path = self.base_dir / 'data' / 'media' / Path(fig.get('file_path', '')).name
-                if path.is_file(): self.doc.add_picture(str(path))
+                try: path = AppPaths(self.base_dir).media_file(fig.get('file_path', ''))
+                except (ValueError, OSError): path = None
+                if path is not None and path.is_file(): self.doc.add_picture(str(path))
                 self.doc.add_paragraph(fig.get('caption', ''))
                 continue
             tables = wrapper.xpath('.//table')

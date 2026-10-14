@@ -1,0 +1,172 @@
+{
+  "backup": "C:\\Users\\natur\\BackUp\\OCRアプリ\\パス設定共通化_20261014_195618",
+  "migration": {
+    "applied": true,
+    "databases": {
+      "my_notebook.db": [
+        {
+          "table": "documents",
+          "column": "doc_metadata_json",
+          "values": 761
+        }
+      ],
+      "knowledge.db": [
+        {
+          "table": "documents",
+          "column": "file_path",
+          "values": 1
+        },
+        {
+          "table": "pages",
+          "column": "image_path",
+          "values": 6
+        },
+        {
+          "table": "figures",
+          "column": "image_path",
+          "values": 5
+        },
+        {
+          "table": "content_blocks",
+          "column": "html_content",
+          "values": 4
+        }
+      ]
+    },
+    "changed_values": 777,
+    "backup": "C:\\Users\\natur\\BackUp\\OCRアプリ\\パス設定共通化_20261014_195618\\変更前DB"
+  },
+  "verification": {
+    "changed_values": 777,
+    "database_tables": {
+      "my_notebook.db": {
+        "documents": 767,
+        "sections": 48077,
+        "content_blocks": 700148,
+        "document_tables": 760,
+        "document_figures": 49660,
+        "annotations": 14070,
+        "document_tags": 1216,
+        "tag_groups": 6,
+        "tags": 46,
+        "editor_paragraph_styles": 1,
+        "editor_style_backups": 396
+      },
+      "knowledge.db": {
+        "documents": 6,
+        "pages": 7,
+        "tree_nodes": 17,
+        "content_blocks": 60,
+        "tables": 1,
+        "figures": 5,
+        "annotations": 0
+      }
+    },
+    "migration_idempotent": true,
+    "environment": {
+      "app_folder": "C:\\Users\\natur\\myAI_Apli\\myNoteBookLM",
+      "missing_app_modules": [],
+      "ocr_runtime_available": true,
+      "ocr_python": "C:\\Users\\natur\\myAI_Apli\\myNoteBookLM\\runtimes\\ocr\\venv\\Scripts\\python.exe",
+      "ocr_source_folder": "C:\\Users\\natur\\myAI_Apli\\myNoteBookLM\\runtimes\\ocr\\src",
+      "ocr_models_available": true,
+      "research_python": "C:\\Users\\natur\\myAI_Apli\\myNoteBookLM\\.venv_research\\Scripts\\python.exe",
+      "research_runtime_available": true,
+      "research_model_available": true,
+      "windows_powershell_available": true,
+      "font_folders": [
+        "C:\\WINDOWS\\Fonts",
+        "C:\\Users\\natur\\AppData\\Local\\Microsoft\\Windows\\Fonts"
+      ],
+      "data_folder": "C:\\Users\\natur\\myAI_Apli\\myNoteBookLM\\data",
+      "backup_directory": "C:\\Users\\natur\\BackUp\\OCRアプリ"
+    },
+    "editable_pdf_books": 5,
+    "research_embedding": true,
+    "ocr_recognition": true,
+    "http_checks": {
+      "/editor_form.html": 200,
+      "/ocr_form1_designer.html": 200,
+      "/research_form.html": 200,
+      "/backup_restore.js": 200,
+      "/api/batch/storage-folders": 200,
+      "/api/batch/ocr-pdfs": 200,
+      "/api/editor/documents": 200,
+      "/api/backup/status": 200
+    },
+    "configured_backup_default": true,
+    "backup_automation_configured": true
+  },
+  "source_files": [
+    "app/core/db.py",
+    "app/data_backup.py",
+    "app/db_service.py",
+    "app/export_service.py",
+    "app/importers/base_importer.py",
+    "app/importers/docx_importer.py",
+    "app/importers/ocr_batch_importer.py",
+    "app/importers/odt_importer.py",
+    "app/importers/pdf_importer.py",
+    "app/main.py",
+    "app/ocr_pipeline/engine_paths.py",
+    "app/ocr_pipeline/figure_extractor.py",
+    "app/ocr_pipeline/ocr_repos_adapter.py",
+    "app/ocr_pipeline/pdf_pipeline.py",
+    "app/ocr_pipeline/pdf_renderer.py",
+    "app/ocr_pipeline/tcy_digit_refiner.py",
+    "app/ocr_pipeline/user_dict_service.py",
+    "app/path_migration.py",
+    "app/paths.py",
+    "app/research_embeddings.py",
+    "app/rich_docx.py",
+    "app/runtime_paths.py",
+    "backup_restore.js",
+    "check_environment.py",
+    "config/paths.json",
+    "repair_runtime.py",
+    "run.py",
+    "setup_research_semantic.py"
+  ],
+  "tests": {
+    "path_cases": 7,
+    "import_storage_http_flow": 1,
+    "renamed_and_relocated_copy": true,
+    "different_working_directory": true,
+    "backup_UI_syntax": true
+  },
+  "source_hashes": {
+    "app/core/db.py": "698e9a56e10faa656a40f24d08de42a264e26b261191b731ce9affe5f25ef01f",
+    "app/data_backup.py": "e12860929cfe24e3c3ced80564a912ad38106df3e7112fb01d62835e948cc843",
+    "app/db_service.py": "1eadd7772058bf9ea84974fa3054012aa60a51c2c4111ac77bafb38c8f95d733",
+    "app/export_service.py": "36e013abae1a304094435b71c9e07229f3a69e8a062589578303aaa3db4ee01f",
+    "app/importers/base_importer.py": "028549d6af8e5f46de9972451679d5906c4f2f5da001a8e75b1d863fde0a12b2",
+    "app/importers/docx_importer.py": "988954b4bb40bd1ade05e6b5d1ddbc0b4fe13613fbfecbee2e2786b639b8b1ef",
+    "app/importers/ocr_batch_importer.py": "f3b105bc470ae083c785a03406b618aae8ed81c96164c080e6f5fb4d5fe7717d",
+    "app/importers/odt_importer.py": "3414d690a92628161ffcc4ee1caded76f5ed8c54399c90fe3f7a18f0a3d3c6b4",
+    "app/importers/pdf_importer.py": "a5c074b9a136d18479ff897404c0f0d276dcc8ac2e303cd7497ff16f04f48560",
+    "app/main.py": "b80ef5dc45076ef6b73ed8cc3ffb08cd8fb9e61194de8000d61e17be1ae0f03f",
+    "app/ocr_pipeline/engine_paths.py": "550b2e8ef10f035f5c17a8e86d975587bc8383d906c96cf340a95e0e556365d0",
+    "app/ocr_pipeline/figure_extractor.py": "eb38f6245fde568fef04adf7626d24200339349ee6f99362c2190b3a90973044",
+    "app/ocr_pipeline/ocr_repos_adapter.py": "51387a8b191a2cb1a3c90255ece755a60ea83008c22b06a0be0d42c4659902c3",
+    "app/ocr_pipeline/pdf_pipeline.py": "7c90aeca110acc9288de0fefb603bd678a37d2ac7e97afeaf8e68f5ca2436bce",
+    "app/ocr_pipeline/pdf_renderer.py": "5babaf61e02caec410f3835e5bcdeb3c36befc5b6467817043e76d8fcb135673",
+    "app/ocr_pipeline/tcy_digit_refiner.py": "6ab42fcfcb30fe40e6696b90554b0a859ca42a4dbd353a1ced3f038c5b9e40d0",
+    "app/ocr_pipeline/user_dict_service.py": "c21126e79368d7a18cd7929ef1d856020d1b77dc7376220dfd693ce9047f2aa1",
+    "app/path_migration.py": "4ca44bd387d5433af019c0d39c304601b90df9ca119c19ecdfa11c52b4619f3a",
+    "app/paths.py": "3fb0c05837c974e98fc2be9716aa53d0c3e56a79978767aa0fbb22082f3da4e4",
+    "app/research_embeddings.py": "552ff9fa6e93dd006415dd51935fc6989ab0f8d84ba628e2e88c9fe28bb033ad",
+    "app/rich_docx.py": "69a8f5f362f8cf802389acf61ca53a9d49b09d5bdece4ec254d86aee11faeb73",
+    "app/runtime_paths.py": "1ea90de511a92e0170fff1e3734644f147adf416f1215e7a18279e5d7bf48db9",
+    "backup_restore.js": "fb571ec7825ac2c3f451f6ed10a066ab1e8fe5fe9df5e55390a4b2109ee7ac35",
+    "check_environment.py": "75461f9ab8d1ff8ea050f81f042713dad9954ae30c89d4fedfdeca9e689fc61e",
+    "config/paths.json": "6fb1049883b2bee89c2fff28c0e1fe0f4b8050f2d829c4b6bb47ffd83cd00d76",
+    "repair_runtime.py": "cce67362a6907c213edd2a57c38909275a5eefe6e0973ae3589def38d1d454da",
+    "run.py": "80c13622b08233ba690c10e3de3410ed557faa6c3b10ef22c60f920cc3d25c11",
+    "setup_research_semantic.py": "6ef93d9e535c59de1ad9934778d5d3dc7e3339a8be5d792886144ebe2cd57d2f"
+  },
+  "unverified": [
+    "ネイティブ選択ダイアログの手動操作",
+    "バックアップ期限切れ削除の実行（今回は設定・識別情報・実行条件のみ確認）"
+  ],
+  "temporary_work_removed": true
+}

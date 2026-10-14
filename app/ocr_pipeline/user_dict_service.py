@@ -12,8 +12,9 @@ import os
 from pathlib import Path
 from typing import Dict, List, Tuple, Any, Optional
 
-BASE_DIR = Path(__file__).resolve().parent.parent.parent
-USER_DICT_PATH = BASE_DIR / "data" / "user_dictionary.json"
+from app.paths import APP_PATHS
+
+USER_DICT_PATH = APP_PATHS.user_dictionary
 
 class UserDictService:
     _instance = None

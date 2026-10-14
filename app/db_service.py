@@ -16,8 +16,10 @@ def sanitize_fts_snippet(snippet_text: str) -> str:
     safe = html.escape(escaped_tokens)
     return safe.replace(token_open, "<mark>").replace(token_close, "</mark>")
 
-BASE_DIR = Path(__file__).resolve().parent.parent
-DEFAULT_NOTEBOOK_DB_PATH = BASE_DIR / "data" / "my_notebook.db"
+from app.paths import APP_PATHS
+
+BASE_DIR = APP_PATHS.root
+DEFAULT_NOTEBOOK_DB_PATH = APP_PATHS.notebook_db
 
 NOTEBOOK_SCHEMA_SQL = """
 PRAGMA foreign_keys = ON;
@@ -825,7 +827,7 @@ class DBService:
                 "SELECT * FROM document_figures WHERE document_id = ? ORDER BY reading_order ASC",
                 (doc_id,)
             ).fetchall()
-            figures = [dict(f) for f in fig_rows]
+            figures = [{**dict(f), "file_path": APP_PATHS.media_url(f["file_path"])} for f in fig_rows]
 
             ann_rows = cur.execute(
                 "SELECT * FROM annotations WHERE document_id = ? ORDER BY created_at ASC",
@@ -852,7 +854,7 @@ class DBService:
         source_type = doc.get("source_type") or "manual"
         source_filename = doc.get("source_filename") or ""
         total_pages = int(doc.get("total_pages") or 0)
-        metadata = doc.get("doc_metadata_json")
+        metadata = APP_PATHS.metadata(doc.get("doc_metadata_json"))
         if isinstance(metadata, dict):
             metadata_str = json.dumps(metadata, ensure_ascii=False)
         else:
@@ -951,7 +953,7 @@ class DBService:
 
                 b_type = blk.get("block_type") or "paragraph"
                 t_content = blk.get("text_content") or ""
-                h_content = blk.get("html_content") or f"<p>{t_content}</p>"
+                h_content = APP_PATHS.html(blk.get("html_content") or f"<p>{t_content}</p>")
                 r_order = int(blk.get("reading_order", idx + 1))
                 p_num = blk.get("page_number")
                 bbox = blk.get("bbox_json")
@@ -1000,7 +1002,7 @@ class DBService:
                 sec_id = mapped_sec_id if mapped_sec_id in valid_section_ids else None
 
                 caption = fig.get("caption") or f"図 {idx+1}"
-                f_path = fig.get("file_path") or ""
+                f_path = APP_PATHS.store_file(fig.get("file_path") or "")
                 f_hash = fig.get("file_hash") or ""
                 f_size = float(fig.get("file_size_kb") or 0.0)
                 w = int(fig.get("width") or 0)

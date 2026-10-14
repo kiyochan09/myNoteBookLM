@@ -1,5 +1,6 @@
 """Local query variants and exact, contextual evidence; independent of the LLM."""
 from hashlib import sha256
+from itertools import islice
 import math
 import re
 from collections import Counter, defaultdict
@@ -62,6 +63,28 @@ def relevance(text, groups):
                 coverage += 1
             found.extend(matches)
     return score, coverage, list(dict.fromkeys(found))
+
+
+def evidence_windows(text, groups, size=1000):
+    """Keep distinct hits in a long OCR block; prefer windows covering the relationship."""
+    lower=text.lower();positions=[]
+    substantive=any(g['term'] not in INTENT_WORDS for g in groups)
+    for group in groups:
+        if substantive and group['term'] in INTENT_WORDS:continue
+        for term in [group['term'],*group['aliases']]:
+            positions.extend(match.start() for match in islice(re.finditer(re.escape(term.lower()),lower),64))
+    if not positions:return []
+    starts={max(0,p-240) for p in positions}
+    # A hit near the end of a window should not displace the other query entity.
+    starts.update(max(0,p-size+120) for p in positions)
+    ranked=sorted(starts,key=lambda start:(-relevance(text[start:start+size],groups)[0],start))
+    chosen=[]
+    for start in ranked:
+        end=min(len(text),start+size)
+        if any(max(0,min(end,b)-max(start,a))>=.5*min(end-start,b-a) for a,b in chosen):continue
+        chosen.append((start,end))
+        if len(chosen)==3:break
+    return chosen
 
 
 def related_terms(groups, rows, count, lookup):

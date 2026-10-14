@@ -1,0 +1,72 @@
+{
+  "CompletedAt": "2026-10-14T18:06:06.3659037+09:00",
+  "Backup": "C:\\Users\\natur\\BackUp\\OCRアプリ\\OCRエンジン統合_20261014_175918",
+  "Runtime": "C:\\Users\\natur\\.gemini\\antigravity\\scratch\\knowledge_base_system\\runtimes\\ocr",
+  "OldRuntimeRemoved": true,
+  "Validation": {
+    "internal_runtime_selected": true,
+    "old_runtime_absent": true,
+    "source_preserved_except_resource_lookup": true,
+    "all_four_models_sha256_unchanged": true,
+    "no_old_path_in_launchers": true,
+    "table_japanese_and_numeric_recognition": "passed"
+  },
+  "Before": {
+    "neo4": {
+      "sha256": "f3a48a9549991e97ec965740a08b4e8c6d4a835000f5d175b54c996943208a06",
+      "seconds": 24.79,
+      "files": 1
+    },
+    "war206": {
+      "sha256": "2a4b5c98e504f64a14b69c658d76df4bc455a6f5d8fe85533f232027fde6ebc0",
+      "seconds": 20.63,
+      "files": 1
+    }
+  },
+  "After": {
+    "neo4": {
+      "sha256": "f3a48a9549991e97ec965740a08b4e8c6d4a835000f5d175b54c996943208a06",
+      "seconds": 17.41,
+      "files": 1
+    },
+    "war206": {
+      "sha256": "2a4b5c98e504f64a14b69c658d76df4bc455a6f5d8fe85533f232027fde6ebc0",
+      "seconds": 15.6,
+      "files": 1
+    }
+  },
+  "ChangedFiles": [
+    {
+      "File": "app/runtime_paths.py",
+      "SHA256": "E652C83A5AB270EF951489E23E2378A2FA151954D4E383139413382EBFB7BAC8"
+    },
+    {
+      "File": "app/ocr_pipeline/engine_paths.py",
+      "SHA256": "C53F47F60A9D6F105152ECFB80D611F3D0B9405970428AFD266C93C98E8C8647"
+    },
+    {
+      "File": "repair_runtime.py",
+      "SHA256": "B70B972E8D1064BCCEB1809B07744C7FF6949560FE8AD1E802BC9CB0CDE4AB1B"
+    },
+    {
+      "File": "OCR_RUNTIME.md",
+      "SHA256": "08C66F1FB82B6AE621DB77C9B30E56969FBDD35DFB80B1D885DB92A4EC146DAE"
+    },
+    {
+      "File": "別PCへの移行手順.md",
+      "SHA256": "C36ACB3D9FBB8ABC17783D1F4273CEBB5384BD01EBAFF16F9BB747C3678BD16F"
+    },
+    {
+      "File": "README.md",
+      "SHA256": "673357FB0952EE32D74FA5BB5F920C1A5FB0D94C04D209AA5E34127E95F3C490"
+    },
+    {
+      "File": ".gitignore",
+      "SHA256": "E407E39F6FC1481D8CD0364F729ECEC0877E63DC74CBB47F3FC3C84CA864C445"
+    },
+    {
+      "File": "check_environment.py",
+      "SHA256": "A43BDB609B170CA17651FC9E043CEC76969DB374BE2857B16A150FF81145BBC9"
+    }
+  ]
+}

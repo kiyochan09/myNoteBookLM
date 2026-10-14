@@ -1,4 +1,5 @@
 from pathlib import Path
+from app.paths import APP_PATHS
 from typing import List, Dict, Any, Optional
 from PIL import Image
 import re
@@ -8,7 +9,7 @@ class FigureExtractor:
     """図版・写真・地図の検出およびクロップ保存、キャプション紐付けを行うモジュール"""
 
     def __init__(self, media_dir: Optional[Path] = None):
-        self.media_dir = media_dir or (Path(__file__).resolve().parent.parent.parent / "data" / "media")
+        self.media_dir = media_dir or (APP_PATHS.media)
         self.media_dir.mkdir(parents=True, exist_ok=True)
 
     def crop_and_save(self, page_img_path: str | Path, box: List[int], doc_id: str, fig_idx: int) -> str:

@@ -6,10 +6,11 @@ import subprocess
 import urllib.request
 from repair_runtime import ensure_venv
 
-APP=Path(__file__).resolve().parent
-RUNTIME=APP/'.venv_research'
+from app.paths import APP_PATHS
+APP=APP_PATHS.root
+RUNTIME=APP_PATHS.research_runtime
 REVISION='614241f622f53c4eeff9890bdc4f31cfecc418b3'
-MODEL=APP/'models/research'/('multilingual-e5-small-'+REVISION[:12])
+MODEL=APP_PATHS.research_model(REVISION)
 FILES=['config.json','tokenizer.json','tokenizer_config.json','onnx/model_qint8_avx512_vnni.onnx']
 
 def main():
@@ -42,7 +43,7 @@ def main():
     versions=subprocess.check_output([str(python),'-c','import importlib.metadata as m,json;print(json.dumps({n:m.version(n) for n in ["numpy","tokenizers","onnxruntime"]}))'],text=True)
     manifest['versions']=json.loads(versions)
     (MODEL/'manifest.json').write_text(json.dumps(manifest,indent=2),encoding='utf-8')
-    (APP/'models/research/runtime.json').write_text(json.dumps({'model_path':MODEL.relative_to(APP).as_posix(),**manifest},indent=2),encoding='utf-8')
+    (APP_PATHS.models/'research/runtime.json').write_text(json.dumps({'model_path':MODEL.relative_to(APP).as_posix(),**manifest},indent=2),encoding='utf-8')
     print('Isolated local semantic runtime ready.',flush=True)
 
 

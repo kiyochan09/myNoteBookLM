@@ -8,6 +8,7 @@ import queue
 import subprocess
 import threading
 from typing import Protocol
+from app.paths import AppPaths
 from app.runtime_paths import get_research_python, python_available
 
 REVISION='614241f622f53c4eeff9890bdc4f31cfecc418b3'
@@ -26,7 +27,7 @@ class OfflineEmbeddingProvider:
     def __init__(self,app_path):
         self.app_path=Path(app_path).resolve()
         self.python=get_research_python(self.app_path)
-        self.model=self.app_path/'models/research'/('multilingual-e5-small-'+REVISION[:12])
+        self.model=AppPaths(self.app_path).research_model(REVISION)
         self.worker=self.app_path/'app/research_embedding_worker.py'
         self.lock=threading.Lock();self.process=None;self.output=None;self.closed=False
         atexit.register(self.close)

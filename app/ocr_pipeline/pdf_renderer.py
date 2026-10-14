@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from app.paths import APP_PATHS
 from typing import List, Dict, Any, Tuple, Optional
 import fitz  # PyMuPDF
 
@@ -8,7 +9,7 @@ class PdfRenderer:
     """PDFの各ページを高解像度画像としてレンダリングし、埋め込みテキストや画像情報を取得するクラス"""
 
     def __init__(self, output_dir: Optional[Path] = None, dpi: int = 200):
-        self.output_dir = output_dir or (Path(__file__).resolve().parent.parent.parent / "data" / "media")
+        self.output_dir = output_dir or (APP_PATHS.media)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.dpi = dpi
 
@@ -19,7 +20,7 @@ class PdfRenderer:
         ocr_json_path: Optional[str | Path] = None,
         max_pages: Optional[int] = None
     ) -> List[Dict[str, Any]]:
-        pdf_path = Path(pdf_path).resolve()
+        pdf_path = APP_PATHS.resolve_file(pdf_path)
         doc = fitz.open(str(pdf_path))
         pages_info = []
 

@@ -8,23 +8,23 @@ DB・透明テキスト付きPDF・図版をまとめて保存・復元するメ
 
 移行元のアプリを終了してから、アプリ本体のフォルダを丸ごとコピーしてください。`data` には文書DB、タグ、研究の会話、OCR生データ、透明テキスト付きPDF、図版、辞書などが入っています。`models` は意味検索用モデルです。どちらも必要です。
 
-アプリ本体の隣にある `OCR-REPOS` フォルダもコピーしてください。既存のOCR用パッケージにはこのアプリで利用する修正やモデルが含まれるため、移行時に別のOCRパッケージへ置き換えないでください。
-
-既存と同じ配置の例：
+OCRエンジンも本体内の `runtimes/ocr` に集約されています。このフォルダーを含めてコピーすれば、隣の `OCR-REPOS` は不要です。既存の修正版ソース・モデル・専用実行環境をそのまま引き継ぎ、別のOCRパッケージで置き換えないでください。
 
 ```text
 任意の保存先/
-├─ knowledge_base_system/
-│  ├─ app/
-│  ├─ data/
-│  ├─ models/
-│  └─ .venv_research/
-└─ OCR-REPOS/
-   └─ ocr_engine/
-      └─ venv/
+└─ myNoteBookLM/
+   ├─ app/
+   ├─ data/
+   ├─ models/
+   ├─ .venv_research/
+   └─ runtimes/ocr/
+      ├─ src/                 # 修正版OCRソース・config・model
+      ├─ venv/                # Python 3.12の専用実行環境
+      ├─ dependencies.lock.txt
+      └─ model-manifest.json
 ```
 
-OCR実行環境は本体内の `runtimes/ocr/venv`、`ocr_engine/venv`、`OCR-REPOS/ocr_engine/venv` からも探します。各場所の `.venv` 形式にも対応します。特殊な配置が必要な場合は `MYNOTEBOOKLM_OCR_DIR` または `MYNOTEBOOKLM_OCR_PYTHON`、意味検索には `MYNOTEBOOKLM_RESEARCH_PYTHON` を指定できます。相対パスはアプリ本体からの位置として解釈します。絶対パスの設定を使った場合は移行先でも見直してください。
+OCRの参照先は本体内のこの1か所です。旧OCR-REPOSや環境変数による外部OCRの自動選択は行いません。意味検索の `MYNOTEBOOKLM_RESEARCH_PYTHON` 設定は引き続き利用できます。
 
 ## 2. Pythonと依存ライブラリ
 
@@ -36,7 +36,7 @@ OCR実行環境は本体内の `runtimes/ocr/venv`、`ocr_engine/venv`、`OCR-RE
 py -3.12 -m pip install -r requirements.txt
 ```
 
-仮想環境のコピーには元PCのPython参照先が残ることがあります。次を実行すると、既存のパッケージとモデルを残して、その参照先を修復します。異なるバージョンのPythonでの修復は拒否します。
+仮想環境のコピーには元PCのPython参照先が残ることがあります。次を実行すると、既存のパッケージとモデルを残して、その参照先を修復します。OCRはコマンドのランチャーと有効化スクリプトも再生成します。異なるバージョンのPythonでの修復は拒否します。
 
 ```powershell
 py -3.12 repair_runtime.py --research
@@ -61,3 +61,7 @@ py -3.12 run.py
 APIキーは元PCのWindowsユーザーで暗号化されています。別PCでは原則として再登録が必要です。リサーチ画面の「AI設定」に再登録が必要と表示されたら、同じキーを入力し直してください。キーを移行用の平文ファイルへ書き出す必要はありません。
 
 文書・タグ・会話などは `data` と一緒に移行できます。表示倍率や画面の表示設定など、ブラウザに保存している設定は移行先で再設定してください。
+
+## 保存先設定と内部参照
+
+configも本体と一緒にコピーする。内部参照は相対パスで管理し、本体の位置を自動取得する。外部バックアップの既定先はconfig/paths.json。~は移行先ユーザーのホームになる。旧バックアップの絶対参照を整理する場合は [保存先の管理](PATHS.md) を参照。

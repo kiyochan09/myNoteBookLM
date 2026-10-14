@@ -10,6 +10,7 @@ import numpy as np
 import cv2
 from PIL import Image, ImageDraw, ImageFont
 from app.runtime_paths import windows_font_dirs
+from app.paths import APP_PATHS
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +90,7 @@ class TcyDigitRefiner:
 
     def _load_disk_templates(self):
         candidate_dirs = [
-            Path(__file__).resolve().parents[2] / "data" / "tcy_templates",
+            APP_PATHS.tcy_templates,
         ]
         for tdir in candidate_dirs:
             if not tdir.exists():

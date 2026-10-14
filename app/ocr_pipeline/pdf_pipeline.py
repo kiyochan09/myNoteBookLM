@@ -1,6 +1,7 @@
 import json
 import uuid
 from pathlib import Path
+from app.paths import APP_PATHS
 from typing import Dict, Any, Optional, List
 
 from app.core.db import get_db_connection
@@ -15,14 +16,14 @@ class PdfPipeline:
 
     def __init__(self, db_path: Optional[Path] = None, media_dir: Optional[Path] = None):
         self.db_path = db_path
-        self.media_dir = media_dir or (Path(__file__).resolve().parent.parent.parent / "data" / "media")
+        self.media_dir = media_dir or (APP_PATHS.media)
         self.renderer = PdfRenderer(output_dir=self.media_dir)
         self.table_extractor = TableExtractor()
         self.figure_extractor = FigureExtractor(media_dir=self.media_dir)
         self.classifier = BlockClassifier()
 
     def process_pdf(self, pdf_path: str | Path, notebook_id: str = "nb-default", ocr_json_path: Optional[str | Path] = None, max_pages: Optional[int] = None) -> Dict[str, Any]:
-        pdf_path = Path(pdf_path).resolve()
+        pdf_path = APP_PATHS.resolve_file(pdf_path)
         if not pdf_path.exists():
             raise FileNotFoundError(f"PDF file not found: {pdf_path}")
 
@@ -54,7 +55,7 @@ class PdfPipeline:
                 INSERT INTO documents (id, title, file_path, source_type, page_count, metadata_json)
                 VALUES (?, ?, ?, 'pdf_ocr', ?, ?)
                 """,
-                (doc_id, doc_title, str(pdf_path), len(pages_data), json.dumps({"filename": pdf_path.name}))
+                (doc_id, doc_title, APP_PATHS.store_file(pdf_path), len(pages_data), json.dumps({"filename": pdf_path.name}))
             )
 
             # ルートノード (KaisoRエディタのドキュメントノード)
@@ -85,7 +86,7 @@ class PdfPipeline:
                     INSERT INTO pages (id, document_id, page_number, width, height, image_path)
                     VALUES (?, ?, ?, ?, ?, ?)
                     """,
-                    (page_id, doc_id, p_no, pw, ph, p_info["image_path"])
+                    (page_id, doc_id, p_no, pw, ph, APP_PATHS.store_file(p_info["image_path"]))
                 )
 
                 page_debug_blocks = []
@@ -228,7 +229,7 @@ class PdfPipeline:
                         INSERT INTO content_blocks (id, document_id, page_id, node_id, block_type, reading_order, text_content, html_content, bbox_json)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
-                        (block_id, doc_id, page_id, current_node_id, "figure", global_reading_order, fig["caption"], f'<figure id="{fig_id}"><img src="{fig["image_path"]}"><figcaption>{fig["caption"]}</figcaption></figure>', bbox_json)
+                        (block_id, doc_id, page_id, current_node_id, "figure", global_reading_order, fig["caption"], f'<figure id="{fig_id}"><img src="{APP_PATHS.media_url(fig["image_path"])}"><figcaption>{fig["caption"]}</figcaption></figure>', bbox_json)
                     )
 
                     cur.execute(
@@ -236,7 +237,7 @@ class PdfPipeline:
                         INSERT INTO figures (id, block_id, figure_type, image_path, caption, anchor_id)
                         VALUES (?, ?, 'figure', ?, ?, ?)
                         """,
-                        (fig_id, block_id, fig["image_path"], fig["caption"], fig_id)
+                        (fig_id, block_id, APP_PATHS.store_file(fig["image_path"]), fig["caption"], fig_id)
                     )
                     stats["figures_count"] += 1
                     page_debug_blocks.append({"id": block_id, "type": "figure", "box": fig["box"], "text": fig["caption"]})

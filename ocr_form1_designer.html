@@ -42,6 +42,16 @@
         color: #ffffff !important;
         box-shadow: 0 4px 8px rgba(37,99,235,0.35) !important;
     }
+    .ocr-document-navigation {
+        margin-left: auto; display: flex; align-items: center; gap: 12px;
+        min-width: 0; max-width: 100%;
+    }
+    #lblCurrentPdfName {
+        max-width: min(360px, 28vw); min-width: 0; overflow: hidden;
+        text-overflow: ellipsis; white-space: nowrap;
+        font-size: 14px; font-weight: bold; color: #334155; user-select: text;
+    }
+    .ocr-document-navigation .btn-goto-editor { flex-shrink: 0; }
 
     /* 2. メイン作業領域 */
     #mainContainer {
@@ -858,7 +868,7 @@
 
 
 
-    #btnSaveEditedOcrPdf[hidden], #ocrPdfEditorStatus[hidden] { display:none !important; }
+    #btnSaveEditedOcrPdf[hidden], #ocrPdfEditorStatus[hidden], #pdfCompressionDialog [hidden] { display:none !important; }
     .btn-toolbar:disabled { opacity:.5; cursor:default; }
     .ocr-pdf-library { position:fixed; inset:0; margin:auto; width:min(960px,94vw); max-height:85vh; padding:20px; border:1px solid #cbd5e1; border-radius:10px; color:#1e293b; }
     .ocr-pdf-library .win-btn { flex:0 0 auto; width:auto; padding:6px 12px; white-space:nowrap; }
@@ -885,6 +895,7 @@
         <button class="btn-toolbar" id="btnOpenPdf" title="PDFを開く" onclick="triggerOpenPdf()">📂</button>
         <input type="file" id="pdfFileInput" accept=".pdf" style="display:none;" onchange="if(this.files && this.files[0]){ handleFileSelect(this.files[0]); this.value=''; }">
 
+        <button class="btn-toolbar" id="btnCompressOcrPdf" onclick="openPdfCompression()" title="PDFの画像だけを圧縮し、透明テキストと編集情報を保持" style="width:auto;padding:0 12px;font-size:13px;gap:5px;">🗜 PDF圧縮</button>
         <button class="btn-toolbar" id="btnEditOcrPdf" onclick="openOcrPdfLibrary()" title="アプリ内の保存済みPDFを開いて編集" style="width:auto;padding:0 12px;font-size:13px;gap:5px;">✏️ 透明テキスト編集</button>
         <button class="btn-toolbar" id="btnSaveEditedOcrPdf" onclick="saveEditedOcrPdf()" hidden disabled style="width:auto;padding:0 12px;font-size:13px;background:#eff6ff;color:#1d4ed8;">変更をPDFへ保存</button>
 
@@ -938,12 +949,15 @@
         <button class="btn-toolbar" id="btnUserDict" title="ユーザー辞書・縦中横登録" onclick="openUserDictModal()">📖</button>
         <button class="btn-toolbar" id="btnOptions" title="オプション設定" onclick="openOptions()">⚙️</button>
 
-        <!-- エディタ画面への移動ボタン -->
-        <a href="editor_form.html" class="btn-toolbar btn-goto-editor" id="btnGoToEditor" title="ドキュメントエディタ画面へ移動 (MyNotebookLM)" style="margin-left:auto; text-decoration:none; width:auto; padding:0 14px; gap:6px; background:#1e40af; color:#ffffff; border-color:#3b82f6; font-size:12.5px; font-weight:bold; height:38px; border-radius:6px; box-shadow:0 2px 4px rgba(30,64,175,0.25);">
+        <!-- 開いているPDF名・エディタ画面への移動ボタン -->
+        <div class="ocr-document-navigation">
+        <span id="lblCurrentPdfName" role="status" aria-label="開いているPDFファイル名">PDF未選択</span>
+        <a href="editor_form.html" class="btn-toolbar btn-goto-editor" id="btnGoToEditor" title="ドキュメントエディタ画面へ移動 (MyNotebookLM)" style="text-decoration:none; width:auto; padding:0 14px; gap:6px; background:#1e40af; color:#ffffff; border-color:#3b82f6; font-size:12.5px; font-weight:bold; height:38px; border-radius:6px; box-shadow:0 2px 4px rgba(30,64,175,0.25);">
             <span>📝</span>
             <span>エディタ画面へ</span>
             <span style="font-size:11px;">➔</span>
         </a>
+        </div>
         <div id="ocrPdfEditorStatus" role="status" hidden></div>
         <div id="imageProcessingPanel" aria-label="画像処理メニュー">
             <div class="image-tool-group">
@@ -2801,6 +2815,9 @@ document.addEventListener('DOMContentLoaded',initOcrPaneSplitter);
         currentArchiveEditor = options.editor || null;
         updateOcrPdfEditorState();
         currentPdfFile = file;
+        const pdfNameLabel = document.getElementById("lblCurrentPdfName");
+        pdfNameLabel.textContent = file.name;
+        pdfNameLabel.title = file.name;
         modifiedPages.clear();
         pageCache = {};
         imageProcessingStrokesByPage = {};
@@ -3670,6 +3687,11 @@ document.addEventListener('DOMContentLoaded',initOcrPaneSplitter);
                 syncBodyTextToRegions(currentDocData, currentDocData.body_text);
             }
             const dataCopy = JSON.parse(JSON.stringify(currentDocData));
+            for (const dimension of ["image_width", "image_height"]) {
+                if (!dataCopy[dimension] && currentPageImgInfo[dimension]) {
+                    dataCopy[dimension] = currentPageImgInfo[dimension];
+                }
+            }
             dataCopy.page_number = currentPage;
             dataCopy.current_page = currentPage;
             pageCache[currentPage] = {
@@ -5257,7 +5279,7 @@ document.addEventListener('DOMContentLoaded',initOcrPaneSplitter);
         const declaredColCount = Number(tbl.column_count || tbl.col_count || 0);
         const metadataColCount = Array.isArray(tbl.columns) ? tbl.columns.length : 0;
         const colCount = Math.max(declaredColCount, metadataColCount, 0, ...rows.map(row => row.length));
-        tbl.merges ||= [];
+        tbl.merges ||= (tbl.merge_spans || []).map(merge => ({ ...merge }));
         tbl.column_widths ||= [];
         header.innerHTML = "";
         ["ページ", "表名", "行"].forEach((label, i) => {
@@ -6682,6 +6704,32 @@ document.addEventListener('DOMContentLoaded',initOcrPaneSplitter);
         try {
             const baseUrl = API_BASE;
 
+            if (targetReg.type === "table") {
+                const tablePage = currentPage, tableFile = currentPdfFile.name;
+                const tableImage = typeof lineTiltComposedImage === "function" ? await lineTiltComposedImage(tablePage) : currentDocData.corrected_image;
+                const response = await fetch(`${baseUrl}/api/ocr/extract-table-grid`, {
+                    method: "POST", headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ filename: tableFile, page_number: tablePage,
+                        region: targetReg, doc_type: currentDocType.includes("和書") ? "japanese" : "western",
+                        corrected_image: tableImage,
+                        processed_image: typeof getProcessedPageImageDataUrl === "function" ? getProcessedPageImageDataUrl() : null })
+                });
+                const result = await response.json();
+                if (!response.ok || !result.success) throw new Error(result.detail || result.message || `HTTP ${response.status}`);
+                if (currentPage !== tablePage || currentPdfFile?.name !== tableFile) throw new Error("ページが切り替わったため認識結果は適用しませんでした。");
+                const table = result.table;
+                const tables = currentDocData.tables || [];
+                const index = tables.findIndex(t => t.id === targetReg.id || t.region_id === targetReg.id);
+                if (index >= 0) tables[index] = table; else tables.push(table);
+                currentDocData.tables = tables;
+                Object.assign(targetReg, { text: table.text, rows: table.rows, cells: table.cells,
+                    merges: table.merges, merge_spans: table.merge_spans, rule_lines: table.rule_lines });
+                syncDocDataAndTabsFromRegions();
+                saveCurrentPageToCache(true);
+                appendLog("部分再OCR", `表「${targetReg.name}」のセル認識が完了しました`, "success");
+                return;
+            }
+
             const formData = new FormData();
             formData.append("file", currentPdfFile);
             formData.append("page_number", currentPage);
@@ -6797,6 +6845,10 @@ document.addEventListener('DOMContentLoaded',initOcrPaneSplitter);
         const willCollapse = (forceState !== undefined) ? !forceState : !isCurrentlyCollapsed;
 
         if (willCollapse) {
+            ruleLineMode = "none";
+            selectedRuleLineIdx = null;
+            selectedRuleLineIndices.clear();
+            updateTableLineControlsState();
             pnl.classList.add("pane-collapsed");
             pnl.style.display = "none";
             if (dockTab) dockTab.style.display = "flex";
@@ -7655,7 +7707,7 @@ document.addEventListener('DOMContentLoaded',initOcrPaneSplitter);
         }
         if (!currentPdfFile) { alert("先にPDFを開いてください。"); return; }
         if (ocrPdfArchiveBusy || isAutoLayoutRunning) { alert("現在の処理が完了してから実行してください。"); return; }
-        if (deleteRaw && !confirm("OCR生データ（画像・JSON）を削除します。\n\n透明テキスト未作成：作成して埋め込み\n作成済み・変更なし：埋め込みをスキップ\n作成済み・変更あり：更新して埋め込み\n\n本文・座標・読み順はPDF内に残り、後から再編集できます。\n\n補正画像のあるページは補正後の画像を使用します。原本PDFは変更しません。\n保存・検証が成功した場合だけOCR生データ（画像・JSON）を削除します。\n\n実行しますか？")) return;
+        if (deleteRaw && !confirm("OCR生データ（画像・JSON）を削除します。\n\n透明テキスト未作成：作成して埋め込み\n作成済み・変更なし：埋め込みをスキップ\n作成済み・変更あり：更新して埋め込み\n\n本文・座標・読み順はPDF内に残り、後から再編集できます。\n\n容量を抑えるため、元のページ画像に透明テキストを追加し、補正画像はPDFに保存しません。補正したページでは検索の強調位置がずれる場合があります。原本PDFは変更しません。\n保存・検証が成功した場合だけOCR生データ（画像・JSON）を削除します。\n\n実行しますか？")) return;
         const file = currentPdfFile;
         const overlay = document.createElement('dialog');
         overlay.style.cssText = 'padding:24px;border:1px solid #cbd5e1;border-radius:10px;max-width:480px;';
@@ -9723,6 +9775,7 @@ saveCurrentPageToCache=function(...args){
 
 </script>
 <script src="ocr_pdf_library.js"></script>
+<script src="ocr_pdf_compression.js"></script>
 <script src="storage_folders.js"></script>
 
 <dialog id="dataBackupDialog" aria-labelledby="dataBackupTitle" style="position:fixed;inset:0;margin:auto;width:620px;max-width:90vw;max-height:85vh;overflow:auto;box-sizing:border-box;border:1px solid #94a3b8;border-radius:10px;padding:22px;color:#1e293b;background:white;font:14px sans-serif;">

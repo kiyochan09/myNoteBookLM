@@ -27,7 +27,7 @@
 ## 📂 ディレクトリ構成
 
 `	ext
-knowledge_base_system/
+myNoteBookLM/
 ├── app/
 │   ├── api/              # APIルーター・エンドポイント
 │   ├── core/             # DB接続・スキーマ管理
@@ -40,6 +40,7 @@ knowledge_base_system/
 │   ├── db_service.py     # データベース操作サービス
 │   ├── export_service.py # Word/Markdownエクスポート
 │   └── main.py           # FastAPI アプリケーションエントリーポイント
+├── runtimes/ocr/         # 本体内のOCRソース・モデル・専用実行環境
 ├── data/
 │   ├── ocr_results/      # OCR解析結果データ (JSON / Text)
 │   └── tcy_templates/    # 縦中横マッチング用テンプレート画像
@@ -71,3 +72,11 @@ python run.py
 - **OCR デザイナー UI**: [http://localhost:8000/ocr_form1_designer.html](http://localhost:8000/ocr_form1_designer.html)
 - **エディタ UI**: [http://localhost:8000/editor_form.html](http://localhost:8000/editor_form.html)
 - **API ドキュメント**: [http://localhost:8000/docs](http://localhost:8000/docs)
+
+## 現在の配置（2026-10-14）
+
+本体は `C:\Users\natur\myAI_Apli\myNoteBookLM`。このPCでは `起動.cmd` で起動する。最新の配置・保存先・検証結果は [引き継ぎメモ](引き継ぎメモ/引き継ぎメモ_2026-10-14_配置移行.md) を参照。開発作業・履歴・成果物は本体内の専用フォルダーにまとめる。
+
+## 保存先の共通設定
+
+保存先と内部参照は共通管理しています。[保存先・パスの管理](PATHS.md)を参照してください。外部バックアップの既定先はconfig/paths.jsonで設定します。

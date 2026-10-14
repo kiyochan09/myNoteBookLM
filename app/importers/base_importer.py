@@ -4,14 +4,14 @@ from typing import Dict, Any, List, Optional
 import uuid
 import hashlib
 import base64
+from app.paths import APP_PATHS
 
 class BaseImporter(ABC):
     """
     MyNotebookLM インポーター共通基底クラス
     """
     def __init__(self, media_dir: Optional[Path] = None):
-        base_dir = Path(__file__).resolve().parent.parent.parent
-        self.media_dir = media_dir or (base_dir / "data" / "media")
+        self.media_dir = media_dir or APP_PATHS.media
         self.media_dir.mkdir(parents=True, exist_ok=True)
 
     @abstractmethod

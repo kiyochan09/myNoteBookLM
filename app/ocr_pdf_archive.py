@@ -60,7 +60,7 @@ def encode(data):
     return json.dumps(data, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode("utf-8")
 
 
-def revision(pages, with_images=True):
+def revision(pages, with_images=False):
     ignore = {"filename", "last_modified", "current_page", "page", "page_number",
               "total_pages", "archive_restored", "success", "file_name"}
     def stable(value):
@@ -589,9 +589,12 @@ class OcrPdfArchive:
                 path, receipt = self.receipt_pdf(folder, receipt)
                 if self.document_stem(filename) != self.document_stem(receipt["output_name"]):
                     continue
+                # Older saves baked corrected bitmaps into the page. A new save
+                # must apply the current image policy before it can be reused.
+                if receipt.get("page_images") not in ("original", "preserved"):
+                    continue
                 matched = ((receipt.get("source_pdf_sha256") == pdf_hash and receipt.get("revision") == fingerprint) or
-                           (receipt.get("pdf_sha256") == pdf_hash and receipt.get("portable_revision") == portable and
-                            not any(v.get("corrected_image") for v in pages.values())))
+                           (receipt.get("pdf_sha256") == pdf_hash and receipt.get("portable_revision") == portable))
                 if not matched or self.file_hash(path) != receipt["pdf_sha256"]:
                     continue
                 # Refresh deletion authorization against the exact current files.
@@ -664,7 +667,9 @@ class OcrPdfArchive:
                         doc.update_stream(xref, b"")
                 doc.embfile_del(ATTACHMENT)
             meta = {"format": "MyNotebookLM-OCR", "version": 1, "page_count": len(doc),
-                    "source_name": filename, "pages": {}, "streams": {}}
+                    "source_name": filename, "pages": {}, "streams": {},
+                    "page_images": old.get("page_images", "preserved") if old else "original",
+                    "original_pdf_sha256": old.get("original_pdf_sha256") if old else pdf_hash}
             signatures, expected_text, corrected_pages = {}, {}, []
             # A fresh resource name also avoids reusing an existing subset font
             # when an edited PDF introduces characters absent from that subset.
@@ -688,28 +693,24 @@ class OcrPdfArchive:
                     page.apply_redactions(images=0, graphics=0, text=0)
                     if page_signature(page) != signature or clean_text(page.get_text()):
                         raise ValueError(f"P.{number}の既存文字層を安全に置き換えられません。生データは保持します。")
-                corrected = raw.get("corrected_image")
-                if corrected:
-                    image = base64.b64decode(corrected.split(",", 1)[-1], validate=True)
-                    pix = fitz.Pixmap(image)
-                    if pix.width != raw.get("image_width") or pix.height != raw.get("image_height"):
-                        raise ValueError(f"P.{number}の補正画像と座標の大きさが一致しません。")
-                    # Replace page content only in the output copy, preserving page geometry.
-                    xref = doc.get_new_xref()
-                    doc.update_object(xref, "<<>>")
-                    doc.update_stream(xref, b"")
-                    page.set_contents(xref)
-                    doc.xref_set_key(page.xref, "Resources", "<<>>")
-                    rotation = page.rotation
-                    page.set_rotation(0)
-                    page.insert_image(page.rect, stream=image, rotate=rotation, keep_proportion=False)
-                    page.set_rotation(rotation)
-                    corrected_pages.append(number)
+                # Keep the original compressed page images. OCR correction
+                # bitmaps are working data and are excluded from the PDF.
+                # Coordinates still provide page-level search after correction.
                 signatures[key] = page_signature(page)
+                runs = make_runs(raw)
                 width, height = raw.get("image_width"), raw.get("image_height")
                 if not width or not height or not 0 < width <= 100000 or not 0 < height <= 100000:
-                    raise ValueError(f"P.{number}の画像サイズが不明です。")
-                runs = make_runs(raw)
+                    if runs:
+                        # Text placement must use its actual OCR coordinate size.
+                        # Do not guess a scale for existing recognized text.
+                        raise ValueError(f"P.{number}の画像サイズが不明です。")
+                    # Older manually selected figure / blank pages can contain
+                    # no OCR image metadata. They have no text to position; keep
+                    # the PDF image and restore the app's zoom=2 canvas size for
+                    # subsequent figure extraction and portable editing.
+                    canvas = (page.rect * fitz.Matrix(2, 2)).irect
+                    width, height = canvas.width, canvas.height
+                    raw = {**raw, "image_width": width, "image_height": height}
                 if runs:
                     text_page_count += 1
                 before = set(page.get_contents())
@@ -734,7 +735,6 @@ class OcrPdfArchive:
             temp = folder / (".building_" + uuid.uuid4().hex + ".pdf" if target is not None else "building.pdf")
             # Keep xrefs stable: they identify only our generated streams on re-edit.
             try:
-                optimize_lossless_images(doc)
                 doc.save(temp, garbage=1, deflate=True)
             except Exception:
                 if target is not None:
@@ -749,7 +749,8 @@ class OcrPdfArchive:
                    "page_count": len(meta["pages"]), "source_pdf_sha256": pdf_hash,
                    "revision": revision(pages), "portable_revision": revision(meta["pages"], False),
                    "text_page_count": text_page_count, "total_pages": meta["page_count"],
-                   "corrected_pages": corrected_pages}
+                   "corrected_pages": corrected_pages, "page_images": meta["page_images"],
+                   "original_pdf_sha256": meta["original_pdf_sha256"]}
             if target is not None:
                 self.replace_archive(output, temp, receipt, original_receipt, pdf_hash)
             else:

@@ -4,7 +4,8 @@ import socket
 from pathlib import Path
 
 # プロジェクトルートを sys.path の先頭に追加
-BASE_DIR = Path(__file__).resolve().parent
+from app.paths import APP_PATHS
+BASE_DIR = APP_PATHS.root
 if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 

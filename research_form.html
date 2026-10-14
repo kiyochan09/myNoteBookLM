@@ -28,6 +28,7 @@
 .conversation .research-title,.conversation .search-question,.conversation .search-summary,
 .conversation .answer-block,.conversation .answer-heading,.conversation .answer-section-title,
 .conversation .composer textarea,.conversation .welcome p,.conversation .prompt-chip{font-size:18px}
+.copy-toolbar{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin:8px 0}.copy-toolbar .search-date,.copy-toolbar .answer-heading{margin:0}.copy-buttons{display:flex;gap:6px;flex-wrap:wrap}.copy-button{border:1px solid #cfddd3;background:#fff;color:var(--green);border-radius:6px;padding:6px 9px;font-size:11px;line-height:1.5;white-space:nowrap}.copy-button:hover:not(:disabled){background:var(--soft)}.copy-button:focus-visible{outline:2px solid var(--green);outline-offset:2px}.copy-button:disabled{opacity:.55;cursor:default}.search-question,.answer-block,.answer-section-title,.answer-proof{user-select:text}.copy-notice{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);max-width:calc(100vw - 32px);padding:10px 16px;border:1px solid #b5d1c4;border-radius:8px;background:#f1f7f2;color:var(--green);box-shadow:0 4px 16px #253b3b18;font-size:12px;line-height:1.7;z-index:100}.copy-notice[hidden]{display:none}
 </style>
 </head>
 <body>
@@ -90,7 +91,7 @@
   </div></div>
   <div class="composer-wrap">
    <div class="scope-summary"><svg aria-hidden="true"><use href="#i-book"/></svg><span id="composerScope">タグを選ぶと、リサーチする範囲がここに表示されます</span></div>
-   <div class="composer"><textarea id="questionDraft" aria-label="質問の下書き" placeholder="選んだ資料について、何を知りたいですか？" maxlength="12000"></textarea><div class="composer-bottom"><span class="char-count" id="charCount">0 / 12,000</span><div class="composer-buttons"><button type="button" class="prepare-button" id="searchSources" disabled aria-describedby="stageNote"><svg aria-hidden="true"><use href="#i-send"/></svg>資料を検索</button><button type="button" class="prepare-button" id="createAnswer" disabled>回答を作成</button></div></div></div>
+   <div class="composer"><textarea id="questionDraft" aria-label="質問の下書き" placeholder="選んだ資料について、何を知りたいですか？" maxlength="12000"></textarea><div class="composer-bottom"><span class="char-count" id="charCount">0 / 12,000</span><div class="composer-buttons"><button type="button" class="copy-button" id="copyQuestionDraft" disabled>質問をコピー</button><button type="button" class="prepare-button" id="searchSources" disabled aria-describedby="stageNote"><svg aria-hidden="true"><use href="#i-send"/></svg>資料を検索</button><button type="button" class="prepare-button" id="createAnswer" disabled>回答を作成</button></div></div></div>
    <label class="followup-control" id="followupControl" hidden><input type="checkbox" id="usePreviousAnswer"> <span id="followupLabel">選んだ回答に続けて質問する</span></label>
    <p class="stage-note" id="stageNote">「資料を検索」はPC内で検索。「回答を作成」は質問と引用抜粋をGeminiへ送ります。</p>
    <div class="semantic-status" aria-live="polite"><span id="semanticStatus">意味検索の準備状況を確認しています…</span><span class="semantic-actions"><progress id="semanticProgress" hidden aria-label="意味検索の準備済み文書"></progress><button id="toggleSemanticIndex" type="button" hidden>停止</button></span></div>
@@ -99,6 +100,7 @@
  <aside class="panel evidence" aria-labelledby="evidenceHeading"><div class="panel-title evidence-heading"><h2 id="evidenceHeading"><svg aria-hidden="true"><use href="#i-quote"/></svg>回答の出典</h2><label class="source-font-option" for="sourceFontSize">文字サイズ<select id="sourceFontSize"><option value="12">12 px（標準）</option><option value="14">14 px</option><option value="16">16 px</option><option value="18">18 px</option><option value="20">20 px</option><option value="24">24 px</option></select></label></div><div class="evidence-body"><div class="evidence-empty"><div class="evidence-mark"><svg aria-hidden="true"><use href="#i-file"/></svg></div><div><h3>根拠を、たどれる形に。</h3><p>検索で見つかった引用文と<br>文書名・ページをここに表示します。</p></div></div><div class="evidence-note">検索結果から元の文書をエディタで確認できます。</div></div></aside>
 </main>
 </div>
+<div id="copyStatus" class="copy-notice" role="status" aria-live="polite" hidden></div>
 <dialog id="threadSettings" class="thread-settings" aria-labelledby="threadSettingsHeading">
  <form id="threadSettingsForm">
   <h2 id="threadSettingsHeading">スレッドの設定</h2>
@@ -117,7 +119,7 @@
  <form id="aiSettingsForm">
   <h2 id="aiSettingsHeading">AI回答の設定</h2>
   <p id="aiSettingsError" class="error" role="alert" hidden></p>
-  <p class="ai-settings-note">回答はGemini APIで作成します。文書全文をまとめて送信せず、質問と検索で得た前後関係を含む引用抜粋（最大24件・合計6万文字まで）、続きの質問では必要な前の会話を送ります。利用量に応じて料金や利用上限が適用されます。</p>
+  <p class="ai-settings-note">回答はGemini APIで作成します。文書全文をまとめて送信せず、質問と検索で得た前後関係を含む引用抜粋（最大32件・合計6万文字まで）、続きの質問では必要な前の会話を送ります。利用量に応じて料金や利用上限が適用されます。</p>
   <label class="setting-label" for="geminiApiKey">APIキー</label>
   <input id="geminiApiKey" type="password" autocomplete="off" spellcheck="false" maxlength="300" placeholder="APIキーを入力">
   <p class="ai-settings-note" id="aiKeyStatus">キーはこのWindowsユーザーだけが復号できる形で保存します。</p>
@@ -508,6 +510,7 @@ function researchScope(documents, tags, groupIds, tagIds) {
     function updateQuestion() {
         if (state.question !== $('questionDraft').value) questionEditVersion++;
         state.question = $('questionDraft').value;
+        $('copyQuestionDraft').disabled=!state.question.trim();
         searchControls();
         $('charCount').textContent = `${state.question.length.toLocaleString('ja')} / 12,000`;
     }
@@ -558,6 +561,50 @@ function researchScope(documents, tags, groupIds, tagIds) {
         const item=document.createElement(tag); if(className) item.className=className;
         if(text!==undefined) item.textContent=text; return item;
     }
+    let copyNoticeTimer;
+    function copyNotice(message) {
+        clearTimeout(copyNoticeTimer);
+        $('copyStatus').textContent=message;$('copyStatus').hidden=false;
+        copyNoticeTimer=setTimeout(()=>{$('copyStatus').hidden=true;},3500);
+    }
+    async function writeClipboard(text) {
+        try {
+            if(navigator.clipboard?.writeText) {await navigator.clipboard.writeText(text);return;}
+        } catch(_) {} // Older browsers/embedded views may only allow the fallback.
+        const previous=document.activeElement,selection=window.getSelection();
+        const ranges=selection ? Array.from({length:selection.rangeCount},(_,i)=>selection.getRangeAt(i).cloneRange()) : [];
+        const inputSelection=previous && typeof previous.selectionStart==='number'
+            ? [previous.selectionStart,previous.selectionEnd,previous.selectionDirection] : null;
+        const temporary=document.createElement('textarea');temporary.value=text;
+        temporary.setAttribute('readonly','');temporary.setAttribute('aria-label','コピー用の一時領域');
+        temporary.style.cssText='position:fixed;left:-10000px;top:0;opacity:0;';
+        document.body.append(temporary);
+        try {
+            temporary.focus({preventScroll:true});temporary.select();
+            if(!document.execCommand('copy'))throw new Error('clipboard unavailable');
+        } finally {
+            temporary.remove();previous?.focus({preventScroll:true});
+            if(inputSelection)previous.setSelectionRange(...inputSelection);
+            if(selection) {selection.removeAllRanges();for(const range of ranges)selection.addRange(range);}
+        }
+    }
+    async function copyFrom(button,getText) {
+        const label=button.textContent;button.disabled=true;
+        try {
+            const text=await getText();
+            if(!text?.trim()) {copyNotice('コピーする文章がありません。');return;}
+            await writeClipboard(text);copyNotice('コピーしました。');
+        } catch(_) {copyNotice('コピーできませんでした。文章を選択してコピーしてください。');}
+        finally {
+            button.textContent=label;
+            button.disabled=button.id==='copyQuestionDraft' && !$('questionDraft').value.trim();
+        }
+    }
+    function copyButton(label,getText) {
+        const button=element('button','copy-button',label);button.type='button';
+        button.addEventListener('click',()=>copyFrom(button,getText));return button;
+    }
+    $('copyQuestionDraft').addEventListener('click',()=>copyFrom($('copyQuestionDraft'),()=>$('questionDraft').value));
     function searchControls() {
         $('searchSources').disabled=busy || !activeId || !loaded || !state.question.trim() || !state.tagIds.length;
     }
@@ -569,8 +616,14 @@ function researchScope(documents, tags, groupIds, tagIds) {
             const card=element('article','search-turn');
             const question=element('button','search-question',run.question); question.type='button';
             question.setAttribute('aria-pressed',String(searchRun?.id===run.id));
-            question.addEventListener('click',()=>selectSearch(run.id));
-            card.append(element('div','search-date',new Date(run.created_at).toLocaleString('ja-JP')),question);
+            question.addEventListener('click',()=>{
+                const selection=window.getSelection();
+                if(selection && !selection.isCollapsed && question.contains(selection.anchorNode) && question.contains(selection.focusNode))return;
+                selectSearch(run.id);
+            });
+            const toolbar=element('div','copy-toolbar');
+            toolbar.append(element('div','search-date',new Date(run.created_at).toLocaleString('ja-JP')),copyButton('質問をコピー',()=>run.question));
+            card.append(toolbar,question);
             renderAnswersForRun(run,card);
             const info=element('div','search-info');
             if(searchRun?.id===run.id) {
@@ -771,9 +824,41 @@ function researchScope(documents, tags, groupIds, tagIds) {
             if(target) {const details=target.querySelector('details');if(details)details.open=true;target.scrollIntoView({block:'nearest',behavior:'smooth'});target.focus({preventScroll:true});}
         });return button;
     }
+    function answerCopyText(job,run,includeSources=false) {
+        const chunks=[],sources=new Map();
+        if(job.answer.status==='insufficient')chunks.push('この資料範囲では回答の根拠が足りません。');
+        for(const paragraph of job.answer.paragraphs) {
+            if(paragraph.heading)chunks.push(paragraph.heading);
+            const references=[...new Set(paragraph.evidence.map(proof=>proof.source_id))];
+            chunks.push(paragraph.text+(includeSources && references.length ? '\n'+references.map(id=>'['+id+']').join(' ') : ''));
+            for(const proof of paragraph.evidence) {
+                if(!sources.has(proof.source_id))sources.set(proof.source_id,new Set());
+                sources.get(proof.source_id).add(proof.quote);
+            }
+        }
+        if(job.answer.limitations)chunks.push(job.answer.limitations);
+        if(includeSources && sources.size) {
+            chunks.push('引用・出典');
+            for(const [id,quotes] of sources) {
+                const source=run.citations.find(item=>item.id===id);
+                const location=source ? [source.page_number>0 ? '保存本文のページ '+source.page_number : 'ページ情報なし',source.section_title].filter(Boolean).join(' · ') : '';
+                chunks.push('['+id+']'+(source ? ' '+source.title : '')+(location ? '\n'+location : '')+'\n'+[...quotes].map(quote=>'「'+quote+'」').join('\n'));
+            }
+        }
+        return chunks.join('\n\n');
+    }
     function renderAnswersForRun(run,card) {
         for(const job of answers.filter(a=>a.run_id===run.id).reverse()) {
-            card.append(element('div','answer-heading',job.status==='completed' && job.finish_reason==='NO_EVIDENCE' ? '根拠の確認' : 'AI回答'));
+            const toolbar=element('div','copy-toolbar');
+            toolbar.append(element('div','answer-heading',job.status==='completed' && job.finish_reason==='NO_EVIDENCE' ? '根拠の確認' : 'AI回答'));
+            if(job.status==='completed') {
+                const buttons=element('div','copy-buttons');
+                buttons.append(copyButton('回答をコピー',()=>answerCopyText(job,run)),copyButton('引用・出典付きでコピー',async()=>{
+                    const fullRun=searchRun?.id===run.id ? searchRun : (await api('/'+encodeURIComponent(run.thread_id || activeId)+'/searches/'+encodeURIComponent(run.id))).search;
+                    return answerCopyText(job,fullRun,true);
+                }));toolbar.append(buttons);
+            }
+            card.append(toolbar);
             if(job.status==='completed') {
                 if(job.answer.status==='insufficient')card.append(element('p','answer-block','この資料範囲では回答の根拠が足りません。'));
                 for(const paragraph of job.answer.paragraphs) {
@@ -883,7 +968,7 @@ function researchScope(documents, tags, groupIds, tagIds) {
     }
     function reusableSearch(run, parentId) {
         const sameIds=(one,two)=>JSON.stringify([...(one || [])].sort())===JSON.stringify([...(two || [])].sort());
-        return !!run && ['local-hybrid-multilingual-v1'].includes(run.retrieval)
+        return !!run && ['local-hybrid-depth-v1'].includes(run.retrieval)
             && run.answer_preparation===true && run.english_query_expansion?.state==='ready'
             && !(indexState?.ready_documents > (run.semantic?.ready_documents || 0))
             && run.thread_id===activeId && run.question===state.question.trim()

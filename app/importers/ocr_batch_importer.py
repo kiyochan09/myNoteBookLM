@@ -2,6 +2,7 @@ import re
 import json
 import uuid
 from pathlib import Path
+from app.paths import APP_PATHS
 from typing import Dict, Any, List, Optional
 from PIL import Image as PILImage
 
@@ -17,7 +18,7 @@ class OcrBatchImporter(BaseImporter):
     """
 
     def parse_batch_dir(self, batch_dir: Path) -> Dict[str, Any]:
-        batch_dir = Path(batch_dir).resolve()
+        batch_dir = APP_PATHS.resolve_file(batch_dir)
         if not batch_dir.exists():
             raise FileNotFoundError(f"OCR Batch folder not found: {batch_dir}")
 
@@ -221,7 +222,7 @@ class OcrBatchImporter(BaseImporter):
                 "source_filename": f"{doc_name}.pdf",
                 "total_pages": total_pages,
                 "doc_metadata_json": {
-                    "source_folder": str(batch_dir),
+                    "source_folder": APP_PATHS.store_file(batch_dir),
                     "total_pages": total_pages
                 }
             },

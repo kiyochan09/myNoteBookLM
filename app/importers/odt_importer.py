@@ -5,6 +5,7 @@ import uuid
 import zipfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from app.paths import APP_PATHS
 from typing import Dict, Any, List, Optional
 from PIL import Image as PILImage
 
@@ -40,7 +41,7 @@ class OdtImporter(BaseImporter):
         return "".join(texts)
 
     def parse_file(self, file_path: Path, original_filename: Optional[str] = None) -> Dict[str, Any]:
-        file_path = Path(file_path).resolve()
+        file_path = APP_PATHS.resolve_file(file_path)
         if not file_path.exists():
             raise FileNotFoundError(f"File not found: {file_path}")
 
@@ -308,7 +309,7 @@ class OdtImporter(BaseImporter):
                 "source_filename": source_file_name,
                 "total_pages": 1,
                 "doc_metadata_json": {
-                    "original_path": str(file_path),
+                    "original_path": APP_PATHS.store_file(file_path),
                     "file_size_bytes": file_path.stat().st_size
                 }
             },

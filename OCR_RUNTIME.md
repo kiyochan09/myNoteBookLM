@@ -1,42 +1,43 @@
 # OCR runtime layout
 
-Runtime discovery now uses `app/runtime_paths.py` and accepts both bundled and
-sibling OCR environments. No user name or drive letter is fixed in code.
-`MYNOTEBOOKLM_OCR_DIR`, `MYNOTEBOOKLM_OCR_PYTHON`, and
-`MYNOTEBOOKLM_RESEARCH_PYTHON` support unusual placements; relative overrides use
-the current application directory.
-
-Copied interpreters are probed before use. Use `repair_runtime.py --ocr` or
-`--research` with the same major/minor Python version to repair old base-Python
-references without deleting packages or models. Research setup also checks and
-repairs unusable launchers. New model manifests use relative paths.
-
-See [別PCへの移行手順](別PCへの移行手順.md) for current supported layouts and
-the full migration procedure. The sibling layout below remains supported.
-
-MyNotebookLM and the standalone OCR Translator are kept under the same
-Antigravity `scratch` directory. MyNotebookLM locates the shared OCR runtime
-relative to its own source tree; it does not rely on a clone under
-`C:\Users\...\source\repos` or on PATH lookup.
+MyNotebookLM owns one OCR installation under its application directory:
 
 ```text
-antigravity/
-└── scratch/
-    ├── knowledge_base_system/
-    │   ├── app/ocr_pipeline/engine_paths.py  # single path definition
-    │   └── data/
-    │       ├── user_dictionary.json
-    │       ├── tcy_registry.json             # created when first saved
-    │       └── tcy_templates/
-    └── OCR-REPOS/ocr_engine/
-        └── venv/                              # local NDLOCR package/runtime
+myNoteBookLM/
+├── app/ocr_pipeline/          # layout, tables, image processing, integration
+├── runtimes/ocr/
+│   ├── src/                  # managed, locally modified OCR implementation
+│   │   ├── ocr.py
+│   │   ├── deim.py / parseq.py / ndl_parser.py
+│   │   ├── reading_order/ / tcy_wrapper.py
+│   │   ├── config/
+│   │   └── model/            # detector and three recognition models
+│   ├── venv/                 # Python 3.12 and preserved dependency packages
+│   ├── dependencies.lock.txt
+│   ├── model-manifest.json
+│   ├── repair_launchers.py
+│   └── licenses/
+└── data/                     # PDFs, OCR output, dictionaries, user data
 ```
 
-`engine_paths.py` selects the working OCR runtime through `runtime_paths.py`. Python
-subprocesses run from the MyNotebookLM project root so the installed `ocr`
-module is selected rather than a same-named source file from the standalone
-application. PDFs, OCR output, dictionaries, and templates are stored under
-the MyNotebookLM project's `data` directory.
+`app/runtime_paths.py` defines this one location. `engine_paths.py` runs
+`runtimes/ocr/venv/Scripts/python.exe -m ocr` from the application root.
+The relative `mynotebooklm_ocr.pth` file selects `runtimes/ocr/src`.
+The custom source and models are not hidden inside dependency site-packages.
 
-The venv uses the Python 3.12 installation it was created from, as recorded in
-its `pyvenv.cfg`; the OCR package and its models are stored in the local venv.
+The sibling OCR-REPOS application, its source tree, and old hard-coded resource
+paths are not searched. MYNOTEBOOKLM_OCR_DIR and MYNOTEBOOKLM_OCR_PYTHON are no
+longer used to select an external installation. The separate research runtime
+and MYNOTEBOOKLM_RESEARCH_PYTHON retain their existing behavior.
+
+Use the matching Python 3.12 to run `repair_runtime.py --ocr` after moving the
+application to a new PC or folder. This rebuilds interpreter configuration,
+activation scripts, and installed command launchers without deleting dependency
+packages, OCR source, or models. A venv folder alone is not a portable executable:
+see the [Python venv documentation](https://docs.python.org/3.12/library/venv.html).
+`check_environment.py` verifies the bundled runtime and the four model files.
+
+The original NDLOCR-Lite license notices are retained in `runtimes/ocr/licenses`.
+The source includes the app-specific corrections already in use before
+consolidation. Do not replace it by reinstalling a different ndlocr-lite package.
+See [別PCへの移行手順](別PCへの移行手順.md) for the complete application migration.

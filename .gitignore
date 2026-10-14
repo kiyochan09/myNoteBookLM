@@ -9,6 +9,8 @@ __pycache__/
 .venv
 env/
 venv/
+runtimes/ocr/venv/
+runtimes/ocr/src/model/*.onnx
 ENV/
 .vscode/
 .idea/
@@ -71,3 +73,9 @@ data/research_ai.tmp
 *.db-shm
 *.sqlite-wal
 *.sqlite-shm
+
+/開発/作業中/
+
+/成果物/
+
+/管理/実行ログ/

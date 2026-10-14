@@ -64,7 +64,7 @@ class LocalEvidenceRetriever:
             columns = '''cb.id AS block_id,cb.document_id,cb.text_content,cb.page_number,
                 cb.reading_order,d.title,d.updated_at,COALESCE(s.title,'') AS section_title'''
             joins = '''JOIN documents d ON d.id=cb.document_id LEFT JOIN sections s ON s.id=cb.section_id'''
-            from app.research_evidence import lexical_groups, relevance, related_terms, ContextExpander
+            from app.research_evidence import lexical_groups, relevance, related_terms, ContextExpander, evidence_windows
             cache = {}
             # Read the selected corpus once. Global FTS statistics/joins can be
             # very expensive for dozens of expansion terms in a large library.
@@ -82,7 +82,14 @@ class LocalEvidenceRetriever:
                     tf=row['_lower'].count(term.lower())
                     return -tf/(tf+1.2*(.25+.75*len(row['text_content'])/max(1,average_length)))
                 matches.sort(key=lambda r:(score(r),r['document_id'],r['reading_order'],r['block_id']))
-                found=[{k:v for k,v in row.items() if k!='_lower'}|{'score':score(row)} for row in matches[:96]]
+                # Preserve a few strong passages from every scoped document before
+                # the global cutoff, so a repetitive book cannot hide another book.
+                chosen=matches[:96];seen={r['block_id'] for r in chosen};per_doc={}
+                for row in matches:
+                    doc=row['document_id'];per_doc[doc]=per_doc.get(doc,0)+1
+                    if per_doc[doc]<=4 and row['block_id'] not in seen:
+                        chosen.append(row);seen.add(row['block_id'])
+                found=[{k:v for k,v in row.items() if k!='_lower'}|{'score':score(row)} for row in chosen]
                 cache[term] = (found, frequency)
                 return cache[term]
             try:
@@ -98,31 +105,31 @@ class LocalEvidenceRetriever:
             ranked = []
             for row in rows.values():
                 text = row['text_content'] or ''
-                score, coverage, found = relevance(text, query_groups)
-                if not found:continue
-                focus=max((g for g in query_groups if any(t in found for t in [g['term'],*g['aliases']])),
-                          key=lambda g:g['weight'])
-                pos = min(text.lower().index(t.lower()) for t in [focus['term'],*focus['aliases']] if t in found)
-                start = max(0, pos - 240);end = min(len(text), start + 1000)
-                row.update(matched_terms=found,start=start,end=end,quote=text[start:end],
-                           content_hash=sha256(text.encode()).hexdigest(),truncated=start>0 or end<len(text),
-                           lexical_score=score,lexical_coverage=coverage)
-                ranked.append(row)
+                for start,end in evidence_windows(text,query_groups):
+                    score,coverage,found=relevance(text[start:end],query_groups)
+                    ranked.append(dict(row,matched_terms=found,start=start,end=end,quote=text[start:end],
+                        content_hash=sha256(text.encode()).hexdigest(),truncated=start>0 or end<len(text),
+                        lexical_score=score,lexical_coverage=coverage))
             ranked.sort(key=lambda r: (-r['lexical_score'], -r['lexical_coverage'],len(r['quote']) < 40,
                                        r['score'],r['document_id'],r['reading_order'],r['block_id']))
             expander = ContextExpander(conn)
-            citations = []
+            citations = [];doc_counts={}
             from app.research_hybrid import overlaps
-            for row in ranked[:max(120,limit*2)]:
+            while ranked:
+                row=max(ranked,key=lambda r:r['lexical_score']/(1+.12*doc_counts.get(r['document_id'],0)))
+                ranked.remove(row)
                 row = dict(row);row.pop('text_content');row.pop('score')
                 row = expander.expand(row)
+                score,coverage,found=relevance(row['quote'],query_groups)
+                row.update(lexical_score=score,lexical_coverage=coverage,matched_terms=found)
                 if any(overlaps(row,other,.5) for other in citations):continue
                 row['id'] = str(len(citations)+1);citations.append(row)
+                doc_counts[row['document_id']]=doc_counts.get(row['document_id'],0)+1
                 if len(citations) == limit:break
             tag_names = [r['name'] for r in conn.execute(f'SELECT name FROM tags WHERE id IN ({placeholders}) ORDER BY name',tag_ids)]
             return dict(question=question, terms=terms, document_count=count, groupIds=group_ids, tag_names=tag_names,
                         tagIds=tag_ids, citations=citations, limit=limit,
-                        retrieval='local-keyword-context-v2', candidate_limit=96*len(cache), query_groups=query_groups, related_terms=facets)
+                        retrieval='local-keyword-depth-v1', candidate_limit=sum(len(v[0]) for v in cache.values()), query_groups=query_groups, related_terms=facets)
 
 
 def create_search_router(path, db_service, semantic_index=None):

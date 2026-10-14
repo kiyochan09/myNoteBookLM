@@ -2,6 +2,7 @@ import re
 import json
 import uuid
 from pathlib import Path
+from app.paths import APP_PATHS
 from typing import Dict, Any, List, Optional
 import fitz  # PyMuPDF
 from PIL import Image as PILImage
@@ -17,7 +18,7 @@ class PdfImporter(BaseImporter):
     """
 
     def parse_file(self, file_path: Path, original_filename: Optional[str] = None) -> Dict[str, Any]:
-        file_path = Path(file_path).resolve()
+        file_path = APP_PATHS.resolve_file(file_path)
         if not file_path.exists():
             raise FileNotFoundError(f"File not found: {file_path}")
 
@@ -290,7 +291,7 @@ class PdfImporter(BaseImporter):
                 "source_filename": source_file_name,
                 "total_pages": total_pages,
                 "doc_metadata_json": {
-                    "original_path": str(file_path),
+                    "original_path": APP_PATHS.store_file(file_path),
                     "total_pages": total_pages,
                     "file_size_bytes": file_path.stat().st_size
                 }

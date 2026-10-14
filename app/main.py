@@ -27,6 +27,7 @@ from pydantic import BaseModel
 import re
 import fitz
 from app.ocr_pdf_archive import OcrPdfArchive, create_archive_router, serialized
+from app.pdf_compression import PdfCompression, create_compression_router
 import cv2
 import numpy as np
 from PIL import Image as PILImage
@@ -60,16 +61,19 @@ from app.ocr_pipeline.layout_engine import (
 from app.ocr_pipeline.ndlocr_engine import run_ndlocr_on_image
 from app.ocr_pipeline.region_classifier import split_vertical_heading_regions
 
-BASE_DIR = Path(__file__).resolve().parent.parent
-MEDIA_DIR = BASE_DIR / "data" / "media"
+from app.paths import APP_PATHS
+
+BASE_DIR = APP_PATHS.root
+DATA_DIR = APP_PATHS.data
+MEDIA_DIR = APP_PATHS.media
 MEDIA_DIR.mkdir(parents=True, exist_ok=True)
-TEMP_UPLOAD_DIR = BASE_DIR / "data" / "temp_uploads"
+TEMP_UPLOAD_DIR = APP_PATHS.uploads
 TEMP_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-PDF_CACHE_DIR = BASE_DIR / "data" / "pdf_cache"
+PDF_CACHE_DIR = APP_PATHS.pdf_cache
 PDF_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 # アプリケーション共通セキュリティトークン (暗号学的一意性 & リロード耐久性)
-TOKEN_FILE = BASE_DIR / "data" / ".app_token"
+TOKEN_FILE = APP_PATHS.token
 try:
     if TOKEN_FILE.exists():
         APP_SECURITY_TOKEN = TOKEN_FILE.read_text("utf-8").strip()
@@ -153,10 +157,10 @@ app.add_middleware(
 app.mount("/media", StaticFiles(directory=str(MEDIA_DIR)), name="media")
 
 db_service = DBService()
-app.include_router(create_research_router(BASE_DIR / "data" / "research.db", db_service))
-research_index = SemanticIndex(BASE_DIR / "data" / "research_index.db", db_service, OfflineEmbeddingProvider(BASE_DIR))
-app.include_router(create_search_router(BASE_DIR / "data" / "research.db", db_service, semantic_index=research_index))
-research_answers = ResearchAnswers(BASE_DIR / "data" / "research.db", db_service, AISettings(BASE_DIR / "data" / "research_ai.json"))
+app.include_router(create_research_router(APP_PATHS.research_db, db_service))
+research_index = SemanticIndex(APP_PATHS.research_index_db, db_service, OfflineEmbeddingProvider(BASE_DIR))
+app.include_router(create_search_router(APP_PATHS.research_db, db_service, semantic_index=research_index))
+research_answers = ResearchAnswers(APP_PATHS.research_db, db_service, AISettings(APP_PATHS.ai_settings))
 app.include_router(create_answers_router(research_answers, APP_SECURITY_TOKEN))
 
 from app.data_backup import DataBackup, MaintenanceGate, BackupGateMiddleware, create_backup_router
@@ -164,7 +168,7 @@ backup_gate = MaintenanceGate()
 def backup_background_busy():
     with research_index.lock:
         indexing = research_index.active_job is not None or bool(research_index.pending)
-    return indexing or any(not task.done() for task in research_answers.tasks.values())
+    return indexing or any(not task.done() for task in research_answers.tasks.values()) or ("pdf_compression" in globals() and pdf_compression.is_busy())
 data_backup = DataBackup(BASE_DIR, backup_gate, backup_background_busy)
 app.include_router(create_backup_router(data_backup, APP_SECURITY_TOKEN))
 app.add_middleware(BackupGateMiddleware, gate=backup_gate)
@@ -817,10 +821,12 @@ def search_editor_blocks(q: str):
 # ==========================================
 # 既存 OCR API 群 (完全互換保持)
 # ==========================================
-OCR_RESULTS_DIR = BASE_DIR / "data" / "ocr_results"
+OCR_RESULTS_DIR = APP_PATHS.ocr_results
 OCR_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-ocr_pdf_archive = OcrPdfArchive(OCR_RESULTS_DIR, BASE_DIR / "data" / "ocr_archives", PDF_CACHE_DIR)
+ocr_pdf_archive = OcrPdfArchive(OCR_RESULTS_DIR, APP_PATHS.ocr_archives, PDF_CACHE_DIR)
 app.include_router(create_archive_router(ocr_pdf_archive))
+pdf_compression = PdfCompression(ocr_pdf_archive, backup_gate)
+app.include_router(create_compression_router(pdf_compression))
 
 def save_figure_images_to_disk(pdf_name: str, page_number: int, figures: List[Dict[str, Any]], regions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     doc_dir = OCR_RESULTS_DIR / pdf_name
@@ -968,9 +974,9 @@ def get_pdf_bytes_sync(filename: str) -> Optional[bytes]:
     if cache_path.exists():
         return cache_path.read_bytes()
     candidates = [
-        BASE_DIR / "data" / "ocr_results" / clean_stem / f"{clean_stem}.pdf",
-        BASE_DIR / "data" / "raw_pdfs" / filename,
-        BASE_DIR / "data" / "raw_pdfs" / f"{clean_stem}.pdf"
+        APP_PATHS.ocr_results / clean_stem / f"{clean_stem}.pdf",
+        APP_PATHS.raw_pdfs / filename,
+        APP_PATHS.raw_pdfs / f"{clean_stem}.pdf"
     ]
     for c in candidates:
         if c.exists():
@@ -1534,6 +1540,11 @@ def _detect_regions_only_core(content: bytes, page_number: int, filename: str, l
                             else:
                                 spatial_groups = [(f"{page_name}本文", left_cluster), (f"{page_name}見出し候補", right_cluster)]
 
+                if orientation == "vertical":
+                    # A large gutter can split prose before heading refinement.
+                    # Keep the preceding right-hand columns before the heading.
+                    spatial_groups.sort(key=lambda group: max(b[0] + b[2] for b in group[1]), reverse=True)
+
                 for spatial_name, spatial_boxes in spatial_groups:
                     # Count boxes covering each Y coordinate. Repeated
                     # alignment marks each upper/lower text band independently.
@@ -1682,6 +1693,8 @@ class ExtractTableGridRequest(BaseModel):
     region: Dict[str, Any]
     doc_type: str = "japanese"
     orientation: str = "auto"
+    corrected_image: Optional[str] = None
+    processed_image: Optional[str] = None
 
 @app.post("/api/ocr/extract-table-grid")
 def extract_table_grid_endpoint(req: ExtractTableGridRequest):
@@ -1700,21 +1713,54 @@ def extract_table_grid_endpoint(req: ExtractTableGridRequest):
     reg = req.region
     tx, ty, tw, th = int(reg.get("x", 0)), int(reg.get("y", 0)), int(reg.get("w", 0)), int(reg.get("h", 0))
     rl = reg.get("rule_lines", [])
+    from app.ocr_pipeline.table_image_grid import render_table_image
     img_bgr = None
-    img_path = page_dir / f"page_{req.page_number:04d}.png"
-    if img_path.exists():
-        img_data = np.fromfile(str(img_path), dtype=np.uint8)
-        img_bgr = cv2.imdecode(img_data, cv2.IMREAD_COLOR)
-    if img_bgr is None:
-        img_w = page_data.get("image_width", 1200)
-        img_h = page_data.get("image_height", 1600)
-        img_bgr = np.zeros((img_h, img_w, 3), dtype=np.uint8)
-    if not rl:
-        gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
-        _, binary_img = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY_INV)
-        rl = detect_table_rule_lines(binary_img, tx, ty, tw, th)
-
-    t_res = extract_table_cells_and_matrix(img_bgr, tx, ty, tw, th, existing_rule_lines=rl, doc_type=req.doc_type, ocr_lines=ocr_lines)
+    highres = None
+    corrected = req.corrected_image if req.corrected_image is not None else page_data.get("corrected_image")
+    try:
+        if corrected:
+            img_bgr = decode_page_image(corrected)
+        else:
+            img_path = page_dir / f"page_{req.page_number:04d}.png"
+            if img_path.exists():
+                img_bgr = cv2.imdecode(np.fromfile(str(img_path), np.uint8), cv2.IMREAD_COLOR)
+        pdf_candidates = [PDF_CACHE_DIR / f"{pdf_stem}.pdf", APP_PATHS.raw_pdfs / f"{pdf_stem}.pdf", DATA_DIR / f"{pdf_stem}.pdf"]
+        pdf_path = next((p for p in pdf_candidates if p.is_file()), None)
+        if pdf_path:
+            with fitz.open(pdf_path) as doc:
+                if not 1 <= req.page_number <= len(doc):
+                    raise ValueError("PDFのページ番号を確認してください。")
+                page = doc[req.page_number-1]
+                if img_bgr is None:
+                    pix = page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False, colorspace=fitz.csRGB)
+                    img_bgr = cv2.cvtColor(np.frombuffer(pix.samples, np.uint8).reshape(pix.height, pix.width, 3), cv2.COLOR_RGB2BGR)
+                size = (page_data.get("image_width") or img_bgr.shape[1], page_data.get("image_height") or img_bgr.shape[0])
+                if corrected and img_bgr.shape[:2] != (size[1], size[0]):
+                    raise ValueError("補正画像の大きさが元のページと一致しません。")
+                highres = render_table_image(page, reg, img_bgr if corrected else None, size)
+        elif img_bgr is not None:
+            crop = img_bgr[ty:ty+th, tx:tx+tw]
+            if crop.size:
+                highres = cv2.resize(crop, None, fx=3, fy=3, interpolation=cv2.INTER_CUBIC)
+        if img_bgr is None or highres is None:
+            raise ValueError("表を認識するページ画像が見つかりません。PDFを開き直してください。")
+        if req.processed_image:
+            encoded = req.processed_image.split(",", 1)[-1]
+            mask = cv2.imdecode(np.frombuffer(base64.b64decode(encoded, validate=True), np.uint8), cv2.IMREAD_UNCHANGED)
+            if mask is None or mask.ndim != 3 or mask.shape[2] != 4 or mask.shape[:2] != img_bgr.shape[:2]:
+                raise ValueError("画像処理のマスクを読み取れませんでした。")
+            opaque = mask[:, :, 3] > 0
+            img_bgr[opaque] = 255
+            local_mask = opaque[ty:ty+th, tx:tx+tw].astype(np.uint8)
+            highres[cv2.resize(local_mask, (highres.shape[1], highres.shape[0]), interpolation=cv2.INTER_NEAREST) > 0] = 255
+        if not rl:
+            gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+            _, binary_img = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY_INV)
+            rl = detect_table_rule_lines(binary_img, tx, ty, tw, th)
+        t_res = extract_table_cells_and_matrix(img_bgr, tx, ty, tw, th, existing_rule_lines=rl,
+            doc_type=req.doc_type, ocr_lines=None, recognition_image=highres)
+    except (ValueError, RuntimeError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     table_entry = {
         "id": reg.get("id", "tbl"),
         "name": reg.get("name", "表"),
@@ -1726,6 +1772,7 @@ def extract_table_grid_endpoint(req: ExtractTableGridRequest):
         "rows": t_res["rows"],
         "cells": t_res["cells"],
         "merge_spans": t_res.get("merge_spans", []),
+        "merges": t_res.get("merges", []),
         "text": t_res["text"]
     }
     return {"success": True, "table": table_entry}
@@ -1777,9 +1824,9 @@ def recognize_single_region_endpoint(req: RecognizeSingleRegionRequest):
     if img_bgr is None:
         # PDF原本からのレンダリング取得
         candidate_dirs = [
-            BASE_DIR / "data" / "raw_pdfs",
-            BASE_DIR / "data",
-            BASE_DIR / "data" / "ocr_results" / pdf_stem
+            APP_PATHS.raw_pdfs,
+            DATA_DIR,
+            APP_PATHS.ocr_results / pdf_stem
         ]
         for c_dir in candidate_dirs:
             raw_pdf = c_dir / req.filename
@@ -1872,6 +1919,11 @@ def save_batch_api(req: BatchSaveRequest):
 @app.get("/ocr_footnotes.js")
 def serve_ocr_footnotes_script():
     return FileResponse(BASE_DIR / "ocr_footnotes.js", media_type="application/javascript")
+
+@app.get("/ocr_pdf_compression.js")
+def serve_ocr_pdf_compression_script():
+    return FileResponse(BASE_DIR / "ocr_pdf_compression.js", media_type="application/javascript")
+
 
 @app.get("/ocr_pdf_library.js")
 def serve_ocr_pdf_library_script():
@@ -2168,10 +2220,10 @@ def get_batch_figures_list(filename: str, start_page: Optional[int] = None, end_
 # ユーザー補正辞書 & 縦中横（10〜99）REST API
 # ==========================================
 USER_DICT_PATHS = [
-    BASE_DIR / "data" / "user_dictionary.json"
+    APP_PATHS.user_dictionary
 ]
 TCY_REGISTRY_PATHS = [
-    BASE_DIR / "data" / "tcy_registry.json"
+    APP_PATHS.tcy_registry
 ]
 
 @app.get("/api/user-dict")

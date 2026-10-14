@@ -592,7 +592,8 @@ def extract_table_cells_and_matrix(
     tbl_h: int,
     existing_rule_lines: Optional[List[Dict[str, Any]]] = None,
     doc_type: str = "japanese",
-    ocr_lines: Optional[List[Dict[str, Any]]] = None
+    ocr_lines: Optional[List[Dict[str, Any]]] = None,
+    recognition_image=None
 ) -> Dict[str, Any]:
     """
     ユーザーが設定・配置した表領域と縦横の罫線に基づき、データを消失させずに
@@ -603,6 +604,10 @@ def extract_table_cells_and_matrix(
     _, binary_img = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY_INV)
 
     rl = existing_rule_lines if existing_rule_lines else detect_table_rule_lines(binary_img, tbl_x, tbl_y, tbl_w, tbl_h)
+
+    if recognition_image is not None and any(r.get("is_vertical") for r in rl) and any(not r.get("is_vertical") for r in rl):
+        from app.ocr_pipeline.table_image_grid import extract_image_grid
+        return extract_image_grid(recognition_image, tbl_x, tbl_y, tbl_w, tbl_h, rl, doc_type)
 
     # 1. 縦罫線から列境界 (X座標群) を抽出
     v_lines = sorted([
@@ -746,7 +751,7 @@ def extract_table_cells_and_matrix(
             items_in_cell = cell_items[r][c]
             txt = join_cell_text_items(items_in_cell, is_western=is_western)
             txt = remove_cjk_spaces(txt)
-            txt = re.sub(r'^[17lI\|\s]+$', '', txt).strip()
+            txt = re.sub(r'^[\|\s]+$', '', txt).strip()
             grid[r][c] = txt
 
             cw = col_bounds[c + 1] - col_bounds[c]
@@ -2315,6 +2320,15 @@ def recognize_custom_regions(
                 reg["text"] = ""
                 continue
 
+            if reg.get("type") == "table" and any(r.get("is_vertical") for r in reg.get("rule_lines", [])) and any(not r.get("is_vertical") for r in reg.get("rule_lines", [])):
+                from app.ocr_pipeline.table_image_grid import render_table_image
+                highres = render_table_image(page, reg, image_override, (page_w, page_h))
+                table = extract_table_cells_and_matrix(img_bgr, rx, ry, rw, rh,
+                    existing_rule_lines=reg.get("rule_lines", []), doc_type=doc_type, recognition_image=highres)
+                for key in ("text", "rule_lines", "rows", "cells", "merge_spans", "merges", "columns", "row_count"):
+                    reg[key] = table[key]
+                continue
+
             region_image = img_bgr[ry:ry + rh, rx:rx + rw]
             region_lines = run_ndlocr_on_image(
                 region_image, orientation=orientation, doc_type=doc_type,
@@ -2411,6 +2425,9 @@ def recognize_custom_regions(
                 "rows": reg.get("rows", [[rtext]]),
                 "cells": reg.get("cells", []),
                 "merge_spans": reg.get("merge_spans", []),
+                "merges": reg.get("merges", []),
+                "columns": reg.get("columns", 0),
+                "row_count": reg.get("row_count", 0),
                 "text": rtext
             })
         elif rtype == "body":

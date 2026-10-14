@@ -5,6 +5,7 @@ import uuid
 import shutil
 import subprocess
 from pathlib import Path
+from app.paths import APP_PATHS
 from typing import Dict, Any, List, Optional, Tuple
 import cv2
 import numpy as np
@@ -36,9 +37,9 @@ class OcrReposPipeline:
 
     def __init__(self, db_path: Optional[Path] = None, output_base_dir: Optional[Path] = None):
         self.db_path = db_path or DEFAULT_DB_PATH
-        self.output_base_dir = output_base_dir or (Path(__file__).resolve().parent.parent.parent / "data" / "ocr_results")
+        self.output_base_dir = output_base_dir or (APP_PATHS.ocr_results)
         self.output_base_dir.mkdir(parents=True, exist_ok=True)
-        self.media_dir = Path(__file__).resolve().parent.parent.parent / "data" / "media"
+        self.media_dir = APP_PATHS.media
         self.media_dir.mkdir(parents=True, exist_ok=True)
 
     def process_pdf(
@@ -49,7 +50,7 @@ class OcrReposPipeline:
         orientation: str = "auto",
         doc_type: str = "japanese"
     ) -> Dict[str, Any]:
-        pdf_path = Path(pdf_path).resolve()
+        pdf_path = APP_PATHS.resolve_file(pdf_path)
         if not pdf_path.exists():
             raise FileNotFoundError(f"PDF file not found: {pdf_path}")
 
@@ -67,7 +68,7 @@ class OcrReposPipeline:
             INSERT INTO documents (id, title, file_path, source_type, page_count, metadata_json)
             VALUES (?, ?, ?, 'pdf_ocr', ?, ?)
             """,
-            (doc_id, doc_title, str(pdf_path), total_pages, json.dumps({
+            (doc_id, doc_title, APP_PATHS.store_file(pdf_path), total_pages, json.dumps({
                 "filename": pdf_path.name,
                 "engine": "OCR-REPOS (ndlocr_auto_region.py)"
             }))
@@ -108,7 +109,7 @@ class OcrReposPipeline:
                     INSERT INTO pages (id, document_id, page_number, width, height, image_path)
                     VALUES (?, ?, ?, ?, ?, ?)
                     """,
-                    (page_id, doc_id, page_index, pix.width, pix.height, str(raw_img_path))
+                    (page_id, doc_id, page_index, pix.width, pix.height, APP_PATHS.store_file(raw_img_path))
                 )
 
                 # =================================================================
@@ -200,7 +201,7 @@ class OcrReposPipeline:
 
                 # G. auto_layout.json の出力 (OCR-REPOS標準フォーマット)
                 auto_layout_data = {
-                    "image": str(raw_img_path),
+                    "image": APP_PATHS.store_file(raw_img_path),
                     "image_width": pix.width,
                     "image_height": pix.height,
                     "table_regions": table_regions,

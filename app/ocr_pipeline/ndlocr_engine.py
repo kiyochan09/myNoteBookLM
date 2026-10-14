@@ -19,6 +19,7 @@ from app.ocr_pipeline.ndlocr_core.ocr_utils import clean_runaway_repetition
 from app.ocr_pipeline.katakana_corrector import correct_ocr_lines, correct_japanese_text
 from app.ocr_pipeline.engine_paths import get_ndlocr_command, get_project_root
 from app.ocr_pipeline.column_recovery import recover_missing_vertical_columns
+from app.ocr_pipeline.warichu import exclude_vertical_warichu
 
 import re
 
@@ -377,6 +378,11 @@ def run_ndlocr_on_image(
             img_bgr = image_input
         else:
             return []
+
+        if doc_type == "japanese" and orientation != "horizontal":
+            img_bgr, excluded_warichu = exclude_vertical_warichu(img_bgr)
+            if excluded_warichu:
+                print(f"[NDLOCR Engine] Excluded {len(excluded_warichu)} embedded small-print spans")
 
         orig_h, orig_w = img_bgr.shape[:2]
         if max(orig_h, orig_w) > 2800:

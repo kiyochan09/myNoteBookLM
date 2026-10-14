@@ -2,7 +2,9 @@ import sqlite3
 from pathlib import Path
 from typing import Optional
 
-DEFAULT_DB_PATH = Path(__file__).resolve().parent.parent.parent / 'data' / 'knowledge.db'
+from app.paths import APP_PATHS
+
+DEFAULT_DB_PATH = APP_PATHS.knowledge_db
 SCHEMA_PATH = Path(__file__).resolve().parent / 'schema.sql'
 
 

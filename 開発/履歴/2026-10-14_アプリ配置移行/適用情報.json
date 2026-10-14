@@ -1,0 +1,102 @@
+{
+  "app": "C:\\Users\\natur\\myAI_Apli\\myNoteBookLM",
+  "clipboard": "C:\\Users\\natur\\myAI_Apli\\clipboard-utility",
+  "backup": "C:\\Users\\natur\\BackUp\\OCRアプリ\\アプリ配置移行_20261014_190302",
+  "backup_files": 15111,
+  "backup_bytes": 5700553824,
+  "db_changes": [
+    {
+      "db": "knowledge.db",
+      "table": "documents",
+      "column": "file_path",
+      "rows": 1
+    },
+    {
+      "db": "knowledge.db",
+      "table": "pages",
+      "column": "image_path",
+      "rows": 6
+    },
+    {
+      "db": "knowledge.db",
+      "table": "content_blocks",
+      "column": "html_content",
+      "rows": 4
+    },
+    {
+      "db": "knowledge.db",
+      "table": "figures",
+      "column": "image_path",
+      "rows": 5
+    },
+    {
+      "db": "my_notebook.db",
+      "table": "documents",
+      "column": "doc_metadata_json",
+      "rows": 761
+    }
+  ],
+  "verification": {
+    "unchanged_data_files": 15107,
+    "protected_artifacts_and_executables": 43,
+    "ocr_model_hashes": 4,
+    "runtime_old_paths": 0,
+    "clipboard_data_preserved": true,
+    "environment": {
+      "app_folder": "C:\\Users\\natur\\myAI_Apli\\myNoteBookLM",
+      "missing_app_modules": [],
+      "ocr_runtime_available": true,
+      "ocr_python": "C:\\Users\\natur\\myAI_Apli\\myNoteBookLM\\runtimes\\ocr\\venv\\Scripts\\python.exe",
+      "ocr_source_folder": "C:\\Users\\natur\\myAI_Apli\\myNoteBookLM\\runtimes\\ocr\\src",
+      "ocr_models_available": true,
+      "research_python": "C:\\Users\\natur\\myAI_Apli\\myNoteBookLM\\.venv_research\\Scripts\\python.exe",
+      "research_runtime_available": true,
+      "research_model_available": true,
+      "windows_powershell_available": true,
+      "font_folders": [
+        "C:\\WINDOWS\\Fonts",
+        "C:\\Users\\natur\\AppData\\Local\\Microsoft\\Windows\\Fonts"
+      ],
+      "data_folder": "C:\\Users\\natur\\myAI_Apli\\myNoteBookLM\\data"
+    },
+    "editable_pdf_books": 5,
+    "research_embedding": {
+      "dimensions": 384,
+      "normalized": true
+    },
+    "ocr_recognition": true,
+    "compression_old_name_and_editing": true,
+    "wrong_python_version_rejected": true,
+    "backup_automation_preserved": true,
+    "document_detail_http": true,
+    "compression_toolbar_http": true,
+    "media_http": true,
+    "research_catalog_http": true,
+    "preexisting_legacy_source_references": 5
+  },
+  "preserved_old_outputs": 267,
+  "preserved_old_builds": 10,
+  "modified_files": [
+    "C:\\Users\\natur\\myAI_Apli\\myNoteBookLM\\README.md",
+    "C:\\Users\\natur\\myAI_Apli\\myNoteBookLM\\OCR_RUNTIME.md",
+    "C:\\Users\\natur\\myAI_Apli\\myNoteBookLM\\別PCへの移行手順.md",
+    "C:\\Users\\natur\\myAI_Apli\\myNoteBookLM\\引き継ぎメモ\\引き継ぎメモ_OCR・リサーチ_2026-10-14.md",
+    "C:\\Users\\natur\\myAI_Apli\\myNoteBookLM\\AGENTS.md",
+    "C:\\Users\\natur\\myAI_Apli\\clipboard-utility\\AGENTS.md",
+    "C:\\Users\\natur\\myAI_Apli\\AGENTS.md",
+    "C:\\Users\\natur\\myAI_Apli\\myNoteBookLM\\app\\venv_launchers.py",
+    "C:\\Users\\natur\\myAI_Apli\\myNoteBookLM\\repair_runtime.py",
+    "C:\\Users\\natur\\myAI_Apli\\myNoteBookLM\\関連ツール\\ScanLight\\compress_editable.py",
+    "C:\\Users\\natur\\myAI_Apli\\myNoteBookLM\\関連ツール\\ScanLight\\check_editability.py",
+    "C:\\Users\\natur\\myAI_Apli\\myNoteBookLM\\.gitignore",
+    "C:\\Users\\natur\\myAI_Apli\\myNoteBookLM\\管理\\バックアップ\\README.md",
+    "C:\\Users\\natur\\myAI_Apli\\myNoteBookLM\\起動.cmd"
+  ],
+  "unverified": [
+    "Windows再ログイン後の自動起動",
+    "ClipShelfの実際のキー操作・貼り付け",
+    "Windowsファイル選択ダイアログの手動操作"
+  ],
+  "temporary_work_folders_removed": true,
+  "old_location_guide": "C:\\Users\\natur\\.gemini\\antigravity\\knowledge\\移行先.md"
+}

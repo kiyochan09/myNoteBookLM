@@ -6,7 +6,9 @@ import shutil
 import subprocess
 import sys
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+from app.paths import APP_PATHS, AppPaths
+
+PROJECT_ROOT = APP_PATHS.root
 
 
 def configured_path(name, root=PROJECT_ROOT):
@@ -47,24 +49,18 @@ def python_available(path, modules=()):
 
 
 def ocr_engine_dirs(root=PROJECT_ROOT):
-    root = Path(root)
-    paths = [configured_path('MYNOTEBOOKLM_OCR_DIR', root),
-             root / 'runtimes/ocr', root / 'ocr_engine', root / 'OCR-REPOS/ocr_engine',
-             root.parent / 'OCR-REPOS/ocr_engine']
-    return list(dict.fromkeys(p for p in paths if p is not None))
+    """OCR has one application-owned location; never use a sibling app's venv."""
+    return [AppPaths(root).ocr_runtime]
 
 
 def ocr_python_candidates(root=PROJECT_ROOT):
-    paths = [configured_path('MYNOTEBOOKLM_OCR_PYTHON', root)]
-    for engine in ocr_engine_dirs(root):
-        paths.extend([venv_python(engine / 'venv'), venv_python(engine / '.venv')])
-    return list(dict.fromkeys(p for p in paths if p is not None))
+    return [venv_python(ocr_engine_dirs(root)[0] / 'venv')]
 
 
 def research_python_candidates(root=PROJECT_ROOT):
     root = Path(root)
     paths = [configured_path('MYNOTEBOOKLM_RESEARCH_PYTHON', root),
-             venv_python(root / '.venv_research'), venv_python(root / 'runtimes/research')]
+             venv_python(AppPaths(root).research_runtime), venv_python(root / 'runtimes/research')]
     return list(dict.fromkeys(p for p in paths if p is not None))
 
 

@@ -1,157 +1,150 @@
-"""Split isolated vertical headings using page pixels, without recognizing text."""
-
+"""Separate vertical headings from prose using spacing and local print style."""
 from typing import Any, Dict, List
-
 import cv2
 import numpy as np
 
 
-def split_vertical_heading_regions(
-    binary: np.ndarray,
-    regions: List[Dict[str, Any]],
-    orientation: str = "auto",
-) -> List[Dict[str, Any]]:
-    """Separate short, spaced vertical title columns from coarse body boxes.
+def _vertical_tracks(binary, region):
+    ih, iw = binary.shape[:2]
+    rx, ry = max(0, int(region.get("x", 0))), max(0, int(region.get("y", 0)))
+    end_x = min(iw, int(region.get("x", 0) + region.get("w", 0)))
+    end_y = min(ih, int(region.get("y", 0) + region.get("h", 0)))
+    roi = binary[ry:end_y, rx:end_x]
+    if not roi.size:
+        return []
+    _, _, stats, _ = cv2.connectedComponentsWithStats(roi, connectivity=8)
+    limit = max(48, int(min(iw, ih) * .08))
+    glyphs = [(int(x+rx), int(y+ry), int(w), int(h)) for x, y, w, h, area in stats[1:]
+              if area >= 12 and min(w, h) >= 8 and max(w, h) <= limit]
+    counts = np.zeros(end_x-rx, np.int32)
+    for x, _, w, _ in glyphs:
+        counts[x-rx:x-rx+w] += 1
+    xs = np.flatnonzero(counts)
+    groups = np.split(xs, np.flatnonzero(np.diff(xs)>1)+1) if len(xs) else []
+    tracks = []
+    for group in groups:
+        members = [g for g in glyphs if rx+group[0] <= g[0]+g[2]/2 < rx+group[-1]+1]
+        if len(members) < 3:
+            continue
+        x0, y0 = min(g[0] for g in members), min(g[1] for g in members)
+        x1, y1 = max(g[0]+g[2] for g in members), max(g[1]+g[3] for g in members)
+        patch = (binary[y0:y1, x0:x1]>0).astype(np.uint8)
+        distance = cv2.distanceTransform(patch, cv2.DIST_L2, 3)
+        tracks.append({"box": (x0, y0, x1, y1), "glyph_w": float(np.median([g[2] for g in members])),
+                       "glyph_h": float(np.median([g[3] for g in members])),
+                       "stroke": float(np.mean(distance[distance>0])), "count": len(members)})
+    return tracks
 
-    Require long body columns nearby and a larger-than-normal gutter on both
-    sides (one side for an outer title). Paragraph endings share normal column
-    spacing and remain body. Geometry alone cannot reliably classify a title
-    that has the same length and spacing as prose; keep those conservative.
-    """
+
+def split_vertical_heading_regions(binary: np.ndarray, regions: List[Dict[str, Any]], orientation: str = "auto") -> List[Dict[str, Any]]:
     if orientation == "horizontal" or binary.size == 0:
         return regions
-
-    image_h, image_w = binary.shape[:2]
-    result = []
-    used_ids = {r.get("id") for r in regions}
+    ih, iw = binary.shape[:2]
+    measured = [_vertical_tracks(binary, r) if r.get("type")=="body" else [] for r in regions]
+    all_tracks = [t for group in measured for t in group]
+    if not all_tracks:
+        return regions
+    max_height = max(t["box"][3]-t["box"][1] for t in all_tracks)
+    references = [t for t in all_tracks if t["box"][3]-t["box"][1] >= max_height*.60
+                  and (orientation == "vertical" or t["box"][3]-t["box"][1] > (t["box"][2]-t["box"][0])*3)]
+    if len(references) < 2:
+        return regions
+    result, used_ids = [], {r.get("id") for r in regions}
     heading_index = 0
-    for reg in regions:
-        if reg.get("type") != "body":
-            result.append(reg)
+    for region, tracks in zip(regions, measured):
+        if not tracks:
+            result.append(region)
             continue
-        rx = max(0, min(image_w, int(reg.get("x", 0))))
-        ry = max(0, min(image_h, int(reg.get("y", 0))))
-        x_end = max(rx, min(image_w, int(reg.get("x", 0) + reg.get("w", 0))))
-        y_end = max(ry, min(image_h, int(reg.get("y", 0) + reg.get("h", 0))))
-        roi = binary[ry:y_end, rx:x_end]
-        if roi.size == 0:
-            result.append(reg)
-            continue
-
-        _, _, stats, _ = cv2.connectedComponentsWithStats(roi, connectivity=8)
-        max_glyph_dim = max(48, int(min(image_w, image_h) * 0.08))
-        glyphs = [
-            (int(x + rx), int(y + ry), int(w), int(h))
-            for x, y, w, h, area in stats[1:]
-            if area >= 12 and w >= 8 and h >= 8
-            and w <= max_glyph_dim and h <= max_glyph_dim
-        ]
-        if len(glyphs) < 30:
-            result.append(reg)
-            continue
-        glyph_w = float(np.median([g[2] for g in glyphs]))
-        glyph_h = float(np.median([g[3] for g in glyphs]))
-        counts = np.zeros(x_end - rx, dtype=np.int32)
-        for x, _, w, _ in glyphs:
-            counts[x - rx:x - rx + w] += 1
-        active = counts > 0
-        tracks = []
-        x = 0
-        while x < len(active):
-            if not active[x]:
-                x += 1
-                continue
-            start = x
-            while x < len(active) and active[x]:
-                x += 1
-            members = [g for g in glyphs if rx + start <= g[0] + g[2] / 2 < rx + x]
-            if len(members) < 3:
-                continue
-            x0 = min(g[0] for g in members)
-            y0 = min(g[1] for g in members)
-            x1 = max(g[0] + g[2] for g in members)
-            y1 = max(g[1] + g[3] for g in members)
-            tracks.append((x0, y0, x1, y1))
-
-        body_top = min((t[1] for t in tracks), default=ry)
-        body_bottom = max((t[3] for t in tracks), default=y_end)
-        body_height = body_bottom - body_top
-        # Several long columns establish that this is vertical prose, even in
-        # auto mode. Horizontal rows do not produce full-height narrow tracks.
-        long_tracks = [t for t in tracks if t[3] - t[1] >= body_height * 0.60]
-        if body_height < glyph_h * 12 or len(long_tracks) < 2:
-            result.append(reg)
-            continue
-        if orientation == "auto" and not any(
-            t[3] - t[1] > (t[2] - t[0]) * 3 for t in long_tracks
-        ):
-            result.append(reg)
-            continue
-
+        rx, ry, rw, rh = [int(region.get(k, 0)) for k in ("x", "y", "w", "h")]
         candidates = []
-        for i, track in enumerate(tracks):
-            x0, y0, x1, y1 = track
-            if not (
-                x1 - x0 <= glyph_w * 2.2
-                and glyph_h * 2.5 <= y1 - y0 <= body_height * 0.55
-                and body_top <= y0 <= body_top + glyph_h * 4
-            ):
+        for track in tracks:
+            x0, y0, x1, y1 = track["box"]
+            nearby = [t for t in references if abs((t["box"][0]+t["box"][2]-x0-x1)/2) <= max(200, iw*.25)
+                      and t["box"][1] < y1 and t["box"][3] > y0]
+            if len(nearby) < 2:
+                nearby = sorted((t for t in references if t["box"][1] < y1 and t["box"][3] > y0),
+                    key=lambda t: abs(t["box"][0]+t["box"][2]-x0-x1))[:4]
+                if len(nearby) < 2:
+                    continue
+            glyph_w = float(np.median([t["glyph_w"] for t in nearby]))
+            glyph_h = float(np.median([t["glyph_h"] for t in nearby]))
+            body_top = float(np.median([t["box"][1] for t in nearby]))
+            body_height = float(np.median([t["box"][3]-t["box"][1] for t in nearby]))
+            stroke = float(np.median([t["stroke"] for t in nearby]))
+            width = float(np.median([t["box"][2]-t["box"][0] for t in nearby]))
+            if not (x1-x0 <= glyph_w*2.2 and glyph_h*3 <= y1-y0 <= body_height*.55
+                    and body_top-glyph_h*.5 <= y0 <= body_top+glyph_h*4):
                 continue
-            left_gap = x0 - tracks[i - 1][2] if i else None
-            right_gap = tracks[i + 1][0] - x1 if i + 1 < len(tracks) else None
-            gaps = [gap for gap in (left_gap, right_gap) if gap is not None]
-            minimum_gap = glyph_w * (1.25 if len(gaps) == 2 else 1.60)
-            if not gaps or min(gaps) < minimum_gap:
+            # Neighboring regions supply context too: coarse layout detection
+            # may have split a large gutter before this heading refinement.
+            neighbors = [t["box"] for t in all_tracks if t is not track and t["box"][1] < y1 and t["box"][3] > y0]
+            left = max((b[2] for b in neighbors if b[2] <= x0), default=None)
+            right = min((b[0] for b in neighbors if b[0] >= x1), default=None)
+            gaps = [gap for gap in (x0-left if left is not None else None, right-x1 if right is not None else None) if gap is not None]
+            if not gaps:
                 continue
-            # Do not label a tiny isolated numeral or a short marginal mark.
-            if y1 - y0 < glyph_h * 3:
+            indent = y0-body_top
+            size_ratio = track["glyph_w"]/max(1, glyph_w)
+            height_ratio = track["glyph_h"]/max(1, glyph_h)
+            width_ratio = (x1-x0)/max(1, width)
+            stroke_ratio = track["stroke"]/max(.01, stroke)
+            distinctive = (
+                (size_ratio >= 1.12 and height_ratio >= 1.07 and stroke_ratio >= 1.015)
+                or (stroke_ratio >= 1.07 and width_ratio >= 1.03)
+                or (size_ratio >= 1.12 and width_ratio >= 1.08 and stroke_ratio >= 1.025)
+                or (width_ratio >= 1.08 and height_ratio >= 1.03 and stroke_ratio >= 1.045)
+                or (stroke_ratio >= 1.04 and max(gaps) >= glyph_w*2 and x1-x0 >= glyph_w*.95)
+                or (size_ratio >= 1.12 and height_ratio >= 1.03 and stroke_ratio >= 1.04)
+                or (height_ratio >= 1.07 and stroke_ratio >= 1.035 and x1-x0 >= glyph_w*1.05)
+            )
+            styled = distinctive and indent >= glyph_h*.65 and min(gaps) >= glyph_w*.40
+            isolated = min(gaps) >= glyph_w*(1.25 if len(gaps)==2 else 1.60)
+            # Keep isolated short columns eligible even when their print style
+            # matches prose: favor heading recall over rare ending false positives.
+            if not (styled or isolated):
                 continue
-            left_cut = int((tracks[i - 1][2] + x0) / 2) if i else rx
-            right_cut = int((x1 + tracks[i + 1][0]) / 2) if i + 1 < len(tracks) else x_end
-            candidates.append((track, left_cut, right_cut))
-
+            left_cut = max(rx, int((left+x0)/2)) if left is not None else rx
+            right_cut = min(rx+rw, int((x1+right)/2)) if right is not None else rx+rw
+            # Include thin punctuation/long vowel marks rejected by the glyph
+            # size measurement, stopping at a genuine blank paragraph gap.
+            ink = binary[max(0, ry):min(ih, ry+rh), max(left_cut, x0-3):min(right_cut, x1+3)]
+            ink_rows = np.flatnonzero(np.any(ink>0, axis=1))
+            runs = np.split(ink_rows, np.flatnonzero(np.diff(ink_rows)>glyph_h*1.8)+1) if len(ink_rows) else []
+            matching = [run for run in runs if ry+run[0] <= y0 and ry+run[-1]+1 >= y1]
+            if matching:
+                y0, y1 = ry+int(matching[0][0]), ry+int(matching[0][-1])+1
+            candidates.append(((x0,y0,x1,y1),left_cut,right_cut))
         if not candidates:
-            result.append(reg)
+            result.append(region)
             continue
-
+        candidates.sort(key=lambda c:c[1])
         parts = []
-        boundaries = [(rx, candidates[0][1])]
-        boundaries.extend((a[2], b[1]) for a, b in zip(candidates, candidates[1:]))
-        boundaries.append((candidates[-1][2], x_end))
-        for part_index, (start, end) in enumerate(boundaries, 1):
-            members = [g for g in glyphs if start <= g[0] + g[2] / 2 < end]
-            if not members:
+        intervals = [(rx,candidates[0][1])] + [(a[2],b[1]) for a,b in zip(candidates,candidates[1:])] + [(candidates[-1][2],rx+rw)]
+        for index, (start,end) in enumerate(intervals,1):
+            if end <= start or not np.any(binary[max(0,ry):min(ih,ry+rh), max(0,start):min(iw,end)]):
                 continue
-            # Preserve the full original height, including small punctuation
-            # omitted by the glyph measurement filter.
-            parts.append({
-                **reg, "id": f"{reg.get('id', 'detect-body')}-part-{part_index}",
-                "name": f"{reg.get('name', '本文候補')} ({part_index})",
-                "x": start, "y": ry, "w": end - start, "h": y_end - ry,
-                "text": "",
-            })
-        for (x0, y0, x1, y1), left_cut, right_cut in candidates:
+            _, _, support, _ = cv2.connectedComponentsWithStats(binary[max(0,ry):min(ih,ry+rh), max(0,start):min(iw,end)], connectivity=8)
+            if not any(a>=12 and w>=8 and h>=8 for _,_,w,h,a in support[1:]):
+                continue
+            identifier = f"{region.get('id','detect-body')}-part-{index}"
+            while identifier in used_ids:
+                identifier += "-part"
+            used_ids.add(identifier)
+            parts.append({**region,"id":identifier,"name":f"{region.get('name','本文候補')} ({index})",
+                          "x":start,"y":ry,"w":end-start,"h":rh,"text":""})
+        for (x0,y0,x1,y1),left_cut,right_cut in candidates:
             heading_index += 1
-            heading_id = f"detect-heading-{heading_index}"
-            while heading_id in used_ids:
+            identifier = f"detect-heading-{heading_index}"
+            while identifier in used_ids:
                 heading_index += 1
-                heading_id = f"detect-heading-{heading_index}"
-            used_ids.add(heading_id)
-            hx = max(left_cut, x0 - 7)
-            hy = max(ry, y0 - 8)
-            hx1 = min(right_cut, x1 + 7)
-            hy1 = min(y_end, y1 + 8)
-            parts.append({
-                "id": heading_id, "name": f"見出し候補 {heading_index}",
-                "type": "heading", "orientation": "vertical",
-                "x": hx, "y": hy, "w": hx1 - hx, "h": hy1 - hy,
-                "text": "",
-            })
-        # Each incoming region already has page/band reading order. Only order
-        # its subdivisions right-to-left; retain table and other page ordering.
-        parts.sort(key=lambda r: -(r["x"] + r["w"] / 2))
+                identifier = f"detect-heading-{heading_index}"
+            used_ids.add(identifier)
+            hx,hy = max(left_cut,x0-7),max(ry,y0-8)
+            hx1,hy1 = min(right_cut,x1+7),min(ry+rh,y1+8)
+            parts.append({"id":identifier,"name":f"見出し候補 {heading_index}","type":"heading","orientation":"vertical",
+                          "heading_level":2,"x":hx,"y":hy,"w":hx1-hx,"h":hy1-hy,"text":""})
+        parts.sort(key=lambda r:-(r["x"]+r["w"]/2))
         result.extend(parts)
-
-    for order, reg in enumerate(result, 1):
-        reg["reading_order"] = order
+    for order, region in enumerate(result,1):
+        region["reading_order"] = order
     return result
